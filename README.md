@@ -80,15 +80,16 @@ Mirza Bot integrates with the most popular VPN and network management panels:
 
 ## 💳 Payment Gateways
 
-| Gateway | Type |
-|---------|------|
-| 💵 **Card-to-Card** | Manual (receipt + admin approval) |
-| 🪙 **NowPayments** | Crypto |
-| 🪙 **Plisio** | Crypto |
-| 🪙 **cubpay** | TRON / crypto |
-| 🇮🇷 **Zarinpal** | Online gateway |
-| 🇮🇷 **Aqayepardakht** | Online gateway |
-| 🇮🇷 **IranPay** | Online gateway |
+| Gateway                | Type                              |
+|------------------------|-----------------------------------|
+| 💵 **Card-to-Card**    | Manual (receipt + admin approval) |
+| 🪙 **NowPayments**     | Crypto                            |
+| 🪙 **Plisio**          | Crypto                            |
+| 🪙 **Tronado**         | TRON / crypto                     |
+| 🪙 **Tetraminator**    | USDT(BEP20) / crypto              |
+| 🇮🇷 **Zarinpal**      | Online gateway                    |
+| 🇮🇷 **Aqayepardakht** | Online gateway                    |
+| 🇮🇷 **IranPay**       | Online gateway                    |
 
 ---
 
@@ -151,7 +152,7 @@ Mirza Bot integrates with the most popular VPN and network management panels:
 Run the following command on your server as **root**:
 
 ```bash
-curl -o install.sh -L https://raw.githubusercontent.com/mahdiMGF2/mirzabot/main/install.sh && bash install.sh
+curl -o install.sh -L https://raw.githubusercontent.com/Rezah95/mirzabot/master/install.sh && bash install.sh
 ```
 
 An interactive menu will appear:
@@ -173,7 +174,7 @@ An interactive menu will appear:
 Run the same command and select **`2`**:
 
 ```bash
-curl -o install.sh -L https://raw.githubusercontent.com/mahdiMGF2/mirzabot/main/install.sh && bash install.sh
+curl -o install.sh -L https://raw.githubusercontent.com/Rezah95/mirzabot/master/install.sh && bash install.sh
 ```
 
 ### Remove
