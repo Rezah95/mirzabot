@@ -1,4 +1,4 @@
-<?php
+W<?php
 require_once 'config.php';
 $setting = select("setting", "*", null, null, "select");
 $textbotlang = languagechange();
@@ -180,7 +180,7 @@ $CartManage = json_encode([
         [['text' => $textbotlang['keyboard']['disableShowCard']], ['text' => $textbotlang['keyboard']['enableShowCard']]],
         [['text' => $textbotlang['keyboard']['groupShowCard']]],
         [['text' => $textbotlang['keyboard']['exportActiveCardUsers']]],
-        [['text' => $textbotlang['keyboard']['cashbackCartToCart']]],
+        [['text' => $textbotlang['keyboard']['autoConfirmReceipt']], ['text' => $textbotlang['keyboard']['cashbackCartToCart']]],
         [['text' => $textbotlang['keyboard']['showCartAfterFirstPay']]],
         [['text' => $textbotlang['keyboard']['minAmountCartToCart']], ['text' => $textbotlang['keyboard']['maxAmountCartToCart']]],
         [['text' => $textbotlang['keyboard']['setEducationCartToCart']]],
@@ -265,6 +265,18 @@ $payment_status_nowpayment = getPaySettingValue("statusnowpayment");
 $step_payment = [
     'inline_keyboard' => []
 ];
+/* TETRA_KB_START */
+if (function_exists('tetra_setting') && tetra_setting('tetraminatorstatus','offtetraminator') == "ontetraminator") { $step_payment['inline_keyboard'][] = [['text' => tetra_setting('tetraminator_label','درگاه پرداخت ریالی'), 'callback_data' => "tetraminatorpay"]]; }
+/* TETRA_KB_END */
+
+/* TRONADO_START*/
+if ($trnadoo == "onternado") {
+    $step_payment['inline_keyboard'][] = [
+        ['text' => $textbotlang['textbot']['iranPay3'], 'callback_data' => "iranpay2"]
+    ];
+}
+/* TRONADO_END*/
+
 if ($PaySettingcard == "oncard" && intval($users['cardpayment']) == 1) {
     if ($PaySettingpv == "oncardpv") {
         $step_payment['inline_keyboard'][] = [
@@ -298,11 +310,12 @@ if ($Swapino == "onSwapinoBot") {
         ['text' => $textbotlang['textbot']['iranPay2'], 'callback_data' => "iranpay1"]
     ];
 }
-if ($trnadoo == "onternado") {
+ 
+/*if ($trnadoo == "onternado") {
     $step_payment['inline_keyboard'][] = [
         ['text' => $textbotlang['textbot']['iranPay3'], 'callback_data' => "iranpay2"]
     ];
-}
+}*/
 if ($arzireyali3 == "oniranpay3" && $paymentexits >= 2) {
     $step_payment['inline_keyboard'][] = [
         ['text' => $textbotlang['textbot']['iranPay1'], 'callback_data' => "iranpay3"]
@@ -328,6 +341,9 @@ if (intval($paymentsstartelegram) == 1) {
         ['text' => $textbotlang['textbot']['starTelegram'], 'callback_data' => "startelegrams"]
     ];
 }
+/* TETRA_KB_START */
+/*if (function_exists('tetra_setting') && tetra_setting('tetraminatorstatus','offtetraminator') == "ontetraminator") { $step_payment['inline_keyboard'][] = [['text' => tetra_setting('tetraminator_label','درگاه پرداخت ریالی'), 'callback_data' => "tetraminatorpay"]]; }*/
+/* TETRA_KB_END */
 $step_payment['inline_keyboard'][] = [
     ['text' => $textbotlang['keyboard']['closeList'], 'callback_data' => "colselist"]
 ];

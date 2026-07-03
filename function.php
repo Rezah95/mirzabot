@@ -570,21 +570,44 @@ function generateUUID()
 function rate_arze()
 {
     $arze_rate = [];
-    $requests_tron = json_decode(file_get_contents('https://api.diadata.org/v1/assetQuotation/Tron/0x0000000000000000000000000000000000000000'), true);
-    $requestsusd = 0;
-    $html_read = @file_get_contents("https://www.bon-bast.com/");
-    if ($html_read !== false) {
-        preg_match('/<span>\s*([\d,]+)\s*<\/span>/', $html_read, $matches);
+
+    $requests_tron = json_decode(
+        file_get_contents('https://api.diadata.org/v1/assetQuotation/Tron/0x0000000000000000000000000000000000000000'),
+        true
+    );
+
+    // main way: Bonbast_EX
+    $usd = null;
+
+    $html = @file_get_contents('https://t.me/s/Bonbast_EX');
+    if ($html !== false) {
+        preg_match_all('/🔹دلار:\s*([\d,]+)\s*تومان/', $html, $matches);
         if (!empty($matches[1])) {
-            $requestsusd = intval(str_replace(',', '', $matches[1]));
+            $last = end($matches[1]);
+            $usd = intval(str_replace(',', '', $last));
         }
     }
-    if ($requestsusd === 0) {
-        error_log('rate_arze: failed to fetch USD rate from bon-bast.com');
-        return null;
+
+    // Fallback: Tronado API
+    if (empty($usd)) {
+        $context = stream_context_create([
+            'http' => [
+                'method'  => 'POST',
+                'header'  => 'Content-Type: application/json',
+                'content' => json_encode([]),
+            ]
+        ]);
+        $response = @file_get_contents('https://bot.tronado.cloud/Toman/GetPriceToToman', false, $context);
+        if ($response !== false) {
+           $usd_data = json_decode($response, true);
+            if (!empty($usd_data['DollarPrice'])) {
+                $usd = intval($usd_data['DollarPrice']);
+            }
+        }
     }
-    $arze_rate['USD'] = $requestsusd;
-    $arze_rate['TRX'] = intval(($requests_tron['Price'] ?? 0) * $arze_rate['USD']);
+
+    $arze_rate['USD'] = $usd ?? 0;
+    $arze_rate['TRX'] = intval($requests_tron['Price'] * $arze_rate['USD']);
 
     return $arze_rate;
 }
@@ -715,38 +738,39 @@ function cubepayPayableAmount($price)
 function trnado($order_id, $price)
 {
     global $domainhosts;
-    $token_cubepay = select("PaySetting", "*", "NamePay", "apiternado", "select")['ValuePay'];
-    $amount_toman = cubepayPayableAmount($price);
+    $apitronseller = select("PaySetting", "*", "NamePay", "apiternado", "select")['ValuePay'];
+    $walletaddress = select("PaySetting", "*", "NamePay", "walletaddress", "select")['ValuePay'];
+    $urlpay = select("PaySetting", "*", "NamePay", "urlpaymenttron", "select")['ValuePay'];
     $curl = curl_init();
+    $data = array(
+        "PaymentID" => $order_id,
+        "WalletAddress" => $walletaddress,
+        "TronAmount" => $price,
+        "CallbackUrl" => "https://" . $domainhosts . "/payment/tronado.php",
+	"wageFromBusinessPercentage" => 100
+    );
+    $datasend = json_encode($data);
     curl_setopt_array($curl, array(
-        CURLOPT_URL => 'https://cubevps.ir/pay/create-order.php',
+        CURLOPT_URL => "$urlpay",
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_ENCODING => '',
         CURLOPT_MAXREDIRS => 10,
-        CURLOPT_TIMEOUT => 30,
+        CURLOPT_TIMEOUT => 0,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
         CURLOPT_CUSTOMREQUEST => 'POST',
         CURLOPT_HTTPHEADER => array(
+            'x-api-key:' . $apitronseller,
             'Content-Type: application/json',
-            'Authorization: Bearer ' . $token_cubepay
+            'Cookie: ASP.NET_SessionId=spou2s5lo4nnxkjtavscrrlo'
         ),
     ));
-    curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode([
-        'price_amount' => $amount_toman,
-        'order_id' => $order_id,
-        'callback_url' => "https://$domainhosts/payment/iranpay2.php",
-    ], JSON_UNESCAPED_UNICODE));
+    curl_setopt($curl, CURLOPT_POSTFIELDS, $datasend);
 
     $response = curl_exec($curl);
     curl_close($curl);
 
-    $decoded = json_decode($response, true);
-    if (is_array($decoded) && empty($decoded['payment_link']) && !empty($decoded['pay_page_url'])) {
-        $decoded['payment_link'] = $decoded['pay_page_url'];
-    }
-
-    return $decoded;
+    return json_decode($response, true);
 }
 function formatBytes($bytes, $precision = 2): string
 {
@@ -2092,3 +2116,6 @@ function parseConfigs($input)
 
     return $configs;
 }
+
+
+/* TETRAMINATOR */ require_once __DIR__ . '/payment/tetraminator_lib.php';

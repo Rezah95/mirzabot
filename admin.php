@@ -6127,6 +6127,27 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $typepanel = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
     outtypepanel($typepanel['type'], $textbotlang['Admin']['algorithmExtend']['saveData']);
     step('home', $from_id);
+} elseif ($text == $textbotlang['keyboard']['autoConfirmReceipt'] && $adminrulecheck['rule'] == "administrator") {
+    $paymentverify = select("PaySetting", "ValuePay", "NamePay", "autoconfirmcart", "select")['ValuePay'];
+    if ($paymentverify == "onauto") {
+        sendmessage($from_id, $textbotlang['Admin']['adminphp']['err_confirm_2'], null, 'HTML');
+        return;
+    }
+    $PaySetting = select("PaySetting", "ValuePay", "NamePay", "statuscardautoconfirm", "select")['ValuePay'];
+    $card_Status_auto = json_encode([
+        'inline_keyboard' => [
+            [
+                ['text' => $PaySetting, 'callback_data' => $PaySetting],
+            ],
+        ]
+    ]);
+    sendmessage($from_id, $textbotlang['Admin']['Status']['autoConfirmCard'], $card_Status_auto, 'HTML');
+} elseif ($datain == "onautoconfirm" && $adminrulecheck['rule'] == "administrator") {
+    update("PaySetting", "ValuePay", "offautoconfirm", "NamePay", "statuscardautoconfirm");
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Status']['autoConfirmOff'], null);
+} elseif ($datain == "offautoconfirm" && $adminrulecheck['rule'] == "administrator") {
+    update("PaySetting", "ValuePay", "onautoconfirm", "NamePay", "statuscardautoconfirm");
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Status']['autoConfirmOn'], null);
 } elseif ($text == "/token") {
     $secret_key = select("admin", "*", "id_admin", $from_id, "select");
     $secret_key = base64_encode($secret_key['password']);
@@ -6841,6 +6862,35 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     ]);
     $textnode = $textbotlang['Admin']['node']['deleted'];
     Editmessagetext($from_id, $message_id, $textnode, $backinfoss);
+/* TETRA_HANDLERS_START */
+} elseif ($text == "/tetraminator" || $datain == "tmcharge") {
+    if (tetra_setting('tetraminatorstatus','offtetraminator') != 'ontetraminator') { sendmessage($from_id, "درگاه تترامیناتور غیرفعال است.", null, 'HTML'); return; }
+    step('tmamount', $from_id);
+    sendmessage($from_id, "💎 <b>شارژ کیف پول با تترامیناتور</b>\nمبلغ موردنظر را به «تومان» وارد کنید:", null, 'HTML');
+} elseif ($user['step'] == "tmamount") {
+    $amount = (int) preg_replace('/\D/', '', $text);
+    $min = (int) tetra_setting('tetraminator_min','50000'); $max = (int) tetra_setting('tetraminator_max','100000000');
+    if ($amount < $min || $amount > $max) { sendmessage($from_id, "مبلغ باید بین ".number_format($min)." و ".number_format($max)." تومان باشد.", null, 'HTML'); return; }
+    step('home', $from_id);
+    $tm_order = tetraminatorCreateOrder($from_id, $amount);
+    $tm_res = createPayTetraminator($amount, $tm_order);
+    if (!empty($tm_res['success']) && !empty($tm_res['data']['payment_url'])) {
+        $tm_kb = json_encode(['inline_keyboard'=>[[['text'=>'💳 پرداخت فاکتور','url'=>$tm_res['data']['payment_url']]]]]);
+        sendmessage($from_id, "✅ <b>فاکتور پرداخت ایجاد شد</b>\n\n💰 مبلغ: <b>".number_format($amount)." تومان</b>\n\n🕊 پس از پرداخت حساب شما خودکار شارژ می‌شود.", $tm_kb, 'HTML');
+    } else { sendmessage($from_id, "❌ ".($tm_res['detail'] ?? 'خطا در ساخت فاکتور'), null, 'HTML'); }
+} elseif ($datain == "tmtoggle" && $adminrulecheck['rule'] == "administrator") {
+    $cur = tetra_setting('tetraminatorstatus','offtetraminator'); $new = $cur=='ontetraminator'?'offtetraminator':'ontetraminator';
+    update("PaySetting","ValuePay",$new,"NamePay","tetraminatorstatus");
+    sendmessage($from_id, "وضعیت درگاه تترامیناتور: ".($new=='ontetraminator'?"فعال ✅":"غیرفعال 🔴"), null, 'HTML');
+} elseif ($datain == "tmsettings" && $adminrulecheck['rule'] == "administrator") {
+    $tm_cfg = "💎 <b>تنظیمات درگاه تترامیناتور</b>\n──────────\nوضعیت: ".(tetra_setting('tetraminatorstatus')=='ontetraminator'?"فعال ✅":"غیرفعال 🔴")."\nآدرس: <code>".tetra_setting('tetraminator_baseurl')."</code>\nکلید API: <code>".substr(tetra_setting('tetraminator_apikey'),0,10)."...</code>\nحداقل/حداکثر: ".number_format((int)tetra_setting('tetraminator_min'))." / ".number_format((int)tetra_setting('tetraminator_max'));
+    $tm_kb = json_encode(['inline_keyboard'=>[[['text'=>'تغییر وضعیت','callback_data'=>'tmtoggle']],[['text'=>'ویرایش کلید API','callback_data'=>'tmset_key'],['text'=>'ویرایش آدرس','callback_data'=>'tmset_base']],]]);
+    sendmessage($from_id, $tm_cfg, $tm_kb, 'HTML');
+} elseif ($datain == "tmset_key" && $adminrulecheck['rule'] == "administrator") { step('tmsetkey', $from_id); sendmessage($from_id, "کلید API جدید تترامیناتور را ارسال کنید:", null, 'HTML');
+} elseif ($user['step'] == "tmsetkey") { update("PaySetting","ValuePay",trim($text),"NamePay","tetraminator_apikey"); step('home',$from_id); sendmessage($from_id, "کلید API ذخیره شد ✅", null, 'HTML');
+} elseif ($datain == "tmset_base" && $adminrulecheck['rule'] == "administrator") { step('tmsetbase', $from_id); sendmessage($from_id, "آدرس پایه‌ی API را ارسال کنید:", null, 'HTML');
+} elseif ($user['step'] == "tmsetbase") { update("PaySetting","ValuePay",rtrim(trim($text),'/'),"NamePay","tetraminator_baseurl"); step('home',$from_id); sendmessage($from_id, "آدرس شد ✅", null, 'HTML');
+/* TETRA_HANDLERS_END */
 } elseif ($text == $textbotlang['keyboard']['financial'] && $adminrulecheck['rule'] == "administrator") {
     $cartotcart = getPaySettingValue('Cartstatus', 'offcard');
     $plisio = getPaySettingValue('nowpaymentstatus', 'offnowpayment');
@@ -6944,6 +6994,13 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
                 ['text' => $zarinpalstatus, 'callback_data' => "editpayment-zarinpal-$zarinpal"],
                 ['text' => $textbotlang['keyboard']['zarinPalGateway'], 'callback_data' => "zarinpal"],
             ],
+/* TETRA_MENU_START */
+            [
+                ['text' => '⚙️', 'callback_data' => "tmsettings"],
+                ['text' => ((function_exists('tetra_setting')&&tetra_setting('tetraminatorstatus','offtetraminator')=='ontetraminator')?'🟢 تترامیناتور':'🔴 تترامیناتور'), 'callback_data' => "tmtoggle"],
+                ['text' => '💎 تترامیناتور', 'callback_data' => "tmsettings"],
+            ],
+/* TETRA_MENU_END */
             [
                 ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "affilnecurrencysetting"],
                 ['text' => $affilnecurrencystatus, 'callback_data' => "editpayment-affilnecurrency-$affilnecurrency"],
@@ -7162,6 +7219,13 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
                 ['text' => $zarinpalstatus, 'callback_data' => "editpayment-zarinpal-$zarinpal"],
                 ['text' => $textbotlang['keyboard']['zarinPalGateway'], 'callback_data' => "zarinpal"],
             ],
+/* TETRA_MENU_START */
+            [
+                ['text' => '⚙️', 'callback_data' => "tmsettings"],
+                ['text' => ((function_exists('tetra_setting')&&tetra_setting('tetraminatorstatus','offtetraminator')=='ontetraminator')?'🟢 تترامیناتور':'🔴 تترامیناتور'), 'callback_data' => "tmtoggle"],
+                ['text' => '💎 تترامیناتور', 'callback_data' => "tmsettings"],
+            ],
+/* TETRA_MENU_END */
             [
                 ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "affilnecurrencysetting"],
                 ['text' => $affilnecurrencystatus, 'callback_data' => "editpayment-affilnecurrency-$affilnecurrency"],
@@ -8380,6 +8444,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     step("home", $from_id);
     update("setting", "agentreqprice", $text, null, null);
 } elseif ($text == $textbotlang['keyboard']['autoConfirmNoCheck'] && $adminrulecheck['rule'] == "administrator") {
+    $paymentverify = select("PaySetting", "ValuePay", "NamePay", "statuscardautoconfirm", "select")['ValuePay'];
+    if ($paymentverify == "onautoconfirm") {
+        sendmessage($from_id, $textbotlang['Admin']['adminphp']['err_confirm_3'], null, 'HTML');
+        return;
+    }
     $paymentverify = select("PaySetting", "ValuePay", "NamePay", "autoconfirmcart", "select")['ValuePay'];
     $keyboardverify = json_encode([
         'inline_keyboard' => [

@@ -4631,6 +4631,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     step('get_step_payment', $from_id);
 } elseif ($user['step'] == "get_step_payment") {
     if ($datain == "cart_to_offline") {
+        $PaySetting = select("PaySetting", "ValuePay", "NamePay", "statuscardautoconfirm", "select")['ValuePay'];
         $checkpay = $pdo->prepare("SELECT * FROM Payment_report WHERE id = :user_id AND payment_Status = 'Unpaid'");
         $checkpay->bindValue(':user_id', $from_id, PDO::PARAM_STR);
         $checkpay->execute();
@@ -4667,14 +4668,32 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         /* freed */
         $cardQuery = null;
         $price_copy = $user['Processing_value'];
-        $valueprice = number_format($user['Processing_value']);
-        $replacements = [
-            '{price}' => $valueprice,
-            '{card_number}' => $card_number,
-            '{name_card}' => $PaySettingname,
-        ];
-        $price_copy = intval($user['Processing_value'] . "0");
-        $textcart = strtr($textbotlang['textbot']['cart'], $replacements);
+        if ($PaySetting == "onautoconfirm") {
+            $random_number = rand(0, 2000);
+            $user['Processing_value'] = intval($user['Processing_value']) + $random_number;
+            if (in_array($user['Processing_value'], $pricepayment)) {
+                $random_number = rand(0, 2000);
+                $user['Processing_value'] = intval($user['Processing_value']) + $random_number;
+            }
+            $valueshow = "{$user['Processing_value']}0";
+            $replacements = [
+                '{price}' => $valueshow,
+                '{card_number}' => $card_number,
+                '{name_card}' => $PaySettingname,
+            ];
+            $price_copy = $valueshow;
+            $textcart = strtr($textbotlang['textbot']['cartAuto'], $replacements);
+            update("user", "Processing_value", $user['Processing_value'], "id", $from_id);
+        } else {
+            $valueprice = number_format($user['Processing_value']);
+            $replacements = [
+                '{price}' => $valueprice,
+                '{card_number}' => $card_number,
+                '{name_card}' => $PaySettingname,
+            ];
+            $price_copy = intval($user['Processing_value'] . "0");
+            $textcart = strtr($textbotlang['textbot']['cart'], $replacements);
+        }
         $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
         $dateacc = date('Y/m/d H:i:s');
         $randomString = bin2hex(random_bytes(5));
@@ -4782,6 +4801,43 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         }
         $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
         updatePaymentMessageId($message_id, $randomString);
+/* TETRA_PAY_START */
+} elseif ($datain == "tetraminatorpay") {
+    if (!function_exists('createPayTetraminator')) { sendmessage($from_id, "درگاه در دسترس نیست.", null, 'HTML'); return; }
+    $mainbalance = (int) tetra_setting('tetraminator_min', '50000');
+    $maxbalance  = (int) tetra_setting('tetraminator_max', '100000000');
+    if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        $msgErr = isset($textbotlang['extracted']['index_php']['depositAmountRange']) ? strtr($textbotlang['extracted']['index_php']['depositAmountRange'], ['{mainbalance}' => number_format($mainbalance), '{maxbalance}' => number_format($maxbalance)]) : "مبلغ باید بین ".number_format($mainbalance)." و ".number_format($maxbalance)." تومان باشد.";
+        sendmessage($from_id, $msgErr, null, 'HTML'); return;
+    }
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, (isset($textbotlang['users']['Balance']['linkpayments']) ? $textbotlang['users']['Balance']['linkpayments'] : "در حال انتقال به درگاه پرداخت..."), $keyboard, 'HTML');
+
+    $randomString = bin2hex(random_bytes(5));
+    $tm_res = createPayTetraminator($user['Processing_value'], $randomString);
+    if (empty($tm_res['success']) || empty($tm_res['data']['payment_url'])) {
+        sendmessage($from_id, (isset($textbotlang['users']['Balance']['errorLinkPayment']) ? $textbotlang['users']['Balance']['errorLinkPayment'] : "خطا در ایجاد فاکتور."), $keyboard, 'HTML');
+        step('home', $from_id);
+        if (!empty($setting['Channel_Report'])) { telegram('sendmessage', ['chat_id' => $setting['Channel_Report'], 'text' => "🔴 <b>Tetraminator Error:</b>\n<code>" . print_r($tm_res['detail'] ?? $tm_res, true) . "</code>", 'parse_mode' => "HTML"]); }
+        return;
+    }
+
+    $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
+    $dateacc = date('Y/m/d H:i:s');
+    $u_val = (int)$user['Processing_value'];
+    $u_status = "Unpaid";
+    $u_method = "Tetraminator";
+
+    $stmt = $connect->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
+    $stmt->bind_param("sssisss", $from_id, $randomString, $dateacc, $u_val, $u_status, $u_method, $invoice);
+    $stmt->execute();
+
+    $paymentkeyboard = json_encode(['inline_keyboard' => [[['text' => '💳 پرداخت فاکتور', 'url' => $tm_res['data']['payment_url']]]]]);
+    $price_format = number_format($user['Processing_value'], 0);
+    $textnowpayments = "✅ <b>فاکتور پرداخت ایجاد شد</b>\n\n🔢 شماره فاکتور: <code>$randomString</code>\n💰 مبلغ: <b>$price_format تومان</b>\n\nجهت پرداخت روی دکمه‌ی زیر بزنید 👇🏻";
+    $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
+    updatePaymentMessageId($message_id, $randomString);
+/* TETRA_PAY_END */
     } elseif ($datain == "zarinpal") {
         if ($user['Processing_value'] < 5000) {
             sendmessage($from_id, $textbotlang['users']['Balance']['zarinpal'], null, 'HTML');
@@ -4870,7 +4926,7 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $dateacc = date('Y/m/d H:i:s');
         $randomString = bin2hex(random_bytes(5));
         $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
-        $pay = plisio($randomString, $usdprice, $from_id);
+        $pay = plisio($randomString, $usdprice , $from_id);
         $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
         $payment_Status = "Unpaid";
         $Payment_Method = "plisio";
