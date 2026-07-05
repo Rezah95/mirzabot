@@ -4779,6 +4779,58 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
     updatePaymentMessageId($message_id, $randomString);
 /* TETRA_PAY_END */
+/* UNIQUEPAY_PAY_START */
+} elseif ($datain == "uniquepay") {
+    if (!function_exists('createPayUniquePay')) { sendmessage($from_id, "درگاه یونیک‌پی در دسترس نیست.", null, 'HTML'); return; }
+    $mainbalance = (int) uniquepay_setting('minbalanceuniquepay', '20000');
+    $maxbalance  = (int) uniquepay_setting('maxbalanceuniquepay', '1000000');
+    if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
+        $msgErr = isset($textbotlang['extracted']['index_php']['depositAmountRange']) ? strtr($textbotlang['extracted']['index_php']['depositAmountRange'], ['{mainbalance}' => number_format($mainbalance), '{maxbalance}' => number_format($maxbalance)]) : "مبلغ باید بین " . number_format($mainbalance) . " و " . number_format($maxbalance) . " تومان باشد.";
+        sendmessage($from_id, $msgErr, null, 'HTML'); return;
+    }
+    deletemessage($from_id, $message_id);
+    sendmessage($from_id, (isset($textbotlang['users']['Balance']['linkpayments']) ? $textbotlang['users']['Balance']['linkpayments'] : "در حال انتقال به درگاه پرداخت..."), $keyboard, 'HTML');
+
+    $randomString = bin2hex(random_bytes(5));
+    $up_res = createPayUniquePay($user['Processing_value'], $randomString);
+    if (empty($up_res['success']) || empty($up_res['data']['payment_url'])) {
+        sendmessage($from_id, (isset($textbotlang['users']['Balance']['errorLinkPayment']) ? $textbotlang['users']['Balance']['errorLinkPayment'] : "خطا در ایجاد فاکتور.") . "
+" . ($up_res['detail'] ?? ''), $keyboard, 'HTML');
+        step('home', $from_id);
+        if (!empty($setting['Channel_Report'])) { telegram('sendmessage', ['chat_id' => $setting['Channel_Report'], 'text' => "🔴 <b>UniquePay Error:</b>
+<code>" . print_r($up_res['detail'] ?? $up_res, true) . "</code>", 'parse_mode' => "HTML"]); }
+        return;
+    }
+
+    $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
+    $dateacc = date('Y/m/d H:i:s');
+    $u_val = (int) $user['Processing_value'];
+    $u_status = "Unpaid";
+    $u_method = "UniquePay";
+    $u_dec = json_encode($up_res['data']['raw'] ?? $up_res['data'], JSON_UNESCAPED_UNICODE);
+
+    $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
+    $stmt->bindParam(1, $from_id);
+    $stmt->bindParam(2, $randomString);
+    $stmt->bindParam(3, $dateacc);
+    $stmt->bindParam(4, $u_val);
+    $stmt->bindParam(5, $u_status);
+    $stmt->bindParam(6, $u_method);
+    $stmt->bindParam(7, $invoice);
+    $stmt->bindParam(8, $u_dec);
+    $stmt->execute();
+
+    $paymentkeyboard = json_encode(['inline_keyboard' => [[['text' => '💳 پرداخت فاکتور', 'url' => $up_res['data']['payment_url']]]]]);
+    $price_format = number_format($user['Processing_value'], 0);
+    $textnowpayments = "✅ <b>فاکتور پرداخت یونیک‌پی ایجاد شد</b>
+
+🔢 شماره فاکتور: <code>$randomString</code>
+💰 مبلغ: <b>$price_format تومان</b>
+
+بعد از پرداخت، حساب شما خودکار شارژ می‌شود.";
+    $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
+    updatePaymentMessageId($message_id, $randomString);
+/* UNIQUEPAY_PAY_END */
     } elseif ($datain == "zarinpal") {
         if ($user['Processing_value'] < 5000) {
             sendmessage($from_id, $textbotlang['users']['Balance']['zarinpal'], null, 'HTML');

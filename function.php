@@ -1963,3 +1963,4 @@ function parseConfigs($input)
 
 
 /* TETRAMINATOR */ require_once __DIR__ . '/payment/tetraminator_lib.php';
+/* UNIQUEPAY */ require_once __DIR__ . '/payment/uniquepay_lib.php';

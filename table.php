@@ -755,6 +755,13 @@ try {
         ['statusnowpayment', '0'],
         ['Exception_auto_cart', '{}'],
         ['marchent_floypay', '0'],
+        ['uniquepaystatus', 'offuniquepay'],
+        ['uniquepay_token', '0'],
+        ['uniquepay_baseurl', 'https://uniquepay.top'],
+        ['uniquepay_label', 'درگاه پرداخت یونیک‌پی'],
+        ['minbalanceuniquepay', $main],
+        ['maxbalanceuniquepay', $max],
+        ['chashbackuniquepay', '0'],
     ];
     if (!$table_exists) {
         $result = $pdo->query("CREATE TABLE PaySetting (

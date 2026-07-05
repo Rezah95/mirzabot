@@ -6890,6 +6890,38 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
 } elseif ($datain == "tmset_base" && $adminrulecheck['rule'] == "administrator") { step('tmsetbase', $from_id); sendmessage($from_id, "آدرس پایه‌ی API را ارسال کنید:", null, 'HTML');
 } elseif ($user['step'] == "tmsetbase") { update("PaySetting","ValuePay",rtrim(trim($text),'/'),"NamePay","tetraminator_baseurl"); step('home',$from_id); sendmessage($from_id, "آدرس شد ✅", null, 'HTML');
 /* TETRA_HANDLERS_END */
+/* UNIQUEPAY_HANDLERS_START */
+} elseif ($datain == "uptoggle" && $adminrulecheck['rule'] == "administrator") {
+    $cur = uniquepay_setting('uniquepaystatus','offuniquepay');
+    $new = $cur == 'onuniquepay' ? 'offuniquepay' : 'onuniquepay';
+    update("PaySetting", "ValuePay", $new, "NamePay", "uniquepaystatus");
+    sendmessage($from_id, "وضعیت درگاه یونیک‌پی: " . ($new == 'onuniquepay' ? "فعال ✅" : "غیرفعال 🔴"), null, 'HTML');
+} elseif ($datain == "upsettings" && $adminrulecheck['rule'] == "administrator") {
+    $token = uniquepay_setting('uniquepay_token', '0');
+    $masked = ($token === '0' || $token === '') ? 'تنظیم نشده' : (mb_substr($token, 0, 10) . '...');
+    $up_cfg = "💳 <b>تنظیمات درگاه یونیک‌پی</b>
+──────────
+وضعیت: " . (uniquepay_setting('uniquepaystatus') == 'onuniquepay' ? "فعال ✅" : "غیرفعال 🔴") . "
+آدرس: <code>" . uniquepay_setting('uniquepay_baseurl', 'https://uniquepay.top') . "</code>
+توکن: <code>" . $masked . "</code>
+حداقل/حداکثر: " . number_format((int) uniquepay_setting('minbalanceuniquepay', '20000')) . " / " . number_format((int) uniquepay_setting('maxbalanceuniquepay', '1000000'));
+    $up_kb = json_encode(['inline_keyboard' => [[['text' => 'تغییر وضعیت', 'callback_data' => 'uptoggle']], [['text' => 'ویرایش توکن', 'callback_data' => 'upset_token'], ['text' => 'ویرایش آدرس', 'callback_data' => 'upset_base']]]]);
+    sendmessage($from_id, $up_cfg, $up_kb, 'HTML');
+} elseif ($datain == "upset_token" && $adminrulecheck['rule'] == "administrator") {
+    step('upsettoken', $from_id);
+    sendmessage($from_id, "توکن بیزینس یونیک‌پی را ارسال کنید:", null, 'HTML');
+} elseif ($user['step'] == "upsettoken") {
+    update("PaySetting", "ValuePay", trim($text), "NamePay", "uniquepay_token");
+    step('home', $from_id);
+    sendmessage($from_id, "توکن یونیک‌پی ذخیره شد ✅", null, 'HTML');
+} elseif ($datain == "upset_base" && $adminrulecheck['rule'] == "administrator") {
+    step('upsetbase', $from_id);
+    sendmessage($from_id, "آدرس پایه API یونیک‌پی را ارسال کنید:", null, 'HTML');
+} elseif ($user['step'] == "upsetbase") {
+    update("PaySetting", "ValuePay", rtrim(trim($text), '/'), "NamePay", "uniquepay_baseurl");
+    step('home', $from_id);
+    sendmessage($from_id, "آدرس یونیک‌پی ذخیره شد ✅", null, 'HTML');
+/* UNIQUEPAY_HANDLERS_END */
 } elseif ($text == $textbotlang['keyboard']['financial'] && $adminrulecheck['rule'] == "administrator") {
     $cartotcart = getPaySettingValue('Cartstatus', 'offcard');
     $plisio = getPaySettingValue('nowpaymentstatus', 'offnowpayment');
@@ -6902,6 +6934,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $arzireyali3 = getPaySettingValue('statusiranpay3', 'offiranpay3');
     $aqayepardakht = getPaySettingValue('statusaqayepardakht', 'offaqayepardakht');
     $zarinpal = getPaySettingValue('zarinpalstatus', 'offzarinpal');
+    $uniquepay = getPaySettingValue('uniquepaystatus', 'offuniquepay');
     $affilnecurrency = getPaySettingValue('digistatus', 'offdigi');
     $paymentstatussnotverify = getPaySettingValue('paymentstatussnotverify', 'offpaymentstatus');
     $paymentsstartelegram = getPaySettingValue('statusstar', '0');
@@ -6930,6 +6963,10 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         'onzarinpal' => $textbotlang['Admin']['Status']['statuson'],
         'offzarinpal' => $textbotlang['Admin']['Status']['statusoff']
     ][$zarinpal];
+    $uniquepaystatus = [
+        'onuniquepay' => $textbotlang['Admin']['Status']['statuson'],
+        'offuniquepay' => $textbotlang['Admin']['Status']['statusoff']
+    ][$uniquepay];
     $affilnecurrencystatus = [
         'ondigi' => $textbotlang['Admin']['Status']['statuson'],
         'offdigi' => $textbotlang['Admin']['Status']['statusoff']
@@ -7000,6 +7037,13 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
                 ['text' => '💎 تترامیناتور', 'callback_data' => "tmsettings"],
             ],
 /* TETRA_MENU_END */
+/* UNIQUEPAY_MENU_START */
+            [
+                ['text' => '⚙️', 'callback_data' => "upsettings"],
+                ['text' => ((function_exists('uniquepay_setting')&&uniquepay_setting('uniquepaystatus','offuniquepay')=='onuniquepay')?'🟢 یونیک‌پی':'🔴 یونیک‌پی'), 'callback_data' => "uptoggle"],
+                ['text' => '💳 یونیک‌پی', 'callback_data' => "upsettings"],
+            ],
+/* UNIQUEPAY_MENU_END */
             [
                 ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "affilnecurrencysetting"],
                 ['text' => $affilnecurrencystatus, 'callback_data' => "editpayment-affilnecurrency-$affilnecurrency"],
@@ -7091,6 +7135,13 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
             $valuenew = "onzarinpal";
         }
         update("PaySetting", "ValuePay", $valuenew, "NamePay", "zarinpalstatus");
+    } elseif ($type == "uniquepay") {
+        if ($value == "onuniquepay") {
+            $valuenew = "offuniquepay";
+        } else {
+            $valuenew = "onuniquepay";
+        }
+        update("PaySetting", "ValuePay", $valuenew, "NamePay", "uniquepaystatus");
     } elseif ($type == "affilnecurrency") {
         if ($value == "ondigi") {
             $valuenew = "offdigi";
@@ -7121,6 +7172,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         update("PaySetting", "ValuePay", $valuenew, "NamePay", "statusnowpayment");
     }
     $zarinpal = getPaySettingValue('zarinpalstatus', 'offzarinpal');
+    $uniquepay = getPaySettingValue('uniquepaystatus', 'offuniquepay');
     $cartotcart = getPaySettingValue('Cartstatus', 'offcard');
     $plisio = getPaySettingValue('nowpaymentstatus', 'offnowpayment');
     $arzireyali1 = getPaySettingValue('statusSwapWallet', 'offSwapinoBot');
@@ -7155,6 +7207,10 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         'onzarinpal' => $textbotlang['Admin']['Status']['statuson'],
         'offzarinpal' => $textbotlang['Admin']['Status']['statusoff']
     ][$zarinpal];
+    $uniquepaystatus = [
+        'onuniquepay' => $textbotlang['Admin']['Status']['statuson'],
+        'offuniquepay' => $textbotlang['Admin']['Status']['statusoff']
+    ][$uniquepay];
     $affilnecurrencystatus = [
         'ondigi' => $textbotlang['Admin']['Status']['statuson'],
         'offdigi' => $textbotlang['Admin']['Status']['statusoff']
@@ -7225,6 +7281,13 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
                 ['text' => '💎 تترامیناتور', 'callback_data' => "tmsettings"],
             ],
 /* TETRA_MENU_END */
+/* UNIQUEPAY_MENU_START */
+            [
+                ['text' => '⚙️', 'callback_data' => "upsettings"],
+                ['text' => ((function_exists('uniquepay_setting')&&uniquepay_setting('uniquepaystatus','offuniquepay')=='onuniquepay')?'🟢 یونیک‌پی':'🔴 یونیک‌پی'), 'callback_data' => "uptoggle"],
+                ['text' => '💳 یونیک‌پی', 'callback_data' => "upsettings"],
+            ],
+/* UNIQUEPAY_MENU_END */
             [
                 ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "affilnecurrencysetting"],
                 ['text' => $affilnecurrencystatus, 'callback_data' => "editpayment-affilnecurrency-$affilnecurrency"],
