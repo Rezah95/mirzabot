@@ -268,6 +268,9 @@ $step_payment = [
 /* TETRA_KB_START */
 if (function_exists('tetra_setting') && tetra_setting('tetraminatorstatus','offtetraminator') == "ontetraminator") { $step_payment['inline_keyboard'][] = [['text' => tetra_setting('tetraminator_label','درگاه پرداخت ریالی'), 'callback_data' => "tetraminatorpay"]]; }
 /* TETRA_KB_END */
+/* UNIQUEPAY_KB_START */
+if (function_exists('uniquepay_setting') && uniquepay_setting('uniquepaystatus','offuniquepay') == "onuniquepay") { $step_payment['inline_keyboard'][] = [['text' => uniquepay_setting('uniquepay_label','درگاه پرداخت یونیک‌پی'), 'callback_data' => "uniquepay"]]; }
+/* UNIQUEPAY_KB_END */
 
 /* TRONADO_START*/
 if ($trnadoo == "onternado") {
