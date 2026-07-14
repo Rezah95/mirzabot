@@ -2419,7 +2419,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'qrBackground' => '🖼 QR code background',
                 'quickSetTimePrice' => '⏳ Quick time price setting',
                 'quickSetVolumePrice' => '🔋 Quick volume price setting',
-                'rebeca' => 'Rebeca',
+                'rebecca' => 'Rebecca',
                 'reWebhookAgentBots' => '🔗 Re-webhook agent bots',
                 'receiveMembershipGift' => '🎁 Receive membership gift',
                 'reconnectNode' => '♻️ Reconnect node',

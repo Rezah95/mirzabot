@@ -941,7 +941,7 @@ $optionMarzban = json_encode([
     ],
     'resize_keyboard' => true
 ]);
-$optionrebeca = json_encode([
+$optionrebecca = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['panelFeatureStatus']]],
         [['text' => $textbotlang['keyboard']['panelName']], ['text' => $textbotlang['keyboard']['deletePanel']]],
@@ -1246,7 +1246,7 @@ $keyboardtypepanel = json_encode([
             ['text' => $textbotlang['keyboard']['mikrotik'], 'callback_data' => 'typepanel#mikrotik']
         ],
         [
-            ['text' => $textbotlang['keyboard']['rebeca'], 'callback_data' => 'typepanel#rebeca']
+            ['text' => $textbotlang['keyboard']['rebecca'], 'callback_data' => 'typepanel#rebecca']
         ],
         [
             ['text' => $textbotlang['Admin']['backAdminBtn'], 'callback_data' => 'admin']

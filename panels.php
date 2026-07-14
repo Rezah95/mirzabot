@@ -11,7 +11,7 @@ require_once __DIR__ . '/s_ui.php';
 require_once __DIR__ . '/ibsng.php';
 require_once __DIR__ . '/mikrotik.php';
 require_once __DIR__ . '/mirza_agent.php';
-require_once __DIR__ . '/Rebeca.php';
+require_once __DIR__ . '/Rebecca.php';
 
 class ManagePanel
 {
@@ -404,10 +404,10 @@ class ManagePanel
                 $Output['subscription_url'] = $data_Output['subscription_url'];
                 $Output['configs'] = $data_Output['links'];
             }
-        } elseif ($Get_Data_Panel['type'] == "rebeca") {
+        } elseif ($Get_Data_Panel['type'] == "rebecca") {
             //create user
             $order_get = select("invoice", "*", "username", $usernameC, "select");
-            $ConnectToPanel = adduser_rebeca($Get_Data_Panel['name_panel'], $data_limit, $usernameC, $expire, $Get_Data_Product['name_product'], $note, $Get_Data_Product['data_limit_reset'], $order_get['limit_user']);
+            $ConnectToPanel = adduser_rebecca($Get_Data_Panel['name_panel'], $data_limit, $usernameC, $expire, $Get_Data_Product['name_product'], $note, $Get_Data_Product['data_limit_reset'], $order_get['limit_user']);
             if (!empty($ConnectToPanel['status']) && $ConnectToPanel['status'] == 500) {
                 return array(
                     'status' => 'Unsuccessful',
@@ -1012,8 +1012,8 @@ class ManagePanel
                     'data_limit_reset' => $UsernameData['data_limit_reset']
                 );
             }
-        } elseif ($Get_Data_Panel['type'] == "rebeca") {
-            $UsernameData = getuser_rebeca($username, $Get_Data_Panel['name_panel']);
+        } elseif ($Get_Data_Panel['type'] == "rebecca") {
+            $UsernameData = getuser_rebecca($username, $Get_Data_Panel['name_panel']);
             if (!empty($UsernameData['error'])) {
                 $Output = array(
                     'status' => 'Unsuccessful',
@@ -1274,8 +1274,8 @@ class ManagePanel
                     'subscription_url' => $Data_User['subscription_url']
                 );
             }
-        } elseif ($Get_Data_Panel['type'] == "rebeca") {
-            $revoke_sub = revoke_sub_rebeca($username, $name_panel);
+        } elseif ($Get_Data_Panel['type'] == "rebecca") {
+            $revoke_sub = revoke_sub_rebecca($username, $name_panel);
             if (!empty($revoke_sub['error'])) {
                 $Output = array(
                     'status' => 'Unsuccessful',
@@ -1474,8 +1474,8 @@ class ManagePanel
                     'username' => $username,
                 );
             }
-        } elseif ($Get_Data_Panel['type'] == "rebeca") {
-            $UsernameData = removeuser_rebeca($Get_Data_Panel['name_panel'], $username);
+        } elseif ($Get_Data_Panel['type'] == "rebecca") {
+            $UsernameData = removeuser_rebecca($Get_Data_Panel['name_panel'], $username);
             if (!empty($UsernameData['error'])) {
                 $Output = array(
                     'status' => 'Unsuccessful',
@@ -1739,8 +1739,8 @@ class ManagePanel
                 'status' => true,
                 'data' => $modify
             );
-        } elseif ($Get_Data_Panel['type'] == "rebeca") {
-            $modify = Modifyuser_rebeca($name_panel, $username, $config);
+        } elseif ($Get_Data_Panel['type'] == "rebecca") {
+            $modify = Modifyuser_rebecca($name_panel, $username, $config);
             if (!empty($modify['error'])) {
                 return array(
                     'status' => false,
@@ -1878,7 +1878,7 @@ class ManagePanel
                 'status' => 'successful',
                 'msg' => null
             );
-        } elseif ($Get_Data_Panel['type'] == "rebeca") {
+        } elseif ($Get_Data_Panel['type'] == "rebecca") {
             if ($DataUserOut['status'] == "active") {
                 $status = "disabled";
             } else {
@@ -2033,8 +2033,8 @@ class ManagePanel
                 'status' => true,
                 'msg' => 'successful'
             );
-        } elseif ($panel['type'] == "rebeca") {
-            $reset = ResetUserDataUsage_rebeca($username, $panel['name_panel']);
+        } elseif ($panel['type'] == "rebecca") {
+            $reset = ResetUserDataUsage_rebecca($username, $panel['name_panel']);
             if (!empty($reset['status']) && $reset['status'] >= 400) {
                 $body = json_decode($reset['body'], true);
                 return array(
@@ -2255,7 +2255,7 @@ class ManagePanel
                 'status' => true,
                 'msg' => 'successful'
             );
-        } elseif ($panel['type'] == "rebeca") {
+        } elseif ($panel['type'] == "rebecca") {
             $data = array(
                 'data_limit' => $data_limit_new,
                 'expire' => $time_new == 0 ? null : $time_new,
@@ -2389,7 +2389,7 @@ class ManagePanel
                 'status' => true,
                 'msg' => 'successful'
             );
-        } elseif ($panel['type'] == "rebeca") {
+        } elseif ($panel['type'] == "rebecca") {
             $data = array(
                 'data_limit' => $new_limit,
             );
@@ -2528,7 +2528,7 @@ class ManagePanel
                 'status' => true,
                 'msg' => 'successful'
             );
-        } elseif ($panel['type'] == "rebeca") {
+        } elseif ($panel['type'] == "rebecca") {
             $data = array(
                 'expire' => $new_limit == 0 ? null : $new_limit,
             );

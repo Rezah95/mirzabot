@@ -2419,7 +2419,7 @@ nowpayments.io
                 'qrBackground' => '🖼 二维码背景',
                 'quickSetTimePrice' => '⏳ 快速设置时间价格',
                 'quickSetVolumePrice' => '🔋 快速设置流量价格',
-                'rebeca' => 'Rebeca',
+                'rebecca' => 'Rebecca',
                 'reWebhookAgentBots' => '🔗 重新设置代理机器人 webhook',
                 'receiveMembershipGift' => '🎁 领取会员礼品',
                 'reconnectNode' => '♻️ 重新连接节点',

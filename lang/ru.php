@@ -2420,7 +2420,7 @@ ID пользователя: %s
                 'qrBackground' => '🖼 Фон QR-кода',
                 'quickSetTimePrice' => '⏳ Быстрая настройка цены времени',
                 'quickSetVolumePrice' => '🔋 Быстрая настройка цены трафика',
-                'rebeca' => 'Rebeca',
+                'rebecca' => 'Rebecca',
                 'reWebhookAgentBots' => '🔗 Повторный webhook ботов агентов',
                 'receiveMembershipGift' => '🎁 Получить подарок за членство',
                 'reconnectNode' => '♻️ Переподключить ноду',

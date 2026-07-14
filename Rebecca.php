@@ -1,6 +1,6 @@
 <?php
 #-----------------------------#
-function getuser_rebeca($username_account, $location)
+function getuser_rebecca($username_account, $location)
 {
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
     $url = $panel['url_panel'] . '/api/user/' . $username_account;
@@ -11,7 +11,7 @@ function getuser_rebeca($username_account, $location)
     return $response;
 }
 #-----------------------------#
-function ResetUserDataUsage_rebeca($username_account, $location)
+function ResetUserDataUsage_rebecca($username_account, $location)
 {
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
     $url = $panel['url_panel'] . '/api/user/' . $username_account . '/reset';
@@ -21,7 +21,7 @@ function ResetUserDataUsage_rebeca($username_account, $location)
     $response = $req->post(array());
     return $response;
 }
-function revoke_sub_rebeca($username_account, $location)
+function revoke_sub_rebecca($username_account, $location)
 {
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
     $url = $panel['url_panel'] . '/api/user/' . $username_account . '/revoke_sub';
@@ -32,7 +32,7 @@ function revoke_sub_rebeca($username_account, $location)
     return $response;
 }
 #-----------------------------#
-function adduser_rebeca($location, $data_limit, $username_ac, $timestamp, $name_product, $note = '', $data_limit_reset = 'no_reset', $limitip = null)
+function adduser_rebecca($location, $data_limit, $username_ac, $timestamp, $name_product, $note = '', $data_limit_reset = 'no_reset', $limitip = null)
 {
     $product = select('product', "*", "name_product", $name_product, "select");
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
@@ -76,7 +76,7 @@ function adduser_rebeca($location, $data_limit, $username_ac, $timestamp, $name_
     return $response;
 }
 //----------------------------------
-function Get_System_Stats_rebeca($location)
+function Get_System_Stats_rebecca($location)
 {
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
     $url = $panel['url_panel'] . '/api/system';
@@ -87,7 +87,7 @@ function Get_System_Stats_rebeca($location)
     return $response;
 }
 //----------------------------------
-function removeuser_rebeca($location, $username_account)
+function removeuser_rebecca($location, $username_account)
 {
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
     $url = $panel['url_panel'] . '/api/user/' . $username_account;
@@ -98,7 +98,7 @@ function removeuser_rebeca($location, $username_account)
     return $response;
 }
 //----------------------------------
-function Modifyuser_rebeca($location, $username_account, array $data)
+function Modifyuser_rebecca($location, $username_account, array $data)
 {
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
     $payload = json_encode($data);

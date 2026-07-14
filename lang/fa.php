@@ -2416,7 +2416,7 @@ nowpayments.io
                 'qrBackground' => '🖼 پس زمینه کیوآرکد',
                 'quickSetTimePrice' => '⏳ تنظیم سریع قیمت زمان',
                 'quickSetVolumePrice' => '🔋 تنظیم سریع قیمت حجم',
-                'rebeca' => 'ربکا',
+                'rebecca' => 'ربکا',
                 'reWebhookAgentBots' => '🔗 وبهوک مجدد ربات های نماینده',
                 'receiveMembershipGift' => '🎁 دریافت هدیه عضویت',
                 'reconnectNode' => '♻️ اتصال مجدد نود',
