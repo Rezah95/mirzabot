@@ -6508,7 +6508,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, $textbotlang['users']['selectoption'], $trnado, 'HTML');
 } elseif ($datain == "iranpay3setting" && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $iranpaykeyboard, 'HTML');
-}elseif ($text == "API T" && $adminrulecheck['rule'] == "administrator") {
+} elseif ($text == $textbotlang['keyboard']['apiT'] && $adminrulecheck['rule'] == "administrator") {
     $PaySetting = select("PaySetting", "ValuePay", "NamePay", "apiternado", "select");
     $texttronseller = sprintf($textbotlang['Admin']['gateway']['askMerchant'], $PaySetting['ValuePay']);
     sendmessage($from_id, $texttronseller, $backadmin, 'HTML');
@@ -6517,6 +6517,27 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $trnado, 'HTML');
     update("PaySetting", "ValuePay", $text, "NamePay", "apiternado");
     step('home', $from_id);
+} elseif ($text == $textbotlang['keyboard']['tronadoIpnSigningKey'] && $adminrulecheck['rule'] == "administrator") {
+    $signingKey = getPaySettingValue('tronado_ipn_signing_key', '0');
+    $maskedKey = ($signingKey === '' || $signingKey === '0')
+        ? '-'
+        : (strlen($signingKey) <= 8 ? '********' : substr($signingKey, 0, 4) . '…' . substr($signingKey, -4));
+    sendmessage(
+        $from_id,
+        sprintf($textbotlang['Admin']['gateway']['askTronadoIpnSigningKey'], $maskedKey),
+        $backadmin,
+        'HTML'
+    );
+    step('tronado_ipn_signing_key', $from_id);
+} elseif ($user['step'] == "tronado_ipn_signing_key") {
+    $signingKey = trim($text);
+    if ($signingKey === '' || $signingKey === '0') {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    update("PaySetting", "ValuePay", $signingKey, "NamePay", "tronado_ipn_signing_key");
+    step('home', $from_id);
+    sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $trnado, 'HTML');
 } elseif ($datain == "affilnecurrencysetting") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $tronnowpayments, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['inboundDeactivate'] && $adminrulecheck['rule'] == "administrator") {

@@ -294,11 +294,24 @@ README روش‌های زیر را معرفی می‌کند و کد نیز adapt
 |---|---|---|
 | دستی | کارت‌به‌کارت، ارز دیجیتال آفلاین | رسید کاربر، مدیر یا cron خودکار |
 | آنلاین ریالی | Zarinpal، Aqayepardakht، IranPay | callback و verify درگاه |
-| رمزارزی | NowPayments، Plisio، Tronado، Tetraminator، CubePay/Swapino و UniquePay در مسیرهای مربوط | callback یا polling |
+| رمزارزی | NowPayments، Plisio، Tronado v5، Tetraminator، CubePay/Swapino و UniquePay در مسیرهای مربوط | callback یا polling |
 | Telegram | Telegram Stars | `pre_checkout` و payment موفق |
 | سایر | روش‌هایی که با flag و function موجود فعال می‌شوند | وابسته به تنظیمات و provider |
 
-بعضی درگاه‌ها کارمزد دارند. توابع مربوط به Tronado/CubePay مقدار کارمزد را به‌صورت درصد یا مبلغ ثابت تفسیر می‌کنند؛ مقدارهای بزرگ‌تر از آستانه به‌عنوان مبلغ ثابت در نظر گرفته می‌شوند.
+بعضی درگاه‌ها کارمزد دارند. در اتصال Tronado v5، کارمزد provider با `wageFromBusinessPercentage` کنترل می‌شود؛ این پروژه آن را روی `100` می‌فرستد تا کسب‌وکار کارمزد را جذب کند و مبلغ پرداختی کاربر تقریباً برابر مبلغ فاکتور تومانی باشد.
+
+### ترونادو (API v5)
+
+مسیر کاربر `iranpay2` برای ترونادو از قرارداد جدید استفاده می‌کند:
+
+1. ابتدا `POST /api/Price/Tron/GetPriceToToman` با هدر `x-api-key` دریافت می‌شود.
+2. مقدار `TronAmount` از `price ÷ TronPriceToman` با دقت شش رقم اعشار محاسبه می‌شود.
+3. سفارش به `POST /api/v5/GetOrderToken?wageFromBusinessPercentage=100` با `PaymentID`، آدرس کیف پول، مقدار TRX و callback ارسال می‌شود.
+4. فقط `FullPaymentUrl` پاسخ برای دکمهٔ پرداخت کاربر استفاده می‌شود؛ پاسخ کامل نیز برای audit در `Payment_report.dec_not_confirmed` ذخیره می‌شود.
+
+تنظیمات لازم در `PaySetting` عبارت‌اند از `apiternado` (API Key)، `walletaddress` (کیف پول TRC20) و `tronado_ipn_signing_key` (کلید اختصاصی IPN). کلید IPN از منوی تنظیمات ترونادو در پنل ادمین قابل ثبت است و نباید با API Key یکی فرض شود.
+
+callback در `payment/tronado.php` قرار دارد و باید به‌صورت `https://<domain>/payment/tronado.php` در ترونادو ثبت شود. این endpoint فقط POST را می‌پذیرد، HMAC-SHA512 بدنهٔ خام را با هدر `X-Tronado-Sig` و کلید IPN بررسی می‌کند و callbackها را با کلید یکتای `(PaymentId, OrderStatusID)` در جدول `Tronado_callback` حذف تکرار می‌کند. فقط `IsPaid=true` یا وضعیت `30` باعث `claimPaymentPaid` و سپس `DirectPayment` می‌شود؛ وضعیت‌های دیگر ثبت و با پاسخ 2xx تأیید می‌شوند.
 
 ### چرخه عمومی `Payment_report`
 

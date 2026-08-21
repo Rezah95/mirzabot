@@ -1843,6 +1843,9 @@ Your current merchant code: %s',
                         'askMerchant' => '💳 Obtain your merchant code and enter it in this section
         
 Your current merchant code: %s',
+                        'askTronadoIpnSigningKey' => '🔐 Send the Tronado IPN signing key received from support.
+
+Current key: <code>%s</code>',
                         'askTronWallet' => '💳 Send your Tron trc20 wallet address
         
         Your current wallet: %s',
@@ -3756,6 +3759,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'apiIranPay' => 'Rial currency gateway api',
                 'apiPlisio' => '🧩 api plisio',
                 'apiT' => 'API T',
+                'tronadoIpnSigningKey' => '🔐 Tronado IPN key',
                 'appDownloadLink' => '🔗 App download link',
                 'appDownloadLinkAlt' => '🔗App download link',
                 'aqayePardakhtGateway' => '🔵 Aghaye Pardakht',

@@ -837,42 +837,210 @@ function isValidDate($date)
 
 //     return cubepayApplyFee($price, cubepayFeeValue());
 // }
-function trnado($order_id, $price)
+function tronadoSetting($name, $default = '')
 {
-    global $domainhosts;
-    $apitronseller = select("PaySetting", "*", "NamePay", "apiternado", "select")['ValuePay'];
-    $walletaddress = select("PaySetting", "*", "NamePay", "walletaddress", "select")['ValuePay'];
-    $urlpay = select("PaySetting", "*", "NamePay", "urlpaymenttron", "select")['ValuePay'];
+    $value = getPaySettingValue($name, $default);
+    return is_scalar($value) ? trim((string) $value) : $default;
+}
+
+function tronadoApiRequest($path, $payload = null, array $query = [])
+{
+    $apiKey = tronadoSetting('apiternado');
+    if ($apiKey === '' || $apiKey === '0') {
+        return ['success' => false, 'error' => 'Tronado API key is not configured'];
+    }
+
+    $url = 'https://bot.tronado.cloud/' . ltrim((string) $path, '/');
+    if (!empty($query)) {
+        $url .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    }
+
     $curl = curl_init();
-    $data = array(
-        "PaymentID" => $order_id,
-        "WalletAddress" => $walletaddress,
-        "TronAmount" => $price,
-        "CallbackUrl" => "https://" . $domainhosts . "/payment/tronado.php",
-	"wageFromBusinessPercentage" => 100
-    );
-    $datasend = json_encode($data);
-    curl_setopt_array($curl, array(
-        CURLOPT_URL => "$urlpay",
+    curl_setopt_array($curl, [
+        CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_ENCODING => '',
-        CURLOPT_MAXREDIRS => 10,
-        CURLOPT_TIMEOUT => 0,
-        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 0,
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_FOLLOWLOCATION => false,
         CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-        CURLOPT_CUSTOMREQUEST => 'POST',
-        CURLOPT_HTTPHEADER => array(
-            'x-api-key:' . $apitronseller,
+        CURLOPT_POST => true,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_HTTPHEADER => [
+            'x-api-key: ' . $apiKey,
             'Content-Type: application/json',
-            'Cookie: ASP.NET_SessionId=spou2s5lo4nnxkjtavscrrlo'
-        ),
-    ));
-    curl_setopt($curl, CURLOPT_POSTFIELDS, $datasend);
+            'Accept: application/json',
+        ],
+    ]);
 
-    $response = curl_exec($curl);
+    if ($payload !== null) {
+        $encodedPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION);
+        if ($encodedPayload === false) {
+            curl_close($curl);
+            return ['success' => false, 'error' => 'Unable to encode Tronado request'];
+        }
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $encodedPayload);
+    }
+
+    $rawResponse = curl_exec($curl);
+    $curlError = curl_error($curl);
+    $httpCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
     curl_close($curl);
 
-    return json_decode($response, true);
+    if ($rawResponse === false) {
+        return ['success' => false, 'error' => 'Tronado request failed: ' . $curlError, 'http_code' => $httpCode];
+    }
+
+    $response = json_decode($rawResponse, true);
+    if (!is_array($response)) {
+        return ['success' => false, 'error' => 'Invalid Tronado response', 'http_code' => $httpCode];
+    }
+
+    if ($httpCode < 200 || $httpCode >= 300) {
+        return [
+            'success' => false,
+            'error' => (string) ($response['ErrorMessage'] ?? $response['Error'] ?? 'Tronado returned HTTP ' . $httpCode),
+            'http_code' => $httpCode,
+            'data' => $response,
+        ];
+    }
+
+    return ['success' => true, 'http_code' => $httpCode, 'data' => $response];
+}
+
+function tronadoGetTronPriceToman()
+{
+    $response = tronadoApiRequest('/api/Price/Tron/GetPriceToToman');
+    $price = $response['data']['TronPriceToman'] ?? null;
+
+    if (empty($response['success']) || !is_numeric($price) || (float) $price <= 0) {
+        return null;
+    }
+
+    return (float) $price;
+}
+
+function tronadoCallbackUrl()
+{
+    global $domainhosts;
+
+    $baseUrl = trim((string) $domainhosts);
+    if ($baseUrl === '') {
+        return null;
+    }
+    if (!preg_match('#^https?://#i', $baseUrl)) {
+        $baseUrl = 'https://' . $baseUrl;
+    }
+
+    $callbackUrl = rtrim($baseUrl, '/') . '/payment/tronado.php';
+    $scheme = strtolower((string) parse_url($callbackUrl, PHP_URL_SCHEME));
+    if ($scheme !== 'https' || !filter_var($callbackUrl, FILTER_VALIDATE_URL)) {
+        return null;
+    }
+
+    return $callbackUrl;
+}
+
+function tronadoVerifyCallbackSignature($rawBody, $signature, $signingKey)
+{
+    $rawBody = (string) $rawBody;
+    $signature = strtolower(trim((string) $signature));
+    $signingKey = trim((string) $signingKey);
+
+    if ($rawBody === '' || $signingKey === '' || $signingKey === '0' || strlen($signature) !== 128 || !ctype_xdigit($signature)) {
+        return false;
+    }
+
+    $expectedSignature = hash_hmac('sha512', $rawBody, $signingKey);
+    return hash_equals($expectedSignature, $signature);
+}
+
+function tronadoRegisterCallback($paymentId, $orderStatusId, $rawPayload)
+{
+    global $pdo;
+
+    try {
+        $statement = $pdo->prepare(
+            'INSERT INTO Tronado_callback (payment_id, payment_id_hash, order_status_id, raw_payload) VALUES (?, ?, ?, ?)'
+        );
+        $statement->execute([
+            (string) $paymentId,
+            hash('sha256', (string) $paymentId),
+            (int) $orderStatusId,
+            (string) $rawPayload,
+        ]);
+        return 'new';
+    } catch (PDOException $exception) {
+        if ((string) $exception->getCode() === '23000') {
+            return 'duplicate';
+        }
+
+        error_log('Tronado callback registration failed: ' . $exception->getMessage());
+        return 'error';
+    }
+}
+
+function trnado($order_id, $price)
+{
+    $walletAddress = tronadoSetting('walletaddress');
+    $signingKey = tronadoSetting('tronado_ipn_signing_key');
+    if ($walletAddress === '' || $walletAddress === '0') {
+        return ['success' => false, 'error' => 'Tronado wallet address is not configured'];
+    }
+    if ($signingKey === '' || $signingKey === '0') {
+        return ['success' => false, 'error' => 'Tronado IPN signing key is not configured'];
+    }
+    if (!is_numeric($price) || (float) $price <= 0) {
+        return ['success' => false, 'error' => 'Invalid Tronado order amount'];
+    }
+
+    $tronPriceToman = tronadoGetTronPriceToman();
+    if ($tronPriceToman === null) {
+        return ['success' => false, 'error' => 'Unable to get the current Tron price'];
+    }
+
+    $tronAmount = round((float) $price / $tronPriceToman, 6);
+    if ($tronAmount <= 0) {
+        return ['success' => false, 'error' => 'Calculated Tron amount is invalid'];
+    }
+
+    $callbackUrl = tronadoCallbackUrl();
+    if ($callbackUrl === null) {
+        return ['success' => false, 'error' => 'Tronado callback URL must be a valid HTTPS URL'];
+    }
+
+    // Keep the existing business policy: the business absorbs the Tronado fee,
+    // so the user pays approximately the original toman invoice value.
+    $response = tronadoApiRequest('/api/v5/GetOrderToken', [
+        'PaymentID' => (string) $order_id,
+        'WalletAddress' => $walletAddress,
+        'TronAmount' => $tronAmount,
+        'CallbackUrl' => $callbackUrl,
+    ], [
+        'wageFromBusinessPercentage' => 100,
+    ]);
+
+    if (empty($response['success'])) {
+        return $response;
+    }
+
+    $data = $response['data'];
+    $paymentUrl = trim((string) ($data['FullPaymentUrl'] ?? ''));
+    $token = trim((string) ($data['Token'] ?? ''));
+    if ($paymentUrl === '' || $token === '') {
+        return ['success' => false, 'error' => (string) ($data['ErrorMessage'] ?? 'Tronado did not return a payment URL'), 'data' => $data];
+    }
+
+    return [
+        'success' => true,
+        'payment_link' => $paymentUrl,
+        'token' => $token,
+        'tron_amount' => $tronAmount,
+        'tron_price_toman' => $tronPriceToman,
+        'data' => $data,
+    ];
 }
 function formatBytes($bytes, $precision = 2): string
 {

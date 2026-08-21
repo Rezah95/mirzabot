@@ -1842,6 +1842,9 @@ nowpayments.io
                         'askMerchant' => '💳 مرچنت کد خود را دریافت و در این قسمت وارد کنید
         
 مرچنت کد فعلی شما : %s',
+                        'askTronadoIpnSigningKey' => '🔐 کلید امضای IPN ترونادو را که از پشتیبانی دریافت کرده‌اید ارسال کنید.
+
+کلید فعلی: <code>%s</code>',
                         'askTronWallet' => '💳 آدرس ولت ترون trc20 خود را ارسال کنید
         
         ولت فعلی شما : %s',
@@ -3742,6 +3745,7 @@ f,n.n2',
                 'apiIranPay' => 'api  درگاه ارزی ریالی',
                 'apiPlisio' => '🧩 api plisio',
                 'apiT' => 'API T',
+                'tronadoIpnSigningKey' => '🔐 کلید IPN ترونادو',
                 'appDownloadLink' => '🔗 لینک دانلود برنامه',
                 'appDownloadLinkAlt' => '🔗لینک دانلود برنامه',
                 'aqayePardakhtGateway' => '🔵 آقای پرداخت',

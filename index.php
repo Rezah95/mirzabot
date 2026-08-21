@@ -5176,11 +5176,11 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
         $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
         $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
         $payment_Status = "Unpaid";
-        $Payment_Method = "Currency Rial 2";
+        $Payment_Method = "Tronado";
         $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice]);
         $payment = trnado($randomString, $user['Processing_value']);
         if (empty($payment['success'])) {
-            $text_error = json_encode($payment);
+            $text_error = $payment['error'] ?? json_encode($payment, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
             step('home', $from_id);
             $ErrorsLinkPayment = sprintf($textbotlang['Admin']['reportgroup']['errorPaymentLink2'], $text_error, $from_id, $Payment_Method, $username);
@@ -5194,6 +5194,13 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
             }
             return;
         }
+        update(
+            "Payment_report",
+            "dec_not_confirmed",
+            json_encode($payment['data'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            "id_order",
+            $randomString
+        );
         $paymentkeyboard = json_encode([
             'inline_keyboard' => [
                 [

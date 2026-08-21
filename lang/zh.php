@@ -1843,6 +1843,9 @@ nowpayments.io
                         'askMerchant' => '💳 获取您的商户代码并在此部分输入
         
 您当前的商户代码：%s',
+                        'askTronadoIpnSigningKey' => '🔐 请发送从支持团队获得的 Tronado IPN 签名密钥。
+
+当前密钥：<code>%s</code>',
                         'askTronWallet' => '💳 请发送您的 Tron trc20 钱包地址
         
         您当前的钱包：%s',
@@ -3756,6 +3759,7 @@ f,n.n2',
                 'apiIranPay' => '里亚尔货币网关 api',
                 'apiPlisio' => '🧩 api plisio',
                 'apiT' => 'API T',
+                'tronadoIpnSigningKey' => '🔐 Tronado IPN 密钥',
                 'appDownloadLink' => '🔗 应用下载链接',
                 'appDownloadLinkAlt' => '🔗应用下载链接',
                 'aqayePardakhtGateway' => '🔵 Aghaye Pardakht',

@@ -114,6 +114,20 @@ try {
 }
 //-----------------------------------------------------------------
 try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS Tronado_callback (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        payment_id VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+        payment_id_hash CHAR(64) CHARACTER SET ascii NOT NULL,
+        order_status_id INT NOT NULL,
+        raw_payload MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_tronado_callback (payment_id_hash, order_status_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (Exception $e) {
+    file_put_contents('error_log', $e->getMessage());
+}
+//-----------------------------------------------------------------
+try {
 
     $tableName = 'setting';
     $stmt = $pdo->prepare("SELECT 1 FROM information_schema.tables WHERE table_name = :tableName");
@@ -701,6 +715,7 @@ try {
         ['walletaddress', '0'],
         ['statustarnado', 'offternado'],
         ['apiternado', '0'],
+        ['tronado_ipn_signing_key', '0'],
         ['feestatusternado', 'offfeeternado'],
         ['feeternado', '0'],
         ['chashbackcart', '0'],
