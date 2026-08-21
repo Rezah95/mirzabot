@@ -3504,6 +3504,64 @@ elseif ($datain == "systemsms") {
     sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $keyboardzarinpal, 'HTML');
     update("PaySetting", "ValuePay", $text, "NamePay", "merchant_zarinpal");
     step('home', $from_id);
+} elseif ($text == $textbotlang['keyboard']['zarinpalPaymentGate'] && $adminrulecheck['rule'] == "administrator") {
+    $zarinpalGateMenu = zarinpalPaymentGateAdminMenu($textbotlang);
+    sendmessage($from_id, $zarinpalGateMenu['text'], $zarinpalGateMenu['keyboard'], 'HTML');
+} elseif ($datain == 'zarinpal_payment_gate_toggle' && $adminrulecheck['rule'] == "administrator") {
+    $zarinpalGateSettings = zarinpalPaymentGateSettings();
+    update(
+        "PaySetting",
+        "ValuePay",
+        $zarinpalGateSettings['enabled'] ? '0' : '1',
+        "NamePay",
+        "zarinpal_payment_gate_enabled"
+    );
+    $zarinpalGateMenu = zarinpalPaymentGateAdminMenu($textbotlang);
+    Editmessagetext($from_id, $message_id, $zarinpalGateMenu['text'], $zarinpalGateMenu['keyboard'], 'HTML');
+} elseif ($datain == 'zarinpal_payment_gate_minimum' && $adminrulecheck['rule'] == "administrator") {
+    sendmessage($from_id, $textbotlang['Admin']['Payment']['zarinpalAskPaymentMinimum'], $backadmin, 'HTML');
+    step('zarinpal_payment_gate_minimum', $from_id);
+} elseif ($user['step'] == 'zarinpal_payment_gate_minimum' && $adminrulecheck['rule'] == "administrator") {
+    if (!ctype_digit((string) $text) || (int) $text > 1000000) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    update("PaySetting", "ValuePay", (string) (int) $text, "NamePay", "zarinpal_min_successful_payments");
+    step('home', $from_id);
+    $zarinpalGateMenu = zarinpalPaymentGateAdminMenu($textbotlang);
+    sendmessage(
+        $from_id,
+        $textbotlang['Admin']['Payment']['zarinpalPaymentMinimumSaved'] . "\n\n" . $zarinpalGateMenu['text'],
+        $zarinpalGateMenu['keyboard'],
+        'HTML'
+    );
+} elseif ($text == $textbotlang['keyboard']['zarinpalUserVisibility'] && $adminrulecheck['rule'] == "administrator") {
+    sendmessage($from_id, $textbotlang['Admin']['Payment']['zarinpalAskUserId'], $backadmin, 'HTML');
+    step('zarinpal_payment_user_id', $from_id);
+} elseif ($user['step'] == 'zarinpal_payment_user_id' && $adminrulecheck['rule'] == "administrator") {
+    if (!ctype_digit((string) $text) || !rowExists('user', 'id', $text)) {
+        sendmessage($from_id, $textbotlang['Admin']['Payment']['userNotFound'], $backadmin, 'HTML');
+        return;
+    }
+    $targetZarinpalUser = select('user', '*', 'id', $text, 'select');
+    $zarinpalUserMenu = zarinpalUserVisibilityAdminMenu(
+        $textbotlang,
+        $text,
+        isZarinpalPaymentEnabledForUser($targetZarinpalUser)
+    );
+    step('home', $from_id);
+    sendmessage($from_id, $zarinpalUserMenu['text'], $zarinpalUserMenu['keyboard'], 'HTML');
+} elseif (preg_match('/^zarinpal_payment_user_toggle_(\d+)$/', $datain, $zarinpalUserMatch) && $adminrulecheck['rule'] == "administrator") {
+    $targetUserId = $zarinpalUserMatch[1];
+    $targetZarinpalUser = select('user', '*', 'id', $targetUserId, 'select');
+    if (!$targetZarinpalUser) {
+        sendmessage($from_id, $textbotlang['Admin']['Payment']['userNotFound'], null, 'HTML');
+        return;
+    }
+    $zarinpalEnabled = !isZarinpalPaymentEnabledForUser($targetZarinpalUser);
+    update('user', 'zarinpalpayment', $zarinpalEnabled ? '1' : '0', 'id', $targetUserId);
+    $zarinpalUserMenu = zarinpalUserVisibilityAdminMenu($textbotlang, $targetUserId, $zarinpalEnabled);
+    Editmessagetext($from_id, $message_id, $zarinpalUserMenu['text'], $zarinpalUserMenu['keyboard'], 'HTML');
 } elseif ($text == $textbotlang['Admin']['btnKeyboard']['managementPanel'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['managepanel']['getLoc'], $json_list_marzban_panel, 'HTML');
     step('GetLocationEdit', $from_id);

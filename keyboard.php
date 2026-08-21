@@ -18,7 +18,8 @@ if ($users == false) {
         'limit_usertest' => '',
         'Processing_value' => '',
         'Processing_value_four' => '',
-        'cardpayment' => ""
+        'cardpayment' => "",
+        'zarinpalpayment' => '1'
     );
 }
 $replacements = [
@@ -207,6 +208,7 @@ $keyboardzarinpal = json_encode([
         [['text' => $textbotlang['keyboard']['zarinPalMerchant']]],
         [['text' => $textbotlang['keyboard']['cashbackZarinPal']]],
         [['text' => $textbotlang['keyboard']['minAmountZarinPal']], ['text' => $textbotlang['keyboard']['maxAmountZarinPal']]],
+        [['text' => $textbotlang['keyboard']['zarinpalPaymentGate']], ['text' => $textbotlang['keyboard']['zarinpalUserVisibility']]],
         [['text' => $textbotlang['keyboard']['setEducationZarinPal']]],
         [['text' => $textbotlang['Admin']['backAdminBtn']], ['text' => $textbotlang['Admin']['backMenuBtn']]]
     ],
@@ -262,6 +264,7 @@ $arzireyali3 = getPaySettingValue("statusiranpay3");
 $paymentstatussnotverify = getPaySettingValue("paymentstatussnotverify");
 $paymentsstartelegram = getPaySettingValue("statusstar");
 $payment_status_nowpayment = getPaySettingValue("statusnowpayment");
+$zarinpalAllowed = canUserUseZarinpalGateway($users, $paymentexits);
 $step_payment = [
     'inline_keyboard' => []
 ];
@@ -329,7 +332,7 @@ if ($PaySettingaqayepardakht == "onaqayepardakht") {
         ['text' => $textbotlang['textbot']['aqayePardakht'], 'callback_data' => "aqayepardakht"]
     ];
 }
-if ($zarinpal == "onzarinpal") {
+if ($zarinpal == "onzarinpal" && $zarinpalAllowed) {
     $step_payment['inline_keyboard'][] = [
         ['text' => $textbotlang['textbot']['zarinPal'], 'callback_data' => "zarinpal"]
     ];

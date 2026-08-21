@@ -41,7 +41,7 @@ function usr_users(array $data, string $method): void
         $stmt->execute([':id_user' => $search, ':username' => $search] + $agentParams);
         $totalUsers = (int) $stmt->fetchColumn();
         $totalPages = (int) ceil($totalUsers / $limit);
-        $query = "SELECT id as user_id,username,limit_usertest,roll_Status,number,Balance,User_Status,agent,affiliatescount,affiliates,cardpayment,register as time_join,verify,pricediscount,last_message_time,limit_usertest,score,joinchannel,status_cron,expire,maxbuyagent FROM user WHERE (id  LIKE CONCAT('%', :user_id, '%') OR username  LIKE CONCAT('%', :username, '%')) $agent_type ORDER BY register DESC,Balance DESC LIMIT :limit OFFSET :offset";
+        $query = "SELECT id as user_id,username,limit_usertest,roll_Status,number,Balance,User_Status,agent,affiliatescount,affiliates,cardpayment,zarinpalpayment,register as time_join,verify,pricediscount,last_message_time,limit_usertest,score,joinchannel,status_cron,expire,maxbuyagent FROM user WHERE (id  LIKE CONCAT('%', :user_id, '%') OR username  LIKE CONCAT('%', :username, '%')) $agent_type ORDER BY register DESC,Balance DESC LIMIT :limit OFFSET :offset";
         $stmt = $pdo->prepare($query);
         $stmt->bindValue(':username', $q, PDO::PARAM_STR);
         $stmt->bindValue(':user_id', $q, PDO::PARAM_STR);
@@ -79,7 +79,7 @@ function usr_user(array $data, string $method): void
     }
 
     try {
-        $stmt = $pdo->prepare("SELECT id as user_id,username,limit_usertest,roll_Status,number,Balance,User_Status,agent,affiliatescount,affiliates,cardpayment,register as time_join,verify,pricediscount,last_message_time,limit_usertest,score,joinchannel,status_cron,expire,maxbuyagent,limitchangeloc,description_blocking FROM user WHERE id = :user_id");
+        $stmt = $pdo->prepare("SELECT id as user_id,username,limit_usertest,roll_Status,number,Balance,User_Status,agent,affiliatescount,affiliates,cardpayment,zarinpalpayment,register as time_join,verify,pricediscount,last_message_time,limit_usertest,score,joinchannel,status_cron,expire,maxbuyagent,limitchangeloc,description_blocking FROM user WHERE id = :user_id");
         $stmt->bindValue(':user_id', intval($data['chat_id']), PDO::PARAM_INT);
         $stmt->execute();
         $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -182,6 +182,7 @@ function usr_user_add(array $data, string $method): void
             'affiliates' => '0',
             'affiliatescount' => '0',
             'cardpayment' => $setting['showcard'],
+            'zarinpalpayment' => '1',
             'number_username' => '100',
             'namecustom' => 'none',
             'register' => $currentTime,
@@ -474,6 +475,18 @@ function usr_manage_show_cart(array $data, string $method): void
     sendJsonResponse(true, "Successful");
 }
 
+function usr_manage_show_zarinpal(array $data, string $method): void
+{
+    validateMethod('POST', $method);
+
+    if (!isset($data['chat_id']) || empty($data['chat_id'])) {
+        sendJsonResponse(false, "user-id empty", [], 500);
+    }
+    $type = ($data['type'] ?? '') == "1" ? "0" : "1";
+    update("user", "zarinpalpayment", $type, "id", $data['chat_id']);
+    sendJsonResponse(true, "Successful");
+}
+
 function usr_zero_balance(array $data, string $method): void
 {
     validateMethod('POST', $method);
@@ -755,6 +768,7 @@ match ($action) {
     'join_channel_exception' => usr_join_channel_exception($data, $method),
     'cron_notif' => usr_cron_notif($data, $method),
     'manage_show_cart' => usr_manage_show_cart($data, $method),
+    'manage_show_zarinpal' => usr_manage_show_zarinpal($data, $method),
     'zero_balance' => usr_zero_balance($data, $method),
     'affiliates_users' => usr_affiliates_users($data, $method),
     'remove_affiliates' => usr_remove_affiliates($data, $method),

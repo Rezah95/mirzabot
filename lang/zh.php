@@ -249,6 +249,7 @@ return [
                         'waiting' => '等待支付确认',
                         'zarinpal' => '❌ 错误 
     通过此网关支付的最低金额为 5000 托曼。',
+                        'zarinpalUnavailable' => '❌ 您的账户未启用 ZarinPal，或尚未达到所需的成功付款次数。',
                         'pendingPayment' => '❌ 您有一笔未确认的支付。请等待上一笔支付审核完毕，然后再发送新支付',
                         'cardEnabledNotice' => '💳 尊敬的用户，卡号已为您激活；现在您可以进行购买。',
                         'cardInstructionAlt' => '如需付款，请将金额存入下方卡号',
@@ -1416,6 +1417,15 @@ n2',
                         'askAutoConfirmMinutes' => '📌 在此部分，您可以设置无需审核的自动批准在多少分钟后批准收据。
 请以分钟为单位发送您的时间
 当前时间：%s',
+                        'zarinpalPaymentGateStatus' => '🟡 ZarinPal 显示规则
+成功付款次数规则：%s
+最低成功付款次数：<code>%s</code>',
+                        'zarinpalAskPaymentMinimum' => '📌 请发送显示 ZarinPal 所需的最低成功付款次数。
+发送 0 可取消次数限制。',
+                        'zarinpalPaymentMinimumSaved' => '✅ ZarinPal 最低成功付款次数已保存。',
+                        'zarinpalAskUserId' => '📌 请发送要管理其 ZarinPal 显示状态的用户数字 ID。',
+                        'zarinpalUserAccessStatus' => '🟡 用户 <code>%s</code> 的 ZarinPal 访问权限
+状态：%s',
                 ],
                 'Product' => [
                         'addProductStepOne' => ' 请先发送您的订阅名称
@@ -4134,6 +4144,13 @@ f,n.n2',
                 'yesterday' => '☀️ 昨天',
                 'zarinPalGateway' => '🟡 ZarinPal',
                 'zarinPalMerchant' => 'ZarinPal 商户',
+                'zarinpalPaymentGate' => '🔐 ZarinPal 显示规则',
+                'zarinpalUserVisibility' => '👤 用户 ZarinPal 显示状态',
+                'zarinpalPaymentGateMinimum' => '🔢 最低成功付款次数：%s',
+                'enableZarinpalPaymentGate' => '✅ 启用付款次数规则',
+                'disableZarinpalPaymentGate' => '❌ 停用付款次数规则',
+                'enableZarinpalForUser' => '✅ 为用户启用',
+                'disableZarinpalForUser' => '❌ 为用户隐藏',
                 'zeroBalance' => '0️⃣ 余额清零',
                 'panelSetting' => '🎛 面板设置',
                 'mirzaAgentPanel' => 'Mirza 代理',

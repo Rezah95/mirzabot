@@ -25,7 +25,7 @@ if (!$id) {
     header('Location: users.php'); exit;
 }
 
-$user = db_fetch($pdo, "SELECT id, User_Status FROM user WHERE id = ?", [$id]);
+$user = db_fetch($pdo, "SELECT * FROM user WHERE id = ?", [$id]);
 if (!$user) {
     flash('error', $textbotlang['panel']['userActionUserNotFound']);
     header('Location: users.php'); exit;
@@ -50,6 +50,16 @@ switch ($action) {
             flash('success', sprintf($textbotlang['panel']['userActionUserUnblockedSuccess'], $id));
             error_log("Admin {$_SESSION['admin_user']} unblocked user $id");
         }
+        break;
+
+    case 'toggle_zarinpal':
+        $newValue = (($user['zarinpalpayment'] ?? '1') === '0') ? '1' : '0';
+        update('user', 'zarinpalpayment', $newValue, 'id', $id);
+        $statusText = $newValue === '1'
+            ? $textbotlang['Admin']['Status']['statuson']
+            : $textbotlang['Admin']['Status']['statusoff'];
+        flash('success', $textbotlang['textbot']['zarinPal'] . ': ' . $statusText);
+        error_log("Admin {$_SESSION['admin_user']} changed ZarinPal visibility for user $id to $newValue");
         break;
 
     default:

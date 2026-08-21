@@ -557,6 +557,108 @@ function getPaySettingValue($name, $default = null)
 
     return $default;
 }
+function zarinpalPaymentGateSettings()
+{
+    $minimumRaw = getPaySettingValue('zarinpal_min_successful_payments', '2');
+    $minimum = ctype_digit((string) $minimumRaw) ? (int) $minimumRaw : 2;
+
+    return [
+        'enabled' => (string) getPaySettingValue('zarinpal_payment_gate_enabled', '1') === '1',
+        'minimum_successful_payments' => min(max($minimum, 0), 1000000),
+    ];
+}
+function isZarinpalPaymentEnabledForUser(array $user): bool
+{
+    return !array_key_exists('zarinpalpayment', $user) || (string) $user['zarinpalpayment'] !== '0';
+}
+function countSuccessfulPaymentsForUser($userId): int
+{
+    global $pdo;
+
+    if (!is_numeric($userId)) {
+        return 0;
+    }
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM Payment_report WHERE id_user = :user_id AND payment_Status = 'paid'");
+    $stmt->bindValue(':user_id', (string) $userId, PDO::PARAM_STR);
+    $stmt->execute();
+
+    return (int) $stmt->fetchColumn();
+}
+function canUserUseZarinpalGateway(array $user, $successfulPayments = null): bool
+{
+    if (!isZarinpalPaymentEnabledForUser($user)) {
+        return false;
+    }
+
+    $settings = zarinpalPaymentGateSettings();
+    if (!$settings['enabled']) {
+        return true;
+    }
+
+    if ($successfulPayments === null) {
+        $successfulPayments = countSuccessfulPaymentsForUser($user['id'] ?? 0);
+    }
+
+    return (int) $successfulPayments >= $settings['minimum_successful_payments'];
+}
+function zarinpalPaymentGateAdminMenu(array $textbotlang): array
+{
+    $settings = zarinpalPaymentGateSettings();
+    $statusText = $settings['enabled']
+        ? $textbotlang['Admin']['Status']['statuson']
+        : $textbotlang['Admin']['Status']['statusoff'];
+    $toggleText = $settings['enabled']
+        ? $textbotlang['keyboard']['disableZarinpalPaymentGate']
+        : $textbotlang['keyboard']['enableZarinpalPaymentGate'];
+
+    return [
+        'text' => sprintf(
+            $textbotlang['Admin']['Payment']['zarinpalPaymentGateStatus'],
+            $statusText,
+            $settings['minimum_successful_payments']
+        ),
+        'keyboard' => json_encode([
+            'inline_keyboard' => [
+                [
+                    ['text' => $toggleText, 'callback_data' => 'zarinpal_payment_gate_toggle'],
+                ],
+                [
+                    [
+                        'text' => sprintf(
+                            $textbotlang['keyboard']['zarinpalPaymentGateMinimum'],
+                            $settings['minimum_successful_payments']
+                        ),
+                        'callback_data' => 'zarinpal_payment_gate_minimum',
+                    ],
+                ],
+            ],
+        ]),
+    ];
+}
+function zarinpalUserVisibilityAdminMenu(array $textbotlang, $userId, bool $enabled): array
+{
+    $statusText = $enabled
+        ? $textbotlang['Admin']['Status']['statuson']
+        : $textbotlang['Admin']['Status']['statusoff'];
+    $buttonText = $enabled
+        ? $textbotlang['keyboard']['disableZarinpalForUser']
+        : $textbotlang['keyboard']['enableZarinpalForUser'];
+
+    return [
+        'text' => sprintf($textbotlang['Admin']['Payment']['zarinpalUserAccessStatus'], $userId, $statusText),
+        'keyboard' => json_encode([
+            'inline_keyboard' => [
+                [
+                    [
+                        'text' => $buttonText,
+                        'callback_data' => 'zarinpal_payment_user_toggle_' . (int) $userId,
+                    ],
+                ],
+            ],
+        ]),
+    ];
+}
 function generateUUID()
 {
     $data = openssl_random_pseudo_bytes(16);

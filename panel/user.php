@@ -68,6 +68,7 @@ $convRate = count($payments) > 0 ? round($paidCount / count($payments) * 100) : 
 
 $agent = $user['agent'] ?? 'f';
 $isBlocked = ($user['User_Status'] ?? '') === 'block';
+$isZarinpalVisible = ($user['zarinpalpayment'] ?? '1') !== '0';
 $fullName = $user['namecustom'] ?? '';
 if ($fullName === 'none')
     $fullName = '';
@@ -228,6 +229,12 @@ include __DIR__ . '/inc/layout_head.php';
                 <button class="btn btn-ghost btn-sm" style="justify-content:center" onclick="openModal('roleModal')">
                     <?= icon('users', 13) ?> <?= $textbotlang['panel']['userColMethod'] ?>
                 </button>
+                <a href="user_action.php?action=toggle_zarinpal&id=<?= $id ?>&_csrf=<?= csrf_token() ?>&back=user.php"
+                    class="btn <?= $isZarinpalVisible ? 'btn-no' : 'btn-ok' ?> btn-sm" style="justify-content:center">
+                    <?= icon($isZarinpalVisible ? 'block' : 'check', 13) ?>
+                    <?= $textbotlang['textbot']['zarinPal'] ?>:
+                    <?= $isZarinpalVisible ? $textbotlang['Admin']['Status']['statuson'] : $textbotlang['Admin']['Status']['statusoff'] ?>
+                </a>
                 <div style="height:1px;background:var(--bd);margin:2px 0"></div>
                 <?php if ($isBlocked): ?>
                     <a href="user_action.php?action=unblock&id=<?= $id ?>&_csrf=<?= csrf_token() ?>&back=user.php"

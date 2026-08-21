@@ -37,6 +37,7 @@ try {
             register VARCHAR(100) NOT NULL,
             verify VARCHAR(100) NOT NULL,
             cardpayment VARCHAR(100) NOT NULL,
+            zarinpalpayment VARCHAR(100) NOT NULL DEFAULT '1',
             codeInvitation VARCHAR(100) NULL,
             pricediscount VARCHAR(100) NULL   DEFAULT '0',
             hide_mini_app_instruction VARCHAR(20) NULL   DEFAULT '0',
@@ -69,6 +70,7 @@ try {
         addFieldToTable($tableName, 'namecustom', 'none');
         addFieldToTable($tableName, 'number_username', '100');
         addFieldToTable($tableName, 'cardpayment', '1');
+        addFieldToTable($tableName, 'zarinpalpayment', '1');
         addFieldToTable($tableName, 'affiliatescount', '0');
         addFieldToTable($tableName, 'affiliates', '0');
         addFieldToTable($tableName, 'message_count', '0');
@@ -711,6 +713,8 @@ try {
         ['chashbackzarinpal', '0'],
         ['checkpaycartfirst', 'offpayverify'],
         ['zarinpalstatus', 'offzarinpal'],
+        ['zarinpal_payment_gate_enabled', '1'],
+        ['zarinpal_min_successful_payments', '2'],
         ['merchant_zarinpal', '0'],
         ['minbalancecart', $main],
         ['maxbalancecart', $max],

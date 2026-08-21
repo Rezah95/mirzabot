@@ -249,6 +249,7 @@ Current language: <b>{lang}</b>',
                         'waiting' => 'Awaiting payment confirmation',
                         'zarinpal' => '❌ Error 
     The minimum amount for payment via this gateway is 5000 Toman.',
+                        'zarinpalUnavailable' => '❌ ZarinPal is not enabled for your account or you have not reached the required successful payments.',
                         'pendingPayment' => '❌ You have an unconfirmed payment. Please wait until the previous payment is reviewed, then send the new payment',
                         'cardEnabledNotice' => '💳 Dear user, the card number has been activated for you; you can now make your purchase.',
                         'cardInstructionAlt' => 'To pay, deposit the amount to the card number below',
@@ -1416,6 +1417,15 @@ In this section you can view unapproved payments and approve or reject them.
                         'askAutoConfirmMinutes' => '📌 In this section you can set after how many minutes the automatic approval without review approves the receipt.
 Send your time in minutes
 Current time: %s',
+                        'zarinpalPaymentGateStatus' => '🟡 ZarinPal visibility rule
+Successful-payment rule: %s
+Minimum successful payments: <code>%s</code>',
+                        'zarinpalAskPaymentMinimum' => '📌 Send the minimum successful-payment count required to show ZarinPal.
+Send 0 to remove the count requirement.',
+                        'zarinpalPaymentMinimumSaved' => '✅ The ZarinPal successful-payment minimum was saved.',
+                        'zarinpalAskUserId' => '📌 Send the numeric ID of the user whose ZarinPal visibility you want to manage.',
+                        'zarinpalUserAccessStatus' => '🟡 ZarinPal access for user <code>%s</code>
+Status: %s',
                 ],
                 'Product' => [
                         'addProductStepOne' => ' First send your subscription name
@@ -4134,6 +4144,13 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'yesterday' => '☀️ Yesterday',
                 'zarinPalGateway' => '🟡 ZarinPal',
                 'zarinPalMerchant' => 'ZarinPal merchant',
+                'zarinpalPaymentGate' => '🔐 ZarinPal visibility rule',
+                'zarinpalUserVisibility' => '👤 User ZarinPal visibility',
+                'zarinpalPaymentGateMinimum' => '🔢 Minimum successful payments: %s',
+                'enableZarinpalPaymentGate' => '✅ Enable payment-count rule',
+                'disableZarinpalPaymentGate' => '❌ Disable payment-count rule',
+                'enableZarinpalForUser' => '✅ Enable for user',
+                'disableZarinpalForUser' => '❌ Hide for user',
                 'zeroBalance' => '0️⃣ Reset balance to zero',
                 'panelSetting' => '🎛 Panel Settings',
                 'mirzaAgentPanel' => 'Mirza Agent',

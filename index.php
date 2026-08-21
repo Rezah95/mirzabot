@@ -77,7 +77,7 @@ if ($from_id != 0) {
         $valueverify = 0;
     }
     $randomString = bin2hex(random_bytes(6));
-    $stmt = $pdo->prepare("INSERT IGNORE INTO user (id , step,limit_usertest,User_Status,number,Balance,pagenumber,username,agent,message_count,last_message_time,affiliates,affiliatescount,cardpayment,number_username,namecustom,register,verify,codeInvitation,pricediscount,maxbuyagent,joinchannel,score,status_cron) VALUES (:from_id, 'none',:limit_usertest_all,'Active','none','0','1',:username,'f','0','0','0','0',:showcard,'100','none',:date,:verifycode,:codeInvitation,'0','0','0','0','1')");
+    $stmt = $pdo->prepare("INSERT IGNORE INTO user (id , step,limit_usertest,User_Status,number,Balance,pagenumber,username,agent,message_count,last_message_time,affiliates,affiliatescount,cardpayment,zarinpalpayment,number_username,namecustom,register,verify,codeInvitation,pricediscount,maxbuyagent,joinchannel,score,status_cron) VALUES (:from_id, 'none',:limit_usertest_all,'Active','none','0','1',:username,'f','0','0','0','0',:showcard,'1','100','none',:date,:verifycode,:codeInvitation,'0','0','0','0','1')");
     $stmt->bindParam(':from_id', $from_id);
     $stmt->bindParam(':limit_usertest_all', $setting['limit_usertest_all']);
     $stmt->bindParam(':username', $username);
@@ -104,6 +104,7 @@ if ($user == false) {
         'affiliates' => '',
         'last_message_time' => '',
         'cardpayment' => '',
+        'zarinpalpayment' => '1',
         'roll_Status' => '',
         'number_username' => '',
         'number' => '',
@@ -4891,6 +4892,10 @@ if ($user['step'] == "createusertest" || preg_match('/locationtest_(.*)/', $data
     updatePaymentMessageId($message_id, $randomString);
 /* UNIQUEPAY_PAY_END */
     } elseif ($datain == "zarinpal") {
+        if (getPaySettingValue('zarinpalstatus', 'offzarinpal') !== 'onzarinpal' || !canUserUseZarinpalGateway($user)) {
+            sendmessage($from_id, $textbotlang['users']['Balance']['zarinpalUnavailable'], null, 'HTML');
+            return;
+        }
         if ($user['Processing_value'] < 5000) {
             sendmessage($from_id, $textbotlang['users']['Balance']['zarinpal'], null, 'HTML');
             return;

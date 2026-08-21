@@ -249,6 +249,7 @@ return [
                         'waiting' => 'Ожидание подтверждения платежа',
                         'zarinpal' => '❌ Ошибка 
     Минимальная сумма оплаты через этот шлюз — 5000 туман.',
+                        'zarinpalUnavailable' => '❌ ZarinPal не включён для вашего аккаунта или вы ещё не достигли нужного числа успешных платежей.',
                         'pendingPayment' => '❌ У вас есть неподтверждённый платёж. Дождитесь проверки предыдущего платежа, затем отправьте новый',
                         'cardEnabledNotice' => '💳 Уважаемый пользователь, номер карты активирован для вас; теперь вы можете совершить покупку.',
                         'cardInstructionAlt' => 'Для оплаты внесите сумму на номер карты ниже',
@@ -1416,6 +1417,15 @@ n2',
                         'askAutoConfirmMinutes' => '📌 В этом разделе вы можете задать, через сколько минут автоматическое подтверждение без проверки подтверждает квитанцию.
 Отправьте ваше время в минутах
 Текущее время: %s',
+                        'zarinpalPaymentGateStatus' => '🟡 Правило показа ZarinPal
+Статус правила успешных платежей: %s
+Минимум успешных платежей: <code>%s</code>',
+                        'zarinpalAskPaymentMinimum' => '📌 Отправьте минимальное число успешных платежей для показа ZarinPal.
+Отправьте 0, чтобы снять ограничение по числу платежей.',
+                        'zarinpalPaymentMinimumSaved' => '✅ Минимум успешных платежей для ZarinPal сохранён.',
+                        'zarinpalAskUserId' => '📌 Отправьте числовой ID пользователя, для которого нужно управлять показом ZarinPal.',
+                        'zarinpalUserAccessStatus' => '🟡 Доступ ZarinPal пользователя <code>%s</code>
+Статус: %s',
                 ],
                 'Product' => [
                         'addProductStepOne' => ' Сначала отправьте название вашей подписки
@@ -4134,6 +4144,13 @@ ID пользователя : %s
                 'yesterday' => '☀️ Вчера',
                 'zarinPalGateway' => '🟡 ZarinPal',
                 'zarinPalMerchant' => 'Продавец ZarinPal',
+                'zarinpalPaymentGate' => '🔐 Правило показа ZarinPal',
+                'zarinpalUserVisibility' => '👤 Показ ZarinPal для пользователя',
+                'zarinpalPaymentGateMinimum' => '🔢 Минимум успешных платежей: %s',
+                'enableZarinpalPaymentGate' => '✅ Включить правило количества платежей',
+                'disableZarinpalPaymentGate' => '❌ Отключить правило количества платежей',
+                'enableZarinpalForUser' => '✅ Включить для пользователя',
+                'disableZarinpalForUser' => '❌ Скрыть для пользователя',
                 'zeroBalance' => '0️⃣ Обнулить баланс',
                 'panelSetting' => '🎛 Настройка панели',
                 'mirzaAgentPanel' => 'Агент Mirza',
