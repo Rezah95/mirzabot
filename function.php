@@ -671,47 +671,177 @@ function generateUUID()
 }
 function rate_arze()
 {
-    $arze_rate = [];
+    $request = static function ($url, $method = 'GET', $body = null, array $headers = []) {
+        $curl = curl_init();
+        if ($curl === false) {
+            return null;
+        }
 
-    $requests_tron = json_decode(
-        file_get_contents('https://api.diadata.org/v1/assetQuotation/Tron/0x0000000000000000000000000000000000000000'),
-        true
-    );
+        $options = [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT_MS => 3000,
+            CURLOPT_TIMEOUT_MS => 6000,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; MirzaBot/1.0)',
+            CURLOPT_HTTPHEADER => $headers,
+        ];
 
-    // main way: Bonbast_EX
-    $usd = null;
+        if ($method === 'POST') {
+            $options[CURLOPT_POST] = true;
+            $options[CURLOPT_POSTFIELDS] = $body === null ? '' : $body;
+        }
 
-    $html = @file_get_contents('https://t.me/s/Bonbast_EX');
-    if ($html !== false) {
-        preg_match_all('/🔹دلار:\s*([\d,]+)\s*تومان/', $html, $matches);
-        if (!empty($matches[1])) {
-            $last = end($matches[1]);
-            $usd = intval(str_replace(',', '', $last));
+        curl_setopt_array($curl, $options);
+        $response = curl_exec($curl);
+        $statusCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+
+        if ($response === false || $statusCode < 200 || $statusCode >= 300) {
+            return null;
+        }
+
+        return $response;
+    };
+
+    $normalisePrice = static function ($value) {
+        if (is_string($value)) {
+            $value = str_replace(',', '', trim($value));
+        }
+
+        if (!is_numeric($value) || (float) $value <= 0) {
+            return null;
+        }
+
+        $price = (int) round((float) $value);
+        return $price > 0 ? $price : null;
+    };
+
+    $usdPrice = null;
+
+    // 1. Bonbast: param is generated for each page load, so keep one cURL session.
+    $bonbastCurl = curl_init();
+    if ($bonbastCurl !== false) {
+        curl_setopt_array($bonbastCurl, [
+            CURLOPT_URL => 'https://www.bonbast.com/',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT_MS => 3000,
+            CURLOPT_TIMEOUT_MS => 6000,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_COOKIEFILE => '',
+            CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; MirzaBot/1.0)',
+            CURLOPT_HTTPHEADER => [
+                'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            ],
+        ]);
+
+        $homePage = curl_exec($bonbastCurl);
+        $homeStatusCode = curl_getinfo($bonbastCurl, CURLINFO_HTTP_CODE);
+        $bonbastResponse = null;
+
+        if (
+            $homePage !== false
+            && $homeStatusCode >= 200
+            && $homeStatusCode < 300
+            && preg_match('/\bparam\s*(?::|=)\s*[\'\"]([^\'\"]+)[\'\"]/', html_entity_decode($homePage, ENT_QUOTES, 'UTF-8'), $matches)
+        ) {
+            curl_setopt_array($bonbastCurl, [
+                CURLOPT_URL => 'https://www.bonbast.com/json',
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => http_build_query(['param' => $matches[1]], '', '&'),
+                CURLOPT_HTTPHEADER => [
+                    'Accept: application/json, text/javascript, */*; q=0.01',
+                    'Content-Type: application/x-www-form-urlencoded; charset=UTF-8',
+                    'Origin: https://www.bonbast.com',
+                    'Referer: https://www.bonbast.com/',
+                    'X-Requested-With: XMLHttpRequest',
+                ],
+            ]);
+
+            $response = curl_exec($bonbastCurl);
+            $statusCode = curl_getinfo($bonbastCurl, CURLINFO_HTTP_CODE);
+            if ($response !== false && $statusCode >= 200 && $statusCode < 300) {
+                $bonbastResponse = $response;
+            }
+        }
+
+        curl_close($bonbastCurl);
+
+        $bonbastData = is_string($bonbastResponse) ? json_decode($bonbastResponse, true) : null;
+        if (is_array($bonbastData) && isset($bonbastData['usd1'])) {
+            $usdPrice = $normalisePrice($bonbastData['usd1']);
         }
     }
 
-    // Fallback: Tronado API
-    if (empty($usd)) {
-        $context = stream_context_create([
-            'http' => [
-                'method'  => 'POST',
-                'header'  => 'Content-Type: application/json',
-                'content' => json_encode([]),
-            ]
-        ]);
-        $response = @file_get_contents('https://bot.tronado.cloud/Toman/GetPriceToToman', false, $context);
-        if ($response !== false) {
-           $usd_data = json_decode($response, true);
-            if (!empty($usd_data['DollarPrice'])) {
-                $usd = intval($usd_data['DollarPrice']);
+    // 2. Navasan.
+    if ($usdPrice === null) {
+        $response = $request('https://www.navasan.net/last_currencies.php');
+        $navasanData = is_string($response) ? json_decode($response, true) : null;
+        if (is_array($navasanData) && isset($navasanData['usd']['value'])) {
+            $usdPrice = $normalisePrice($navasanData['usd']['value']);
+        }
+    }
+
+    // 3. Tronado.
+    if ($usdPrice === null) {
+        $response = $request(
+            'https://bot.tronado.cloud/Dollar/GetPriceToToman',
+            'POST',
+            '{}',
+            ['Accept: application/json', 'Content-Type: application/json']
+        );
+        $tronadoData = is_string($response) ? json_decode($response, true) : null;
+        if (is_array($tronadoData) && isset($tronadoData['DollarPrice'])) {
+            $usdPrice = $normalisePrice($tronadoData['DollarPrice']);
+        }
+    }
+
+    // 4. Tabdeal.
+    if ($usdPrice === null) {
+        $response = $request('https://api-web.tabdeal.org/r/festival/get-asset-prices/?asset_type=currency');
+        $tabdealData = is_string($response) ? json_decode($response, true) : null;
+        if (is_array($tabdealData)) {
+            foreach ($tabdealData as $asset) {
+                if (
+                    is_array($asset)
+                    && isset($asset['price_title'], $asset['last_price'])
+                    && trim($asset['price_title']) === 'دلار'
+                ) {
+                    $usdPrice = $normalisePrice($asset['last_price']);
+                    break;
+                }
             }
         }
     }
 
-    $arze_rate['USD'] = $usd ?? 0;
-    $arze_rate['TRX'] = intval($requests_tron['Price'] * $arze_rate['USD']);
+    if ($usdPrice === null) {
+        return null;
+    }
 
-    return $arze_rate;
+    $response = $request('https://api.diadata.org/v1/assetQuotation/Tron/0x0000000000000000000000000000000000000000');
+    $tronData = is_string($response) ? json_decode($response, true) : null;
+    if (
+        !is_array($tronData)
+        || !isset($tronData['Price'])
+        || !is_numeric($tronData['Price'])
+        || (float) $tronData['Price'] <= 0
+    ) {
+        return null;
+    }
+
+    $trxPrice = (int) ($usdPrice * (float) $tronData['Price']);
+    if ($trxPrice <= 0) {
+        return null;
+    }
+
+    return [
+        'USD' => $usdPrice,
+        'TRX' => $trxPrice,
+    ];
 }
 function updatePaymentMessageId($response, $orderId)
 {
