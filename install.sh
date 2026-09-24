@@ -220,7 +220,7 @@ _link_mirza() {
 function self_update_script() {
     local MASTER_PATH="/root/install.sh"
     local BIN_LINK="/usr/local/bin/mirza"
-    local URL="https://raw.githubusercontent.com/mahdiMGF2/mirzabot/main/install.sh"
+    local URL="https://raw.githubusercontent.com/Rezah95/mirzabot/master/install.sh"
     local TEMP_FILE="/tmp/mirzabot_update.sh"
 
     # Make sure DNS works before reaching GitHub
@@ -286,8 +286,8 @@ self_update_script "$@"
 # ── Repo / paths ─────────────────────────────────────────────
 BOT_DIR_DEFAULT="/var/www/html/mirzaprobotconfig"
 CONFIG_FILE_DEFAULT="$BOT_DIR_DEFAULT/config.php"
-GIT_REPO="mahdiMGF2/mirzabot"
-LATEST_CACHE="/tmp/.mirza_latest_version"
+GIT_REPO="Rezah95/mirzabot"
+LATEST_CACHE="/tmp/.mirza_rezah95_latest_version"
 IP_CACHE="/tmp/.mirza_server_ip"
 
 # ── Resumable-install state engine ───────────────────────────
@@ -772,9 +772,9 @@ get_latest_version() {
     tags=$(curl -fsSL --max-time 6 "https://api.github.com/repos/${GIT_REPO}/tags" 2>/dev/null)
     if [ -n "$tags" ]; then
         if command -v jq >/dev/null 2>&1; then
-            v=$(echo "$tags" | jq -r '.[].name' 2>/dev/null | sort -V | tail -1)
+            v=$(echo "$tags" | jq -r '.[].name' 2>/dev/null | grep -E '^v?[0-9]+(\.[0-9]+)*$' | sort -V | tail -1)
         else
-            v=$(echo "$tags" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' | sed -E 's/.*"([^"]+)".*/\1/' | sort -V | tail -1)
+            v=$(echo "$tags" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' | sed -E 's/.*"([^"]+)".*/\1/' | grep -E '^v?[0-9]+(\.[0-9]+)*$' | sort -V | tail -1)
         fi
     fi
     if [ -n "$v" ]; then
@@ -789,19 +789,20 @@ list_tags_desc() {
     tags=$(curl -fsSL --max-time 8 "https://api.github.com/repos/${GIT_REPO}/tags" 2>/dev/null)
     [ -z "$tags" ] && return 1
     if command -v jq >/dev/null 2>&1; then
-        echo "$tags" | jq -r '.[].name' 2>/dev/null | sort -Vr
+        echo "$tags" | jq -r '.[].name' 2>/dev/null | grep -E '^v?[0-9]+(\.[0-9]+)*$' | sort -Vr
     else
-        echo "$tags" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' | sed -E 's/.*"([^"]+)".*/\1/' | sort -Vr
+        echo "$tags" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' | sed -E 's/.*"([^"]+)".*/\1/' | grep -E '^v?[0-9]+(\.[0-9]+)*$' | sort -Vr
     fi
 }
 
 # Choose which source to download.
 # Sets globals: SRC_ZIP_URL, SRC_LABEL
-# Honors flags ARG_CHANNEL (beta|release|auto) and ARG_VERSION (tag) for non-interactive use.
+# Honors flags ARG_CHANNEL (dev|release|auto) and ARG_VERSION (tag) for non-interactive use.
 # Returns: 0 = chosen, 1 = error, 2 = back to menu
 choose_source() {
     SRC_ZIP_URL=""; SRC_LABEL=""
-    local beta="https://github.com/${GIT_REPO}/archive/refs/heads/main.zip"
+    local master="https://github.com/${GIT_REPO}/archive/refs/heads/master.zip"
+    local beta="https://github.com/${GIT_REPO}/archive/refs/heads/dev.zip"
     local tagbase="https://github.com/${GIT_REPO}/archive/refs/tags"
 
     # ── Non-interactive (flags) ──────────────────────────────
@@ -817,11 +818,13 @@ choose_source() {
     fi
     if [ -n "$ARG_CHANNEL" ]; then
         case "$ARG_CHANNEL" in
-            beta|main)      SRC_ZIP_URL="$beta"; SRC_LABEL="Beta (main)"; return 0 ;;
-            release|auto|latest|stable)
+            beta|dev)       SRC_ZIP_URL="$beta"; SRC_LABEL="Development (dev)"; return 0 ;;
+            master|auto|latest|stable)
+                SRC_ZIP_URL="$master"; SRC_LABEL="Current master"; return 0 ;;
+            release)
                 local l; l=$(get_latest_version)
                 if [ -n "$l" ]; then SRC_ZIP_URL="${tagbase}/${l}.zip"; SRC_LABEL="Release ${l}";
-                else SRC_ZIP_URL="$beta"; SRC_LABEL="Beta (main)"; fi
+                else SRC_ZIP_URL="$master"; SRC_LABEL="Current master"; fi
                 return 0 ;;
             *) echo -e "    ${C_BAD}Unknown channel: ${ARG_CHANNEL}${CR}"; return 1 ;;
         esac
@@ -829,23 +832,16 @@ choose_source() {
 
     # ── Interactive ──────────────────────────────────────────
     _sec "Select version"
-    _mi "1" "Automatic  ${C_DIM}(latest stable release)${CR}"
+    _mi "1" "Current master"
     _mi "2" "Choose a specific release version"
-    _mi "3" "Beta       ${C_DIM}(latest main branch - may be unstable)${CR}"
+    _mi "3" "Development ${C_DIM}(dev branch)${CR}"
     _mi "0" "Back to menu"
     echo ""
     printf "  ${C_PROMPT}❯${CR} Select ${C_DIM}[0-3]${CR}: "
     local S; read -r S
     case "$S" in
         0) return 2 ;;
-        1)
-            local l; l=$(get_latest_version)
-            if [ -n "$l" ]; then SRC_ZIP_URL="${tagbase}/${l}.zip"; SRC_LABEL="Release ${l}";
-            else
-                echo -e "    ${C_WARN}Could not detect latest release; falling back to Beta.${CR}"
-                SRC_ZIP_URL="$beta"; SRC_LABEL="Beta (main)"
-            fi
-            return 0 ;;
+        1) SRC_ZIP_URL="$master"; SRC_LABEL="Current master"; return 0 ;;
         2)
             echo ""
             echo -e "  ${C_DIM}Fetching available versions...${CR}"
@@ -871,7 +867,7 @@ choose_source() {
             local c="${TAGS[$((V-1))]}"
             SRC_ZIP_URL="${tagbase}/${c}.zip"; SRC_LABEL="Release ${c}"
             return 0 ;;
-        3) SRC_ZIP_URL="$beta"; SRC_LABEL="Beta (main)"; return 0 ;;
+        3) SRC_ZIP_URL="$beta"; SRC_LABEL="Development (dev)"; return 0 ;;
         *) echo -e "    ${C_BAD}Invalid selection.${CR}"; return 1 ;;
     esac
 }
@@ -2298,6 +2294,39 @@ EOF
     ln -sf /root/install.sh /usr/local/bin/mirza
     self_update_script
 }
+backup_before_update() {
+    local bot_dir="$1" config="$1/config.php"
+    local dbhost dbname dbuser dbpass backup_root
+    [ -f "$config" ] || { echo "Update stopped: config.php is missing."; return 1; }
+    command -v mysqldump >/dev/null 2>&1 || { echo "Update stopped: mysqldump is missing."; return 1; }
+    dbhost=$(grep '^\$dbhost' "$config" | cut -d"'" -f2)
+    dbname=$(grep '^\$dbname' "$config" | cut -d"'" -f2)
+    dbuser=$(grep '^\$usernamedb' "$config" | cut -d"'" -f2)
+    dbpass=$(grep '^\$passworddb' "$config" | cut -d"'" -f2)
+    [ -n "$dbhost" ] && [ -n "$dbname" ] && [ -n "$dbuser" ] && [ -n "$dbpass" ] \
+        || { echo "Update stopped: database connection details are incomplete."; return 1; }
+
+    backup_root="/root/mirza-upgrade-backups"
+    mkdir -p "$backup_root" && chmod 700 "$backup_root" || return 1
+    UPDATE_BACKUP_DIR=$(mktemp -d "$backup_root/upgrade_$(date +%Y%m%d_%H%M%S).XXXXXX") || return 1
+    chmod 700 "$UPDATE_BACKUP_DIR" || return 1
+    if ! MYSQL_PWD="$dbpass" mysqldump -h "$dbhost" -u "$dbuser" \
+        --single-transaction --quick --routines --triggers --events --no-tablespaces \
+        "$dbname" > "$UPDATE_BACKUP_DIR/database.sql" 2> "$UPDATE_BACKUP_DIR/mysqldump.err" \
+        || [ ! -s "$UPDATE_BACKUP_DIR/database.sql" ]; then
+        echo "Update stopped: database backup failed. See $UPDATE_BACKUP_DIR/mysqldump.err"
+        return 1
+    fi
+    chmod 600 "$UPDATE_BACKUP_DIR/database.sql" "$UPDATE_BACKUP_DIR/mysqldump.err"
+    if ! cp -a "$bot_dir" "$UPDATE_BACKUP_DIR/site"; then
+        echo "Update stopped: site backup failed. Partial backup: $UPDATE_BACKUP_DIR"
+        return 1
+    fi
+    (cd "$UPDATE_BACKUP_DIR" && sha256sum database.sql > database.sql.sha256) || return 1
+    echo "Complete site and database backup: $UPDATE_BACKUP_DIR"
+    return 0
+}
+
 function update_bot() {
     clear
     banner
@@ -2328,11 +2357,8 @@ function update_bot() {
     echo ""
     echo -e "  ${C_DIM}Update target:${CR} ${C_KEY}${TARGET_LABEL}${CR}"
     print_header "Updating Mirza Bot"
-    run_step "Updating system packages" "apt update --allow-releaseinfo-change && apt upgrade -y" \
-        || { show_step_error; echo -e "\e[91mError updating the server. Exiting...\033[0m"; exit 1; }
     run_step "Ensuring cron is installed and running" "ensure_cron" \
         || { show_step_error; echo -e "\e[91mError: Failed to install or start cron.\033[0m"; exit 1; }
-    echo -e "\e[92mServer packages updated successfully...\033[0m\n"
     TEMP_DIR="/tmp/mirzaprobot_update"
     rm -rf "$TEMP_DIR"; mkdir -p "$TEMP_DIR"
     run_step "Downloading ${TARGET_LABEL}" "wget -q -O '$TEMP_DIR/bot.zip' '$ZIP_URL'" \
@@ -2351,19 +2377,13 @@ function update_bot() {
         || { show_step_error
              echo -e "\e[91mError: Failed to install PHP dependencies. The update was aborted and your current installation was left untouched.\033[0m"
              rm -rf "$TEMP_DIR"; sleep 2; show_menu; return 1; }
+    backup_before_update "$BOT_DIR" || {
+        echo -e "\e[91mUpdate aborted before changing the current installation.\033[0m"
+        rm -rf "$TEMP_DIR"; return 1;
+    }
     CONFIG_PATH="$BOT_DIR/config.php"
-    TEMP_CONFIG="/root/mirzapro_config_backup.php"
-    if [ -f "$CONFIG_PATH" ]; then
-        cp "$CONFIG_PATH" "$TEMP_CONFIG" || {
-            echo -e "\e[91mConfig file backup failed!\033[0m"
-            exit 1
-        }
-    else
-        echo -e "\e[93mWarning: config.php not found. Proceeding without backup.\033[0m"
-    fi
-    LANG_OVERRIDE_BACKUP="/root/mirzapro_lang_override_backup"
-    rm -rf "$LANG_OVERRIDE_BACKUP"
-    [ -d "$BOT_DIR/lang/override" ] && cp -a "$BOT_DIR/lang/override" "$LANG_OVERRIDE_BACKUP"
+    TEMP_CONFIG="$UPDATE_BACKUP_DIR/site/config.php"
+    LANG_OVERRIDE_BACKUP="$UPDATE_BACKUP_DIR/site/lang/override"
     run_step "Backing up vpnbots" "backup_vpnbots '$BOT_DIR'" \
         || { show_step_error
              echo -e "\e[91mError: Failed to backup vpnbots.\033[0m"
@@ -2389,15 +2409,28 @@ function update_bot() {
     }
     purge_installer_dir "$BOT_DIR"
     if [ -f "$TEMP_CONFIG" ]; then
-        sudo mv "$TEMP_CONFIG" "$CONFIG_PATH" || {
+        sudo cp -a "$TEMP_CONFIG" "$CONFIG_PATH" || {
             echo -e "\e[91mConfig file restore failed!\033[0m"
-            echo -e "\e[93mvpnbot backup: ${VPNBOT_BACKUP}\033[0m"
+            echo -e "\e[93mFull backup: ${UPDATE_BACKUP_DIR}\033[0m"
             exit 1
         }
     fi
+    for data_file in users.json cronbot/users.json cronbot/info cronbot/username.json \
+        api/.htaccess app/.htaccess cronbot/.htaccess sub/.htaccess; do
+        if [ -f "$UPDATE_BACKUP_DIR/site/$data_file" ]; then
+            sudo mkdir -p "$(dirname "$BOT_DIR/$data_file")"
+            sudo cp -a "$UPDATE_BACKUP_DIR/site/$data_file" "$BOT_DIR/$data_file" || {
+                echo -e "\e[91mFailed to restore $data_file. Backup: $UPDATE_BACKUP_DIR\033[0m"
+                return 1
+            }
+        fi
+    done
     if [ -d "$LANG_OVERRIDE_BACKUP" ]; then
         sudo rm -rf "$BOT_DIR/lang/override"
-        sudo mv "$LANG_OVERRIDE_BACKUP" "$BOT_DIR/lang/override"
+        sudo cp -a "$LANG_OVERRIDE_BACKUP" "$BOT_DIR/lang/override" || {
+            echo -e "\e[91mLanguage override restore failed. Backup: $UPDATE_BACKUP_DIR\033[0m"
+            return 1
+        }
     fi
     run_step "Restoring vpnbots" "restore_vpnbots '$BOT_DIR'" \
         || { show_step_error
@@ -2488,16 +2521,16 @@ EOF
         fi
     fi
     if [ -f "$CONFIG_PATH" ]; then
-        URL_PATH=$(grep "^\$domainhosts" "$CONFIG_PATH" | cut -d"'" -f2)
-        if [ -n "$URL_PATH" ]; then
-            run_step "Updating database tables" "curl -s 'https://$URL_PATH/table.php' > /dev/null" \
-                || echo -e "\e[91mSetup script execution failed! Check logs.\033[0m"
-        fi
+        run_step "Updating database tables" "cd '$BOT_DIR' && php table.php" \
+            || { show_step_error
+                 echo -e "\e[91mDatabase migration failed. Backup: $UPDATE_BACKUP_DIR\033[0m"
+                 return 1; }
         run_step "Setting vpnbot webhooks" "set_vpnbot_webhooks '$CONFIG_PATH'" \
             || echo -e "\e[93mWarning: vpnbot webhook update failed.\033[0m"
     fi
     rm -rf "$TEMP_DIR"
     echo -e "\n\e[92mMirza Bot updated to latest version successfully!\033[0m"
+    echo -e "\e[92mPre-update backup: $UPDATE_BACKUP_DIR\033[0m"
     if [ -f "/root/install.sh" ]; then
         sudo chmod +x /root/install.sh
         sudo ln -sf /root/install.sh /usr/local/bin/mirza
@@ -2718,7 +2751,7 @@ function migrate_to_pro() {
     NEW_BOT_DIR="/var/www/html/mirzaprobotconfig"
     rm -rf "$OLD_BOT_DIR"
     mkdir -p "$NEW_BOT_DIR"
-    ZIP_URL="https://github.com/mahdiMGF2/mirzabot/archive/refs/heads/main.zip"
+    ZIP_URL="https://github.com/${GIT_REPO}/archive/refs/heads/master.zip"
     TEMP_DIR="/tmp/mirzabot_mig"
     mkdir -p "$TEMP_DIR"
     run_step "Downloading Mirza source" "wget -q -O '$TEMP_DIR/bot.zip' '$ZIP_URL'" \
@@ -2851,13 +2884,13 @@ print_usage() {
     --db-user <user>   Database username
     --db-pass <pass>   Database password
     --version <tag>    Install/update a specific release tag (e.g. 0.1.7)
-    --channel <name>   Source channel: beta | release | auto
+    --channel <name>   Source channel: master | dev | release | auto
     -h, --help         Show this help and exit
 
   Examples:
     mirza install --channel auto
     mirza install --token 123:ABC --admin 111 --domain bot.example.com --version 0.1.7
-    mirza update --channel release
+    mirza update --channel master
     mirza update --version 0.1.6
 
 USAGE

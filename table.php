@@ -254,7 +254,6 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "daywarn", "2", "varchar(45)");
         addFieldToTable("setting", "btn_status_extned", "0", "varchar(45)");
         addFieldToTable("setting", "wheelـluck_price", "0", "varchar(45)");
-        addFieldToTable("setting", "wheelـluck", "0", "varchar(45)");
         addFieldToTable("setting", "Lottery_prize", $DATAAWARD, "TEXT");
         addFieldToTable("setting", "scorestatus", "0", "VARCHAR(100)");
         addFieldToTable("setting", "verifybucodeuser", "offverify", "VARCHAR(100)");
@@ -269,13 +268,11 @@ timeauto_not_verify,status_keyboard_config,cron_status
         addFieldToTable("setting", "affiliatespercentage", "0", "VARCHAR(600)");
         addFieldToTable("setting", "inlinebtnmain", "offinline", "VARCHAR(200)");
         addFieldToTable("setting", "volumewarn", "2", "VARCHAR(200)");
-        addFieldToTable("setting", "statusagentrequest", "onrequestagent", "VARCHAR(600)");
         addFieldToTable("setting", "statusnewuser", "onnewuser", "VARCHAR(600)");
         addFieldToTable("setting", "numbercount", "0", "VARCHAR(600)");
         addFieldToTable("setting", "statuscategory", "offcategory", "VARCHAR(600)");
         addFieldToTable("setting", "showcard", "1", "VARCHAR(200)");
         addFieldToTable("setting", "removedayc", "1", "VARCHAR(200)");
-        addFieldToTable("setting", "affiliatesstatus", "offaffiliates", "VARCHAR(600)");
         addFieldToTable("setting", "NotUser", "offnotuser", "VARCHAR(200)");
         addFieldToTable("setting", "iran_number", "offAuthenticationiran", "VARCHAR(200)");
         addFieldToTable("setting", "get_number", "onAuthenticationphone", "VARCHAR(200)");
