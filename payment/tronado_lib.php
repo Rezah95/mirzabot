@@ -18,6 +18,28 @@ function tronadoConfigured(): bool
         && tronadoCredentialsReady();
 }
 
+/** Keep the provider's error useful in logs without recording credentials or payment links. */
+function tronadoResponseError(array $response): string
+{
+    $value = !empty($response['ErrorMessage']) ? $response['ErrorMessage'] : ($response['Error'] ?? '');
+    if (!is_string($value) && !is_numeric($value)) {
+        return '';
+    }
+    $message = (string) $value;
+    $secrets = [tronadoSetting('tronado_api_key'), tronadoSetting('tronado_ipn_signing_key')];
+    if (is_string($response['Token'] ?? null)) {
+        $secrets[] = $response['Token'];
+    }
+    foreach ($secrets as $secret) {
+        if ($secret !== '' && $secret !== '0') {
+            $message = str_replace($secret, '[redacted]', $message);
+        }
+    }
+    $message = preg_replace('~https?://[^\s<>"\x27]+~i', '[url]', $message);
+    $message = preg_replace('/[\x00-\x20\x7f]+/', ' ', strip_tags($message));
+    return mb_substr(trim($message), 0, 400, 'UTF-8');
+}
+
 /** Send a JSON POST to the official Tronado API. The caller supplies the key only for order creation. */
 function tronadoPost(string $url, array $body, string $apiKey = ''): array
 {
@@ -42,12 +64,20 @@ function tronadoPost(string $url, array $body, string $apiKey = ''): array
     $status = (int) curl_getinfo($handle, CURLINFO_HTTP_CODE);
     $error = curl_error($handle);
     curl_close($handle);
-    if ($response === false || $status !== 200) {
+    if ($response === false) {
         throw new RuntimeException('Tronado request failed (HTTP ' . $status . ($error !== '' ? ', transport error' : '') . ')');
     }
     $decoded = json_decode($response, true);
+    $endpoint = parse_url($url, PHP_URL_PATH);
+    $detail = is_array($decoded) ? tronadoResponseError($decoded) : '';
+    if ($status !== 200) {
+        throw new RuntimeException('Tronado request failed (' . $endpoint . ', HTTP ' . $status . ')' . ($detail !== '' ? ': ' . $detail : ''));
+    }
     if (!is_array($decoded) || json_last_error() !== JSON_ERROR_NONE) {
-        throw new RuntimeException('Invalid Tronado JSON response');
+        throw new RuntimeException('Invalid Tronado JSON response (' . $endpoint . ')');
+    }
+    if (!empty($decoded['ErrorMessage']) || !empty($decoded['Error'])) {
+        throw new RuntimeException('Tronado API error (' . $endpoint . '): ' . ($detail !== '' ? $detail : 'Unspecified provider error'));
     }
     return $decoded;
 }
@@ -80,9 +110,12 @@ function tronadoCreateOrder(string $orderId, int $amountToman, string $domain, ?
         ],
         tronadoSetting('tronado_api_key')
     );
-    $token = trim((string) ($orderResponse['Token'] ?? ''));
-    if (!preg_match('/^[A-Za-z0-9_-]{8,200}$/', $token) || !empty($orderResponse['ErrorMessage'])) {
-        throw new RuntimeException('Tronado did not create the order');
+    $token = is_string($orderResponse['Token'] ?? null) ? trim($orderResponse['Token']) : '';
+    if ($token === '') {
+        throw new RuntimeException('Tronado order response is missing Token');
+    }
+    if (!preg_match('/^[A-Za-z0-9_-]{8,200}$/', $token)) {
+        throw new RuntimeException('Tronado order response contains an invalid Token format');
     }
     $paymentUrl = 'https://t.me/tronado_robot/customerpayment?startapp=' . rawurlencode($token);
     $fullUrl = (string) ($orderResponse['FullPaymentUrl'] ?? '');
