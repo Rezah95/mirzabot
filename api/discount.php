@@ -234,7 +234,11 @@ function disc_discount_sell_add(array $data, string $method): void
 
     validateMethod('POST', $method);
     requireFields($data, ['code']);
-    $percent = requireInt($data, 'percent', 1, 100);
+    $mode = $data['discount_mode'] ?? 'percent';
+    if (!in_array($mode, ['percent', 'fixed'], true)) {
+        sendJsonResponse(false, 'Invalid discount mode', [], 400);
+    }
+    $value = $mode === 'fixed' ? requireInt($data, 'amount', 1, 100000000) : requireInt($data, 'percent', 1, 100);
     $limitUse = requireInt($data, 'limit_use', 1);
     $perUser = isset($data['useuser']) ? requireInt($data, 'useuser', 1) : 1;
     if ($perUser > $limitUse) {
@@ -247,7 +251,8 @@ function disc_discount_sell_add(array $data, string $method): void
     try {
         $productData = [
             'codeDiscount' => $data['code'],
-            'price' => $percent,
+            'price' => $value,
+            'discount_mode' => $mode,
             'limitDiscount' => $limitUse,
             'usedDiscount' => 0,
             'agent' => empty($data['agent']) ? "allusers" : $data['agent'],

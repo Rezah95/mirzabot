@@ -5,6 +5,8 @@ return [
         id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         codeDiscount varchar(1000) NOT NULL,
         price varchar(200) NOT NULL,
+        discount_mode VARCHAR(10) NOT NULL DEFAULT 'percent',
+        target_user_id VARCHAR(20) NULL,
         limitDiscount varchar(500) NOT NULL,
         agent varchar(500) NOT NULL,
         usefirst varchar(100) NOT NULL,
@@ -16,6 +18,8 @@ return [
         usedDiscount varchar(500) NOT NULL
         SQL,
     'columns' => [
+        ['discount_mode', null, "VARCHAR(10) NOT NULL DEFAULT 'percent'"],
+        ['target_user_id', null, 'VARCHAR(20) NULL'],
         ['agent', null, 'VARCHAR(100)'],
         ['usefirst', null, 'VARCHAR(100)'],
         ['useuser', null, 'VARCHAR(100)'],

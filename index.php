@@ -1688,7 +1688,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             return;
         }
     }
-    sendmessage($from_id, strtr($textbotlang['users']['Discount']['applied'], ['{discount_price}' => $SellDiscountlimit['price']]), $keyboard, 'HTML');
+    sendmessage($from_id, strtr($textbotlang['users']['Discount']['applied'], ['{discount_price}' => discountValueLabel($SellDiscountlimit, $textbotlang['common']['labels']['toman'])]), $keyboard, 'HTML');
     $eextraprice = json_decode($marzban_list_get['pricecustomvolume'], true);
     $custompricevalue = $eextraprice[$user['agent']];
     $eextraprice = json_decode($marzban_list_get['pricecustomtime'], true);
@@ -1706,9 +1706,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $stmt->execute();
         $info_product = $stmt->fetch(PDO::FETCH_ASSOC);
     }
-    $result = ($SellDiscountlimit['price'] / 100) * $info_product['price_product'];
-    $info_product['price_product'] = $info_product['price_product'] - $result;
-    $info_product['price_product'] = round($info_product['price_product']);
+    $info_product['price_product'] = discountPrice($SellDiscountlimit, (float) $info_product['price_product']);
     if (intval($info_product['Service_time']) == 0)
         $info_product['Service_time'] = $textbotlang['users']['status']['unlimited'];
     if ($info_product['price_product'] < 0)
@@ -1768,7 +1766,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     }
     if ($datain == "confirmserdiscount") {
         $discountRow = discountPreview($pdo, (string) ($partsdic[1] ?? ''), (string) $from_id, $user['agent'], $marzban_list_get['code_panel'], $prodcut['code_product'], 'extend', $textbotlang['common']['labels']['testServiceName']);
-        $discountedPrice = $discountRow ? max(0, round((float) $prodcut['price_product'] * (1 - ((int) $discountRow['price'] / 100)))) : null;
+        $discountedPrice = $discountRow ? discountPrice($discountRow, (float) $prodcut['price_product']) : null;
         if ($discountRow === null || !isset($partsdic[2]) || !is_numeric($partsdic[2]) || (float) $partsdic[2] != $discountedPrice) {
             sendmessage($from_id, $textbotlang['users']['Discount']['notAllowed'], null, 'HTML');
             return;
@@ -3893,7 +3891,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         return;
     if ($datain == "confirmandgetserviceDiscount") {
         $discountRow = discountPreview($pdo, (string) ($partsdic[0] ?? ''), (string) $from_id, $user['agent'], $marzban_list_get['code_panel'], $info_product['code_product'], 'buy', $textbotlang['common']['labels']['testServiceName']);
-        $discountedPrice = $discountRow ? max(0, round((float) $info_product['price_product'] * (1 - ((int) $discountRow['price'] / 100)))) : null;
+        $discountedPrice = $discountRow ? discountPrice($discountRow, (float) $info_product['price_product']) : null;
         if ($discountRow === null || !isset($partsdic[1]) || !is_numeric($partsdic[1]) || (float) $partsdic[1] != $discountedPrice) {
             sendmessage($from_id, $textbotlang['users']['Discount']['notAllowed'], null, 'HTML');
             return;
@@ -4237,7 +4235,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             return;
         }
     }
-    sendmessage($from_id, strtr($textbotlang['users']['Discount']['applied'], ['{discount_price}' => $SellDiscountlimit['price']]), null, 'HTML');
+    sendmessage($from_id, strtr($textbotlang['users']['Discount']['applied'], ['{discount_price}' => discountValueLabel($SellDiscountlimit, $textbotlang['common']['labels']['toman'])]), null, 'HTML');
     step('payment', $from_id);
     $parts = explode("_", $user['Processing_value_one']);
     $eextraprice = json_decode($marzban_list_get['pricecustomvolume'], true);
@@ -4257,11 +4255,8 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $stmt->execute();
         $info_product = $stmt->fetch(PDO::FETCH_ASSOC);
     }
-    $result = ($SellDiscountlimit['price'] / 100) * $info_product['price_product'];
-
     $info_productmain = $info_product['price_product'];
-    $info_product['price_product'] = $info_product['price_product'] - $result;
-    $info_product['price_product'] = round($info_product['price_product']);
+    $info_product['price_product'] = discountPrice($SellDiscountlimit, (float) $info_product['price_product']);
     if ($info_product['Service_time'] == 0)
         $info_product['Service_time'] = $textbotlang['users']['status']['unlimited'];
     if (intval($info_product['Volume_constraint']) == 0)

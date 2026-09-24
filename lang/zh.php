@@ -456,7 +456,7 @@ return [
                         'invalidCode' => '❌ 优惠码无效',
                         'expired' => '❌ 优惠码时间已过期。',
                         'useLimit' => '⭕️ 此码仅可使用 {useuser}  次',
-                        'applied' => '🤩 您的优惠码有效，发票已应用 {discount_price}% 折扣。',
+                        'applied' => '🤩 您的优惠码有效，发票已应用 {discount_price} 折扣。',
                         'notAllowed' => '❌ 无法使用此优惠码购买',
                 ],
                 'Major' => [
@@ -1326,13 +1326,16 @@ n2',
                         'giftManage' => "🎁 礼品码管理\n\n• 🎫 已登记的代码：%s\n\n📌 使用每个代码旁边的按钮查看详情或删除。",
                         'giftDetail' => "🎫 %s\n\n💰 金额：%s 托曼\n🔴 总次数限制：%s\n✅ 已使用：%s 次",
                         'discountManage' => "🎁 优惠码管理\n\n• 🎫 已登记的代码：%s\n\n📌 使用每个代码旁边的按钮查看详情或删除。",
-                        'discountDetail' => "🎫 %s\n\n🧮 折扣：%s%%\n🎯 用户组：%s\n🧩 适用范围：%s\n🎛 面板：%s\n📦 产品：%s\n🔴 总次数限制：%s\n👤 每位用户限制：%s\n🥇 仅限首次购买：%s\n⏳ 到期：%s\n✅ 已使用：%s 次",
+                        'discountDetail' => "🎫 %s\n\n🧮 折扣：%s\n🎯 用户组：%s\n🧩 适用范围：%s\n🎛 面板：%s\n📦 产品：%s\n🔴 总次数限制：%s\n👤 每位用户限制：%s\n🥇 仅限首次购买：%s\n⏳ 到期：%s\n✅ 已使用：%s 次",
                         'agentCode' => '🎯 此码适用于哪个用户组？',
                         'errorCode' => '代码无效。代码必须为英文且不含多余字符',
                         'firstDiscount' => '📌 此优惠码应用于首次购买还是所有购买？',
                         'getCode' => '请发送一个礼品码代码',
                         'invalidAgentCode' => '❌ 用户类型无效',
                         'priceCode' => '已收到代码。现在请发送该代码的金额',
+                        'askDiscountMode' => '请选择折扣类型。',
+                        'askFixedDiscount' => '请输入固定折扣金额，单位为托曼（1–100,000,000）。',
+                        'fixedDiscount' => '固定金额（托曼）',
                         'priceCodeSell' => '已收到代码。现在请发送该代码的百分比',
                         'saveCode' => '✅ 代码已成功登记',
                         'setLimitUse' => '📌 请发送使用次数限制。
@@ -1347,7 +1350,7 @@ n2',
 🎁 您的优惠码创建成功。
 
 📩 优惠码名称：<code>%s</code>
-🧮 优惠码百分比：%s
+🧮 折扣：%s
 🎛 面板：%s
 📌  产品：%s
 ♻️ 用户类型：%s

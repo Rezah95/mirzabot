@@ -458,7 +458,7 @@ Use the button below to pay👇🏻',
                         'invalidCode' => '❌ The discount code is invalid',
                         'expired' => '❌ The discount code time has expired.',
                         'useLimit' => '⭕️ This code can only be used {useuser}  times',
-                        'applied' => '🤩 Your discount code was valid and {discount_price} percent discount was applied to your invoice.',
+                        'applied' => '🤩 Your discount code was valid and {discount_price} discount was applied to your invoice.',
                         'notAllowed' => '❌ Purchase with this discount code is not possible',
                 ],
                 'Major' => [
@@ -1328,13 +1328,16 @@ Received error:  %s',
                         'giftManage' => "🎁 Gift code management\n\n• 🎫 Registered codes: %s\n\n📌 Use the buttons next to each code to view details or delete it.",
                         'giftDetail' => "🎫 %s\n\n💰 Amount: %s Toman\n🔴 Total limit: %s\n✅ Used: %s times",
                         'discountManage' => "🎁 Discount code management\n\n• 🎫 Registered codes: %s\n\n📌 Use the buttons next to each code to view details or delete it.",
-                        'discountDetail' => "🎫 %s\n\n🧮 Discount: %s%%\n🎯 User group: %s\n🧩 Section: %s\n🎛 Panel: %s\n📦 Product: %s\n🔴 Total limit: %s\n👤 Per-user limit: %s\n🥇 First purchase only: %s\n⏳ Expiry: %s\n✅ Used: %s times",
+                        'discountDetail' => "🎫 %s\n\n🧮 Discount: %s\n🎯 User group: %s\n🧩 Section: %s\n🎛 Panel: %s\n📦 Product: %s\n🔴 Total limit: %s\n👤 Per-user limit: %s\n🥇 First purchase only: %s\n⏳ Expiry: %s\n✅ Used: %s times",
                         'agentCode' => '🎯 Which user group should the code be defined for?',
                         'errorCode' => 'The code is invalid. The code must be in English without extra characters',
                         'firstDiscount' => '📌 Should the discount code be for the first purchase or all purchases?',
                         'getCode' => 'Send a code for the gift code',
                         'invalidAgentCode' => '❌ The user type is invalid',
                         'priceCode' => 'The code was received. Now send the code\'s amount',
+                        'askDiscountMode' => 'Choose the discount type.',
+                        'askFixedDiscount' => 'Send the fixed discount in toman (1 to 100,000,000).',
+                        'fixedDiscount' => 'Fixed amount (toman)',
                         'priceCodeSell' => 'The code was received. Now send the code\'s percentage',
                         'saveCode' => '✅ The code was successfully registered',
                         'setLimitUse' => '📌 Send the usage limit.
@@ -1349,7 +1352,7 @@ Received error:  %s',
 🎁 Your discount code was created successfully.
 
 📩 Discount code name: <code>%s</code>
-🧮 Discount code percentage: %s
+🧮 Discount: %s
 🎛 Panel:  %s
 📌  Product: %s
 ♻️ User type: %s

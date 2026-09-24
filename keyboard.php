@@ -674,7 +674,7 @@ function discountCodesMenu(int $page = 0)
     global $pdo, $textbotlang;
     $total = (int) $pdo->query('SELECT COUNT(*) FROM DiscountSell')->fetchColumn();
     $page = min(max(0, $page), max(0, (int) ceil($total / 20) - 1));
-    $stmt = $pdo->prepare('SELECT id, codeDiscount, price FROM DiscountSell ORDER BY id DESC LIMIT 20 OFFSET ?');
+    $stmt = $pdo->prepare('SELECT id, codeDiscount, price, discount_mode FROM DiscountSell ORDER BY id DESC LIMIT 20 OFFSET ?');
     $stmt->bindValue(1, $page * 20, PDO::PARAM_INT);
     $stmt->execute();
     $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -682,7 +682,7 @@ function discountCodesMenu(int $page = 0)
     foreach ($discountCodes as $discountCode) {
         $rows[] = [
             ['text' => "❌", 'callback_data' => "discountcode_deleteid_{$discountCode['id']}"],
-            ['text' => "{$discountCode['codeDiscount']} ({$discountCode['price']}%)", 'callback_data' => "discountcode_showid_{$discountCode['id']}"],
+            ['text' => "{$discountCode['codeDiscount']} (" . discountValueLabel($discountCode, $textbotlang['common']['labels']['toman']) . ")", 'callback_data' => "discountcode_showid_{$discountCode['id']}"],
         ];
     }
     $navigation = [];

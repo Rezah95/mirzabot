@@ -10,6 +10,7 @@ require_once __DIR__ . '/bulk_audience.php';
 require_once __DIR__ . '/bulk_queue.php';
 require_once __DIR__ . '/bulk_credit.php';
 require_once __DIR__ . '/discount_rules.php';
+require_once __DIR__ . '/renewal_reminders_admin.php';
 $domainhostsEscaped = htmlspecialchars($domainhosts, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
 $miniAppInstructionText = sprintf($textbotlang['Admin']['webpanel']['miniAppHelp'], $domainhostsEscaped);
@@ -38,7 +39,7 @@ $backmenu_register(["add_name_help", "getcatgoryhelp", "add_dec", "remove_help",
 $backmenu_register(["changenamehelp", "changecategoryhelp", "changedeshelp", "changemedia"], $helpedit);
 $backmenu_register([
     "get_code", "get_price_code", "getlimitcodedis",
-    "get_codesell", "get_price_codesell", "getlimitcode", "gettypecodeagent", "gettimediscount",
+    "get_codesell", "get_discount_mode", "get_price_codesell", "getlimitcode", "gettypecodeagent", "gettimediscount",
     "getfirstdiscount", "getuseuser", "getlocdiscount", "getproductdiscount",
     "minbalancebulk", "getpricecashback", "getagent"
 ], $shopkeyboard);
@@ -113,6 +114,9 @@ if ($adminrulecheck['rule'] != "administrator") {
     if (!$isLimitedRoleAllowed) {
         return;
     }
+}
+if ($adminrulecheck['rule'] === 'administrator' && renewalReminderAdminHandle($datain, $text, $user)) {
+    return;
 }
 $isGatewayOptionClick = preg_match('/^paygwopt-(\w+)$/', $datain, $gatewayOption);
 if ($isGatewayOptionClick) {
@@ -949,6 +953,9 @@ elseif ($datain == "systemsms") {
             ],
             [
                 ['text' => $textbotlang['keyboard']['cancelPinnedMessages'], 'callback_data' => 'typeservice-unpinmessage'],
+            ],
+            [
+                ['text' => '⏰ یادآوری خودکار تمدید', 'callback_data' => 'renewal_menu'],
             ],
             [
                 ['text' => $textbotlang['keyboard']['backToMain'], 'callback_data' => 'backlistuser'],
@@ -4053,23 +4060,34 @@ elseif ($datain == "systemsms") {
     savedata("clear", "message_id", $message_id);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Discountsell']['getCode'], $discountCodeFlowKeyboard);
     step('get_codesell', $from_id);
-} elseif ($user['step'] == "get_codesell") {
+} elseif ($user['step'] == "get_codesell" && $datain === '') {
     if (!preg_match('/^[A-Za-z\d]{1,40}$/', $text)) {
         editFlowMessage($textbotlang['Admin']['Discount']['errorCode'], $discountCodeFlowKeyboard);
         return;
     }
     savedata("save", "code", strtolower($text));
-    editFlowMessage($textbotlang['Admin']['Discount']['priceCodeSell'], $discountCodeFlowKeyboard);
+    $modeKeyboard = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['keyboard']['percentage'], 'callback_data' => 'discountmode_percent'],
+         ['text' => $textbotlang['Admin']['Discount']['fixedDiscount'], 'callback_data' => 'discountmode_fixed']],
+        [['text' => $textbotlang['keyboard']['backToPreviousMenu'], 'callback_data' => 'discountcode_list']],
+    ]]);
+    editFlowMessage($textbotlang['Admin']['Discount']['askDiscountMode'], $modeKeyboard);
+    step('get_discount_mode', $from_id);
+} elseif ($user['step'] === 'get_discount_mode' && preg_match('/^discountmode_(percent|fixed)$/', $datain, $dataget)) {
+    savedata('save', 'discount_mode', $dataget[1]);
+    $prompt = $dataget[1] === 'fixed' ? 'askFixedDiscount' : 'priceCodeSell';
+    editFlowMessage($textbotlang['Admin']['Discount'][$prompt], $discountCodeFlowKeyboard);
     step('get_price_codesell', $from_id);
-} elseif ($user['step'] == "get_price_codesell") {
-    if (!ctype_digit((string) $text) || (int) $text < 1 || (int) $text > 100) {
+} elseif ($user['step'] == "get_price_codesell" && $datain === '') {
+    $userdata = json_decode($user['Processing_value'], true);
+    if (!discountValueValid(['price' => $text, 'discount_mode' => $userdata['discount_mode'] ?? 'percent'])) {
         editFlowMessage($textbotlang['Admin']['Balance']['invalidPrice'], $discountCodeFlowKeyboard);
         return;
     }
     savedata("save", "price", $text);
     editFlowMessage($textbotlang['Admin']['Discountsell']['getLimit'], $discountCodeFlowKeyboard);
     step('getlimitcode', $from_id);
-} elseif ($user['step'] == "getlimitcode") {
+} elseif ($user['step'] == "getlimitcode" && $datain === '') {
     if (!ctype_digit((string) $text) || (int) $text < 1 || (int) $text > 1000000000) {
         editFlowMessage($textbotlang['Admin']['Discount']['invalidParameters'], $discountCodeFlowKeyboard);
         return;
@@ -4094,7 +4112,7 @@ elseif ($datain == "systemsms") {
     savedata("save", "agent", $dataget[1]);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Discount']['askActiveHours'], $discountCodeFlowKeyboard);
     step('gettimediscount', $from_id);
-} elseif ($user['step'] == "gettimediscount") {
+} elseif ($user['step'] == "gettimediscount" && $datain === '') {
     if (!ctype_digit((string) $text) || (int) $text > 87600) {
         editFlowMessage($textbotlang['common']['invalidInput'], $discountCodeFlowKeyboard);
         return;
@@ -4137,7 +4155,7 @@ elseif ($datain == "systemsms") {
     savedata("save", "typediscount", $dataget[1]);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Discount']['askUserLimit'], $discountCodeFlowKeyboard);
     step('getuseuser', $from_id);
-} elseif ($user['step'] == "getuseuser") {
+} elseif ($user['step'] == "getuseuser" && $datain === '') {
     $userdata = json_decode($user['Processing_value'], true);
     if (!ctype_digit((string) $text) || (int) $text < 1 || (int) $text > (int) $userdata['limitDiscount']) {
         editFlowMessage($textbotlang['Admin']['Discount']['userLimitTooHigh'], $discountCodeFlowKeyboard);
@@ -4167,6 +4185,7 @@ elseif ($datain == "systemsms") {
         $created = discountCreate($pdo, [
             'codeDiscount' => $userdata['code'],
             'price' => $userdata['price'],
+            'discount_mode' => $userdata['discount_mode'] ?? 'percent',
             'limitDiscount' => $userdata['limitDiscount'],
             'agent' => $userdata['agent'],
             'usefirst' => $userdata['usefirst'],
@@ -4185,7 +4204,7 @@ elseif ($datain == "systemsms") {
         editFlowMessage($textbotlang['Admin']['Discount']['duplicateCode'], $discountCodeFlowKeyboard);
         return;
     }
-    $textdiscount = sprintf($textbotlang['Admin']['Discount']['created'], $userdata['code'], $userdata['price'], $userdata['name_panel'], $product['name_product'], $userdata['agent'], $userdata['limitDiscount']);
+    $textdiscount = sprintf($textbotlang['Admin']['Discount']['created'], $userdata['code'], discountValueLabel($userdata, $textbotlang['common']['labels']['toman']), $userdata['name_panel'], $product['name_product'], $userdata['agent'], $userdata['limitDiscount']);
     step('home', $from_id);
     [, $discountKeyboard] = discountCodesMenu();
     Editmessagetext($from_id, $message_id, $textdiscount, $discountKeyboard);
@@ -4233,7 +4252,7 @@ elseif ($datain == "systemsms") {
     $discountDetailText = sprintf(
         $textbotlang['Admin']['Discount']['discountDetail'],
         $discountCode['codeDiscount'],
-        $discountCode['price'],
+        discountValueLabel($discountCode, $textbotlang['common']['labels']['toman']),
         $userGroupLabels[$discountCode['agent']] ?? $discountCode['agent'],
         $sectionLabels[$discountCode['type']] ?? $discountCode['type'],
         $panelLabel,

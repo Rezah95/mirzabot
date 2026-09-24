@@ -1,5 +1,28 @@
 <?php
 
+function discountValueValid(array $row): bool
+{
+    $mode = $row['discount_mode'] ?? 'percent';
+    $value = filter_var($row['price'] ?? null, FILTER_VALIDATE_INT);
+    return in_array($mode, ['percent', 'fixed'], true) && $value !== false && $value >= 1
+        && $value <= ($mode === 'fixed' ? 100000000 : 100);
+}
+
+function discountPrice(array $row, float $price): int
+{
+    if (!discountValueValid($row) || !is_finite($price) || $price < 0) {
+        throw new InvalidArgumentException('Invalid discount price');
+    }
+    $off = ($row['discount_mode'] ?? 'percent') === 'fixed'
+        ? (int) $row['price'] : $price * (int) $row['price'] / 100;
+    return (int) max(0, round($price - $off));
+}
+
+function discountValueLabel(array $row, string $currency = 'تومان'): string
+{
+    return number_format((int) $row['price']) . (($row['discount_mode'] ?? 'percent') === 'fixed' ? ' ' . $currency : '%');
+}
+
 function discountEnsureRedemptionSchema(PDO $pdo): void
 {
     static $ready = false;
@@ -42,15 +65,15 @@ function discountIsEligible(PDO $pdo, array $row, string $userId, string $agent,
         || !in_array($row['agent'], ['allusers', $agent], true)
         || !in_array($row['code_panel'], ['/all', $panelCode], true)
         || !in_array($row['code_product'], ['all', $productCode], true)
-        || !in_array($row['type'], ['all', $purpose], true)) {
+        || !in_array($row['type'], ['all', $purpose], true)
+        || (!empty($row['target_user_id']) && (string) $row['target_user_id'] !== $userId)) {
         return false;
     }
-    $percent = filter_var($row['price'], FILTER_VALIDATE_INT);
     $limit = filter_var($row['limitDiscount'], FILTER_VALIDATE_INT);
     $perUser = filter_var($row['useuser'], FILTER_VALIDATE_INT);
     $used = filter_var($row['usedDiscount'], FILTER_VALIDATE_INT);
     $expires = filter_var($row['time'], FILTER_VALIDATE_INT);
-    if ($percent === false || $percent < 1 || $percent > 100
+    if (!discountValueValid($row)
         || $limit === false || $limit < 1 || $used === false || $used < 0 || $used >= $limit
         || $perUser === false || $perUser < 1 || $expires === false || $expires < 0) {
         return false;
@@ -164,8 +187,8 @@ function discountCreate(PDO $pdo, array $row): bool
 {
     $code = strtolower((string) ($row['codeDiscount'] ?? ''));
     if (!preg_match('/^[a-z0-9]{1,40}$/', $code)
-        || filter_var($row['price'] ?? null, FILTER_VALIDATE_INT) === false
-        || (int) $row['price'] < 1 || (int) $row['price'] > 100
+        || !discountValueValid($row)
+        || (isset($row['target_user_id']) && !preg_match('/^[1-9][0-9]{0,19}$/', (string) $row['target_user_id']))
         || filter_var($row['limitDiscount'] ?? null, FILTER_VALIDATE_INT) === false
         || (int) $row['limitDiscount'] < 1
         || filter_var($row['useuser'] ?? null, FILTER_VALIDATE_INT) === false
@@ -177,6 +200,11 @@ function discountCreate(PDO $pdo, array $row): bool
         || !in_array($row['type'] ?? null, ['buy', 'extend', 'all'], true)
         || empty($row['code_panel']) || empty($row['code_product'])) {
         throw new InvalidArgumentException('Invalid discount parameters');
+    }
+    $allowed = ['codeDiscount', 'price', 'discount_mode', 'target_user_id', 'limitDiscount', 'usedDiscount',
+        'agent', 'usefirst', 'useuser', 'code_panel', 'code_product', 'time', 'type'];
+    if (array_diff(array_keys($row), $allowed)) {
+        throw new InvalidArgumentException('Unknown discount field');
     }
     $lockName = 'discount_sell_' . sha1($code);
     $stmt = $pdo->prepare('SELECT GET_LOCK(?, 5)');
