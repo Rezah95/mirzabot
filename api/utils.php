@@ -8,6 +8,21 @@ if (isset($_SERVER['SCRIPT_FILENAME']) && realpath($_SERVER['SCRIPT_FILENAME']) 
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../function.php';
 
+if (!function_exists('getallheaders')) {
+    function getallheaders(): array
+    {
+        $headers = [];
+        foreach ($_SERVER as $name => $value) {
+            if (substr($name, 0, 5) !== 'HTTP_') {
+                continue;
+            }
+            $headerName = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))));
+            $headers[$headerName] = $value;
+        }
+        return $headers;
+    }
+}
+
 function sendJsonResponse($status, $message, $data = [], $httpCode = 200)
 {
     http_response_code($httpCode);
@@ -52,9 +67,6 @@ function apiTokens()
     global $APIKEY;
 
     $tokens = [];
-    if (isset($APIKEY) && $APIKEY !== '') {
-        $tokens[] = (string) $APIKEY;
-    }
 
     $hashFile = __DIR__ . '/hash.txt';
     if (is_file($hashFile)) {
@@ -62,6 +74,10 @@ function apiTokens()
         if ($fileToken !== '') {
             $tokens[] = $fileToken;
         }
+    }
+
+    if (empty($tokens) && isset($APIKEY) && $APIKEY !== '') {
+        $tokens[] = (string) $APIKEY;
     }
 
     return $tokens;
@@ -102,13 +118,13 @@ function hasAdminSession()
     }
 
     try {
-        $admin = select("admin", "id_admin", "username", $_SESSION['admin_user'], "select");
+        $admin = select("admin", "*", "username", $_SESSION['admin_user'], "select");
     } catch (Exception $e) {
         error_log("Admin session check failed: " . $e->getMessage());
         return false;
     }
 
-    return is_array($admin) && isset($admin['id_admin']);
+    return is_array($admin) && isset($admin['id_admin']) && $admin['rule'] === 'administrator';
 }
 
 function requireApiTokenOrAdminSession($headers)
@@ -157,7 +173,7 @@ function logApiRequest($headers, $data, $action)
             "INSERT IGNORE INTO logs_api (header, data, time, ip, actions) VALUES (?, ?, ?, ?, ?)"
         );
         $stmt->execute([
-            json_encode($headers),
+            json_encode(array_diff_key(array_change_key_case((array) $headers), array_flip(['token', 'authorization', 'cookie']))),
             json_encode($data),
             date('Y/m/d H:i:s'),
             $_SERVER['REMOTE_ADDR'] ?? 'unknown',

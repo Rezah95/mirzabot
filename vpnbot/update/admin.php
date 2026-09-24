@@ -80,7 +80,9 @@ if ($text == "📞 تنظیم نام کاربری پشتیبانی") {
             ]
         ]
     ]);
-    $Payment_report = select("Payment_report", "*", "id_order", $order_id, "select");
+    $stmt = $pdo->prepare("SELECT * FROM Payment_report WHERE id_order = ? AND bottype = ?");
+    $stmt->execute([$order_id, $ApiToken]);
+    $Payment_report = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($Payment_report == false) {
         telegram('answerCallbackQuery', array(
             'callback_query_id' => $callback_query_id,
@@ -132,7 +134,9 @@ if ($text == "📞 تنظیم نام کاربری پشتیبانی") {
     update("user", "Processing_value_four", "none", "id", $Balance_id['id']);
 } elseif (preg_match('/reject_pay_(\w+)/', $datain, $datagetr)) {
     $id_order = $datagetr[1];
-    $Payment_report = select("Payment_report", "*", "id_order", $id_order, "select");
+    $stmt = $pdo->prepare("SELECT * FROM Payment_report WHERE id_order = ? AND bottype = ?");
+    $stmt->execute([$id_order, $ApiToken]);
+    $Payment_report = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($Payment_report == false) {
         telegram('answerCallbackQuery', array(
             'callback_query_id' => $callback_query_id,
@@ -418,17 +422,19 @@ if ($text == "📞 تنظیم نام کاربری پشتیبانی") {
     $Balance_user_afters = number_format(select("user", "*", "id", $user['Processing_value'], "select")['Balance']);
 } elseif ($text == "📊 آمار ربات") {
     $statistics = select("user", "*", "bottype", $ApiToken, "count");
-    $stmt2 = $pdo->prepare("SELECT COUNT( DISTINCT id_user) as count FROM `invoice` WHERE name_product = 'سرویس تست' AND  bottype = '$ApiToken'");
-    $stmt2->execute();
+    $stmt2 = $pdo->prepare("SELECT COUNT( DISTINCT id_user) as count FROM `invoice` WHERE name_product = 'سرویس تست' AND  bottype = :mp1");
+    $stmt2->execute([':mp1' => $ApiToken]);
     $statisticsorder = $stmt2->fetch(PDO::FETCH_ASSOC)['count'];
-    $stmt = $pdo->prepare("SELECT * FROM invoice WHERE name_product = 'سرویس تست' AND bottype = '$ApiToken'");
-    $stmt->execute();
+    $stmt = $pdo->prepare("SELECT * FROM invoice WHERE name_product = 'سرویس تست' AND bottype = :mp1");
+    $stmt->execute([':mp1' => $ApiToken]);
     $count_usertest = $stmt->rowCount();
-    $sql1 = "SELECT COUNT(*) AS invoice_count FROM invoice WHERE (status = 'active' OR status = 'end_of_time' OR status = 'end_of_volume' OR status = 'sendedwarn' OR status = 'send_on_hold') AND name_product != 'سرویس تست' AND bottype = '$ApiToken'";
-    $stmt1 = $pdo->query($sql1);
+    $sql1 = "SELECT COUNT(*) AS invoice_count FROM invoice WHERE (status = 'active' OR status = 'end_of_time' OR status = 'end_of_volume' OR status = 'sendedwarn' OR status = 'send_on_hold') AND name_product != 'سرویس تست' AND bottype = :mp1";
+    $stmt1 = $pdo->prepare($sql1);
+    $stmt1->execute([':mp1' => $ApiToken]);
     $invoice = $stmt1->fetch(PDO::FETCH_ASSOC)['invoice_count'];
-    $sql2 = "SELECT SUM(price_product) AS total_price FROM invoice WHERE (status = 'active' OR status = 'end_of_time' OR status = 'end_of_volume' OR status = 'sendedwarn' OR status = 'send_on_hold') AND name_product != 'سرویس تست' AND bottype = '$ApiToken'";
-    $stmt2 = $pdo->query($sql2);
+    $sql2 = "SELECT SUM(price_product) AS total_price FROM invoice WHERE (status = 'active' OR status = 'end_of_time' OR status = 'end_of_volume' OR status = 'sendedwarn' OR status = 'send_on_hold') AND name_product != 'سرویس تست' AND bottype = :mp1";
+    $stmt2 = $pdo->prepare($sql2);
+    $stmt2->execute([':mp1' => $ApiToken]);
     $invoicesum = number_format($stmt2->fetch(PDO::FETCH_ASSOC)['total_price'], 0);
     $statisticsall = "
 📊 آمار کلی ربات  
@@ -706,6 +712,11 @@ if ($text == "📞 تنظیم نام کاربری پشتیبانی") {
     $textupdate = "📍 مدیر عزیز  برای آپدیت گزینه زیر را انتخاب نمایید";
     sendmessage($from_id, $textupdate, $Response, 'HTML');
 } elseif ($datain == "update") {
+    if (!isShellExecAvailable()) {
+        sendmessage($from_id, "❌ آپدیت روی این سرور امکان‌پذیر نیست.\n\nتابع shell_exec غیرفعال است و فایل‌های نسخه جدید بدون آن کپی نمی‌شوند. برای آپدیت باید ربات روی سروری با دسترسی shell_exec اجرا شود.", null, 'HTML');
+        return;
+    }
+
     $source = dirname(__DIR__) . "/update";
     $getversionnow = file_get_contents($source . '/version');
 

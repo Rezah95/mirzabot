@@ -8,13 +8,6 @@ require_once __DIR__ . '/../function.php';
 require_once __DIR__ . '/../panels.php';
 require_once __DIR__ . '/../keyboard.php';
 require __DIR__ . '/../vendor/autoload.php';
-use Endroid\QrCode\Builder\Builder;
-use Endroid\QrCode\Encoding\Encoding;
-use Endroid\QrCode\ErrorCorrectionLevel;
-use Endroid\QrCode\Label\Font\OpenSans;
-use Endroid\QrCode\Label\LabelAlignment;
-use Endroid\QrCode\RoundBlockSizeMode;
-use Endroid\QrCode\Writer\PngWriter;
 
 $ManagePanel = new ManagePanel();
 
@@ -113,7 +106,11 @@ if (!$Payment_report) {
     cubepay_emit('notfound', languagechange(dirname(__DIR__)), $data_order_id, null);
     return;
 }
-$token_cubepay = select("PaySetting", "*", "NamePay", "apiternado", "select")['ValuePay'];
+$token_cubepay = trim((string) select("PaySetting", "*", "NamePay", "apiternado", "select")['ValuePay']);
+if ($token_cubepay === '' || $token_cubepay === '0' || $Payment_report['Payment_Method'] !== "Currency Rial 2") {
+    cubepay_emit('notfound', languagechange(dirname(__DIR__)), $data_order_id, null);
+    return;
+}
 
 $payer_row = select("user", "*", "id", $Payment_report['id_user'], "select");
 $page_lang = is_array($payer_row) && !empty($payer_row['lang']) ? $payer_row['lang'] : 'fa';
