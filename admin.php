@@ -935,6 +935,7 @@ elseif ($datain == "systemsms") {
             return;
         }
     }
+    step('home', $from_id);
     $listbtn = json_encode([
         'inline_keyboard' => [
             [
@@ -957,6 +958,7 @@ elseif ($datain == "systemsms") {
     Editmessagetext($from_id, $message_id, $textbotlang['users']['selectoption'], $listbtn);
 } elseif (preg_match('/^typeservice-(\w+)/', $datain, $dataget)) {
     $type = $dataget[1];
+    step('home', $from_id);
     savedata("clear", "typeservice", $type);
     if ($type == "unpinmessage") {
         deletemessage($from_id, $message_id);
@@ -1006,6 +1008,7 @@ elseif ($datain == "systemsms") {
         return;
     }
     savedata("save", "typeusermessage", $dataget[1]);
+    step('home', $from_id);
     $listbtn = json_encode([
         'inline_keyboard' => [
             [
@@ -1036,7 +1039,10 @@ elseif ($datain == "systemsms") {
     }
     savedata("save", "agent", $type);
     if ($userdata['typeusermessage'] == 'expired_unrenewed') {
-        Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['askExpiredRange'], $backadmin);
+        $rangeKeyboard = json_encode(['inline_keyboard' => [[
+            ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeusermessage-expired_unrenewed'],
+        ]]]);
+        Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['askExpiredRange'], $rangeKeyboard);
         step('bulk_expired_days', $from_id);
         return;
     }
