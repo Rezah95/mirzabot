@@ -4859,7 +4859,8 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             try { $pdo->prepare("UPDATE Payment_report SET payment_Status = 'reject' WHERE id_order = ?")->execute([$orderId]); }
             catch (Throwable $cleanupError) { tonpaysLog('order_rejection_failed', ['order_id' => $orderId], $cleanupError); }
         }
-        sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'] . "\n<code>$reference</code>", $keyboard, 'HTML');
+        $errorMessage = tonpaysCustomerErrorMessage($error, $textbotlang['users']['Balance']['errorLinkPayment']);
+        sendmessage($from_id, $errorMessage . "\n<code>$reference</code>", $keyboard, 'HTML');
         step('home', $from_id);
         return;
     }

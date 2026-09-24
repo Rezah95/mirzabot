@@ -47,7 +47,10 @@ function tonpaysRequest(string $method, string $path, ?array $payload = null, st
     curl_close($ch);
     $data = is_string($raw) ? json_decode($raw, true) : null;
     $reason = is_array($data) ? tonpaysResponseError($data) : '';
-    if (is_array($data)) { $diagnostics['response_fields'] = tonpaysResponseFields($data); }
+    if (is_array($data)) {
+        $diagnostics['response_fields'] = tonpaysResponseFields($data);
+        $diagnostics['provider_code'] = tonpaysResponseErrorCode($data);
+    }
     if ($raw === false || $status < 200 || $status >= 300) {
         $message = 'TonPays API request failed (HTTP ' . $status . ')';
         if ($reason !== '') { $message .= ': ' . $reason; }

@@ -11,6 +11,25 @@ final class TonpaysFailure extends RuntimeException
     }
 }
 
+function tonpaysResponseErrorCode(array $response): string
+{
+    foreach ([$response, $response['error'] ?? null, $response['detail'] ?? null] as $error) {
+        if (!is_array($error)) { continue; }
+        $code = $error['code'] ?? $error['error_code'] ?? null;
+        if (is_string($code) && preg_match('/^[A-Z][A-Z0-9_]{0,63}$/', $code)) { return $code; }
+    }
+    return '';
+}
+
+function tonpaysCustomerErrorMessage(Throwable $error, string $fallback): string
+{
+    if ($error instanceof TonpaysFailure && ($error->diagnostics['http_status'] ?? null) === 400
+        && ($error->diagnostics['provider_code'] ?? '') === 'BUYER_IS_MERCHANT') {
+        return 'TonPays اجازهٔ پرداخت با حساب تلگرام صاحب درگاه را نمی‌دهد. برای تست، با یک حساب تلگرام دیگر وارد ربات شوید یا روش پرداخت دیگری انتخاب کنید.';
+    }
+    return $fallback;
+}
+
 function tonpaysSafeDiagnostic(string $text): string
 {
     try { $key = function_exists('getPaySettingValue') ? trim((string) getPaySettingValue('tonpays_api_key', '')) : ''; }
@@ -76,7 +95,7 @@ function tonpaysLog(string $event, array $context = [], ?Throwable $error = null
     }
     $reference = 'TP-' . bin2hex(random_bytes(6));
     $entry = ['time' => gmdate('c'), 'reference' => $reference, 'event' => tonpaysSafeDiagnostic($event)];
-    foreach (['stage', 'order_id', 'http_status', 'curl_errno', 'curl_error', 'content_type', 'reason', 'response_fields',
+    foreach (['stage', 'order_id', 'http_status', 'provider_code', 'curl_errno', 'curl_error', 'content_type', 'reason', 'response_fields',
         'response_bytes', 'json_error', 'fields', 'exception', 'file', 'line', 'configured', 'amount', 'minimum', 'maximum', 'telegram_code'] as $field) {
         $value = $context[$field] ?? null;
         if (is_bool($value) || is_int($value)) { $entry[$field] = $value; }
@@ -110,7 +129,7 @@ function tonpaysRecentErrorsText(): string
         $entry = json_decode($line, true);
         if (!is_array($entry)) { continue; }
         $parts = [];
-        foreach (['time', 'reference', 'event', 'stage', 'order_id', 'http_status', 'curl_errno', 'curl_error', 'reason', 'fields', 'response_fields'] as $key) {
+        foreach (['time', 'reference', 'event', 'stage', 'order_id', 'http_status', 'provider_code', 'curl_errno', 'curl_error', 'reason', 'fields', 'response_fields'] as $key) {
             if (isset($entry[$key]) && is_scalar($entry[$key])) {
                 $value = (string) $entry[$key];
                 $identifier = ($key === 'reference' && preg_match('/^TP-[a-f0-9]{12}$/', $value))

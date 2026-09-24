@@ -82,6 +82,13 @@ try {
         try { $create(); } catch (TonpaysFailure $error) { return $error; }
         throw new LogicException('Expected a diagnostic failure');
     };
+    $fixture(['success' => false, 'error' => ['code' => 'BUYER_IS_MERCHANT',
+        'message' => 'buyer_chat_id cannot be the merchant Telegram id']], 400);
+    $merchantError = $failure();
+    expectTonpays($merchantError->diagnostics['provider_code'] === 'BUYER_IS_MERCHANT', 'Structured merchant restriction lost');
+    expectTonpays(str_contains(tonpaysCustomerErrorMessage($merchantError, 'generic'), 'حساب تلگرام دیگر'), 'Merchant sees no actionable message');
+    expectTonpays(tonpaysCustomerErrorMessage(new RuntimeException('BUYER_IS_MERCHANT'), 'generic') === 'generic', 'Arbitrary exception exposed to customer');
+    expectTonpays(tonpaysResponseErrorCode(['error' => ['code' => []]]) === '', 'Malformed provider code accepted');
     $fixture(['detail' => 'INVALID_API_KEY: test-tonpays-key'], 401);
     $error = $failure();
     expectTonpays(str_contains($error->getMessage(), 'INVALID_API_KEY') && $error->diagnostics['http_status'] === 401, 'Provider error detail lost');
