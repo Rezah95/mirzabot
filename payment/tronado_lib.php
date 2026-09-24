@@ -40,6 +40,9 @@ function tronadoResponseError(array $response): string
     if (is_string($response['Token'] ?? null)) {
         $secrets[] = $response['Token'];
     }
+    if (is_array($response['Data'] ?? null) && is_string($response['Data']['Token'] ?? null)) {
+        $secrets[] = $response['Data']['Token'];
+    }
     foreach ($secrets as $secret) {
         if ($secret !== '' && $secret !== '0') {
             $message = str_replace($secret, '[redacted]', $message);
@@ -150,6 +153,21 @@ function tronadoCreateOrder(string $orderId, int $amountToman, string $domain, ?
         ],
         tronadoSetting('tronado_api_key')
     );
+    // GetOrderToken v5 wraps the payment data in an IsSuccessful/Code/Message/Data envelope.
+    if (($orderResponse['IsSuccessful'] ?? null) !== true) {
+        $reason = tronadoResponseError($orderResponse);
+        throw new RuntimeException('Tronado order rejected: ' . ($reason !== ''
+            ? $reason
+            : 'IsSuccessful must be true (fields: ' . tronadoResponseFields($orderResponse) . ')'));
+    }
+    if (!is_array($orderResponse['Data'] ?? null)) {
+        throw new RuntimeException('Tronado order response contains invalid Data');
+    }
+    $orderResponse = $orderResponse['Data'];
+    if (!empty($orderResponse['ErrorMessage']) || !empty($orderResponse['Error'])) {
+        $reason = tronadoResponseError($orderResponse);
+        throw new RuntimeException('Tronado order rejected: ' . ($reason !== '' ? $reason : 'Unspecified provider error'));
+    }
     $token = is_string($orderResponse['Token'] ?? null) ? trim($orderResponse['Token']) : '';
     if ($token === '') {
         $reason = tronadoResponseError($orderResponse);
@@ -161,7 +179,7 @@ function tronadoCreateOrder(string $orderId, int $amountToman, string $domain, ?
         throw new RuntimeException('Tronado order response contains an invalid Token format');
     }
     $paymentUrl = 'https://t.me/tronado_robot/customerpayment?startapp=' . rawurlencode($token);
-    $fullUrl = (string) ($orderResponse['FullPaymentUrl'] ?? '');
+    $fullUrl = is_string($orderResponse['FullPaymentUrl'] ?? null) ? $orderResponse['FullPaymentUrl'] : '';
     $fullHost = strtolower((string) parse_url($fullUrl, PHP_URL_HOST));
     if (parse_url($fullUrl, PHP_URL_SCHEME) === 'https' && in_array($fullHost, ['t.me', 'telegram.me'], true)) {
         $paymentUrl = $fullUrl;
