@@ -1765,6 +1765,7 @@ $nowpayment_setting_keyboard = json_encode([
 $tonpaysManage = json_encode(['inline_keyboard' => [
     [['text' => 'تنظیم کلید API', 'callback_data' => 'tonpays_set_api_key']],
     [['text' => 'حداقل مبلغ پرداخت', 'callback_data' => 'tonpays_set_min'], ['text' => 'حداکثر مبلغ پرداخت', 'callback_data' => 'tonpays_set_max']],
+    [['text' => '🧾 آخرین خطاهای TonPays', 'callback_data' => 'tonpays_errors']],
     [['text' => $textbotlang['keyboard']['backToGateways'], 'callback_data' => 'paygwlist']],
 ]], JSON_UNESCAPED_UNICODE);
 $paymentGateways = [

@@ -25,6 +25,7 @@ require_once dirname(__DIR__) . '/db/Schema.php';
 $socket = getenv('TONPAYS_TEST_SOCKET');
 if (!$socket) { echo "Set TONPAYS_TEST_SOCKET to an isolated test MySQL socket\n"; exit(1); }
 checkTonpays(str_starts_with($socket, '/tmp/mirza-tonpays-test.') && is_file(dirname($socket) . '/mysql.pid'), 'Refusing a non-test database');
+define('TONPAYS_TEST_LOG_FILE', tempnam(sys_get_temp_dir(), 'mirza-tonpays-callback-log-'));
 $pdo = new PDO('mysql:unix_socket=' . $socket . ';charset=utf8mb4', 'root', '', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES => false]);
 $db = 'tonpays_test_' . bin2hex(random_bytes(6));
 $pdo->exec("CREATE DATABASE $db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
@@ -95,8 +96,13 @@ try {
     checkTonpays($run(null, 'test-tonpays-key', null, static fn() => false)[0] === 200 && $run()[0] === 200, 'Refunded fulfillment repeated');
     $pdo->exec("UPDATE Payment_report SET Payment_Method = 'Tronado'");
     checkTonpays($run()[0] === 404, 'Other gateway order accepted');
+    $log = file_get_contents(TONPAYS_TEST_LOG_FILE);
+    checkTonpays(str_contains($log, 'inquiry_failed') && str_contains($log, 'offline')
+        && str_contains($log, 'delivery_failed') && str_contains($log, 'After side effect'), 'Callback errors lost their causes');
 
     $from_id = 123; $message_id = 1; $adminUser = ['step' => 'home']; $messages = []; $paymentGateways = [];
+    checkTonpays(paymentGatewayAdminHandle('tonpays_errors', '', $adminUser), 'Diagnostics menu unhandled');
+    checkTonpays(str_contains(end($messages), 'delivery_failed') && !str_contains(end($messages), 'test-tonpays-key'), 'Admin cannot read safe diagnostics');
     checkTonpays(paymentGatewayAdminHandle('gatewayname_edit_tetraminator', '', $adminUser), 'Rename option unhandled');
     checkTonpays($adminUser['step'] === 'gatewayname_input_tetraminator', 'Rename input state missing');
     paymentGatewayAdminHandle('', "نام\nنام", $adminUser);
@@ -148,8 +154,25 @@ try {
     paymentGatewayAdminHandle('gatewayorder_reset', '', $adminUser);
     checkTonpays(gatewayDisplayOrder() === gatewayDefaultOrder() && gatewayUserLabel('tetraminator') === 'کارت به کارت'
         && getPaySettingValue('tonpays_api_key') === 'replacement-test-key', 'Reset affected gateway names or credentials');
+    // Exercise the actual creation route: failures before the HTTP call must also be logged.
+    gatewaySaveSetting($pdo, 'tonpays_status', 'ontonpays');
+    $indexSource = file_get_contents(dirname(__DIR__) . '/index.php');
+    $start = strpos($indexSource, "} elseif (\$datain === 'tonpays') {");
+    $end = strpos($indexSource, "} elseif (\$datain === 'tronadopay') {", $start);
+    $creationRoute = 'if (false) {' . substr($indexSource, $start, $end - $start) . '}';
+    $datain = 'tonpays'; $from_id = -1; $keyboard = null; $domainhosts = 'bot.example.com';
+    $user = ['Processing_value' => '50000', 'Processing_value_tow' => 'addbalance', 'Processing_value_one' => '0'];
+    eval($creationRoute); // Invalid Telegram ID fails locally, with no gateway request.
+    checkTonpays(str_contains(end($messages), 'TP-') && $pdo->query("SELECT payment_Status FROM Payment_report WHERE id_user = '-1'")->fetchColumn() === 'reject', 'Creation error was not reported or rejected');
+    $pdo->exec('RENAME TABLE Payment_report TO saved_payment_report');
+    try { eval($creationRoute); } finally { $pdo->exec('RENAME TABLE saved_payment_report TO Payment_report'); }
+    $entries = array_map(static fn($line) => json_decode($line, true), array_filter(explode("\n", file_get_contents(TONPAYS_TEST_LOG_FILE))));
+    $lastError = end($entries);
+    checkTonpays($lastError['event'] === 'order_creation_failed' && $lastError['stage'] === 'save_payment_record'
+        && $lastError['exception'] === 'PDOException' && str_contains(end($messages), $lastError['reference']), 'Database creation failure has no traceable log');
     echo "TonPays MySQL callback, duplicate delivery, migration preservation, admin settings and gateway order tests passed\n";
 } finally {
     $pdo->exec("DROP DATABASE $db");
+    unlink(TONPAYS_TEST_LOG_FILE);
     restore_error_handler();
 }

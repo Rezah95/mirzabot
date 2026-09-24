@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/tonpays_diagnostics.php';
+
 function tonpaysCredentialsReady(): bool
 {
     $key = trim((string) getPaySettingValue('tonpays_api_key', ''));
@@ -27,7 +29,7 @@ function tonpaysHttpsUrl($value): bool
 
 function tonpaysRequest(string $method, string $path, ?array $payload = null, string $baseUrl = 'https://tonpays.online'): array
 {
-    if (!tonpaysCredentialsReady()) { throw new RuntimeException('TonPays API key is not configured'); }
+    if (!tonpaysCredentialsReady()) { throw new TonpaysFailure('TonPays API key is not configured'); }
     $ch = curl_init(rtrim($baseUrl, '/') . $path);
     $headers = ['Accept: application/json', 'X-API-Key: ' . trim((string) getPaySettingValue('tonpays_api_key'))];
     $options = [CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 25,
@@ -40,12 +42,23 @@ function tonpaysRequest(string $method, string $path, ?array $payload = null, st
     curl_setopt_array($ch, $options);
     $raw = curl_exec($ch);
     $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $diagnostics = ['http_status' => $status, 'curl_errno' => curl_errno($ch), 'curl_error' => curl_error($ch),
+        'content_type' => (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE), 'response_bytes' => is_string($raw) ? strlen($raw) : 0];
     curl_close($ch);
+    $data = is_string($raw) ? json_decode($raw, true) : null;
+    $reason = is_array($data) ? tonpaysResponseError($data) : '';
+    if (is_array($data)) { $diagnostics['response_fields'] = tonpaysResponseFields($data); }
     if ($raw === false || $status < 200 || $status >= 300) {
-        throw new RuntimeException('TonPays API request failed (HTTP ' . $status . ')');
+        $message = 'TonPays API request failed (HTTP ' . $status . ')';
+        if ($reason !== '') { $message .= ': ' . $reason; }
+        elseif ($raw === false) { $message .= ': ' . tonpaysSafeDiagnostic($diagnostics['curl_error']); }
+        else { $message .= ': no structured error message in response'; }
+        throw new TonpaysFailure($message, $diagnostics);
     }
-    $data = json_decode($raw, true);
-    if (!is_array($data)) { throw new RuntimeException('TonPays API returned invalid JSON'); }
+    if (!is_array($data)) {
+        $diagnostics['json_error'] = json_last_error_msg();
+        throw new TonpaysFailure('TonPays API returned invalid JSON object', $diagnostics);
+    }
     return $data;
 }
 
@@ -59,13 +72,25 @@ function tonpaysCreateOrder(string $orderId, int $amount, string $buyerId, strin
     $data = tonpaysRequest('POST', '/api/v1/invoices/create', [
         'amount' => $amount, 'order_id' => $orderId, 'buyer_chat_id' => $buyerId, 'callback_url' => $callback,
     ], $baseUrl);
-    if (!is_string($data['invoice_id'] ?? null) || !preg_match('/^[A-Za-z0-9_-]{1,200}$/', $data['invoice_id'])
-        || ($data['order_id'] ?? null) !== $orderId || tonpaysPositiveInt($data['request_amount'] ?? null) !== $amount
-        || tonpaysPositiveInt($data['final_amount'] ?? null) === null) {
-        throw new RuntimeException('TonPays invoice does not match the requested order');
+    $invalid = [];
+    if (!is_string($data['invoice_id'] ?? null) || !preg_match('/^[A-Za-z0-9_-]{1,200}$/', $data['invoice_id'])) { $invalid[] = 'invoice_id'; }
+    if (($data['order_id'] ?? null) !== $orderId) { $invalid[] = 'order_id'; }
+    if (tonpaysPositiveInt($data['request_amount'] ?? null) !== $amount) { $invalid[] = 'request_amount'; }
+    if (tonpaysPositiveInt($data['final_amount'] ?? null) === null) { $invalid[] = 'final_amount'; }
+    if ($invalid) {
+        $reason = tonpaysResponseError($data);
+        throw new TonpaysFailure('TonPays invoice mismatch: ' . implode(', ', $invalid) . ($reason !== '' ? ': ' . $reason : ''),
+            ['fields' => implode(',', $invalid), 'response_fields' => tonpaysResponseFields($data)]);
     }
-    $url = $data['payment_url'] ?? $data['invoice_url'] ?? null;
-    if (!tonpaysHttpsUrl($url)) { throw new RuntimeException('TonPays payment URL is invalid'); }
+    // The current API calls web checkout web_invoice_url; accept the earlier field too.
+    $url = null;
+    foreach (['web_invoice_url', 'payment_url', 'invoice_url'] as $field) {
+        if (!isset($data[$field]) || $data[$field] === '') { continue; }
+        $url = $data[$field];
+        if (!tonpaysHttpsUrl($url)) { throw new TonpaysFailure('TonPays payment URL is invalid', ['fields' => $field, 'response_fields' => tonpaysResponseFields($data)]); }
+        break;
+    }
+    if ($url === null) { throw new TonpaysFailure('TonPays payment URL is missing', ['response_fields' => tonpaysResponseFields($data)]); }
     return [
         'payment_url' => $url,
         'metadata' => ['invoice_id' => $data['invoice_id'], 'request_amount' => $amount,
@@ -117,11 +142,12 @@ function tonpaysProcessCallback(PDO $pdo, array $callback, string $providedKey, 
     try {
         $verified = $check($invoiceId);
     } catch (Throwable $e) {
-        error_log('TonPays inquiry failed for order ' . $orderId);
+        tonpaysLog('inquiry_failed', ['order_id' => $orderId, 'stage' => 'check_invoice'], $e);
         return [502, ['ok' => false]];
     }
     if (!is_array($verified) || !tonpaysInvoiceMatchesOrder($verified, $order, $metadata)) {
-        error_log('TonPays invoice mismatch for order ' . $orderId);
+        tonpaysLog('invoice_mismatch', ['order_id' => $orderId, 'stage' => 'verify_invoice',
+            'response_fields' => is_array($verified) ? tonpaysResponseFields($verified) : get_debug_type($verified)]);
         return [409, ['ok' => false]];
     }
     if ($verified['paid'] !== true) { return [200, ['ok' => true, 'paid' => false]]; }
@@ -137,7 +163,7 @@ function tonpaysProcessCallback(PDO $pdo, array $callback, string $providedKey, 
         $pdo->prepare('UPDATE Payment_report SET fulfillment_status = ?, fulfillment_updated_at = NOW() WHERE id_order = ?')->execute([$status, $orderId]);
     } catch (Throwable $e) {
         $pdo->prepare("UPDATE Payment_report SET fulfillment_status = 'failed', fulfillment_updated_at = NOW() WHERE id_order = ?")->execute([$orderId]);
-        error_log('TonPays delivery failed for order ' . $orderId);
+        tonpaysLog('delivery_failed', ['order_id' => $orderId, 'stage' => 'fulfillment'], $e);
         return [500, ['ok' => false, 'error' => 'Payment requires reconciliation']];
     }
     return [200, ['ok' => true, 'paid' => true]];

@@ -4824,6 +4824,8 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         updatePaymentMessageId($message_id, $randomString);
 } elseif ($datain === 'tonpays') {
     if (!tonpaysConfigured()) {
+        tonpaysLog('gateway_unavailable', ['stage' => 'configuration', 'configured' => tonpaysCredentialsReady(),
+            'reason' => 'Gateway is disabled or API key is missing/invalid']);
         sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
         return;
     }
@@ -4831,6 +4833,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $minimum = max(1, (int) getPaySettingValue('tonpays_min', '20000'));
     $maximum = (int) getPaySettingValue('tonpays_max', '1000000');
     if ($amount === null || $amount < $minimum || $amount > $maximum || $maximum < $minimum) {
+        tonpaysLog('amount_out_of_range', ['stage' => 'validate_amount', 'amount' => $amount, 'minimum' => $minimum, 'maximum' => $maximum]);
         sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRange'], [
             '{mainbalance}' => number_format($minimum), '{maxbalance}' => number_format($maximum),
         ]), null, 'HTML');
@@ -4838,17 +4841,25 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     }
     $orderId = bin2hex(random_bytes(10));
     $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
-    $statement = $pdo->prepare('INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)');
-    $statement->execute([$from_id, $orderId, date('Y/m/d H:i:s'), $amount, 'Unpaid', 'TonPays', $invoice]);
+    $phase = 'save_payment_record';
+    $paymentRecorded = false;
     try {
+        $statement = $pdo->prepare('INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)');
+        $statement->execute([$from_id, $orderId, date('Y/m/d H:i:s'), $amount, 'Unpaid', 'TonPays', $invoice]);
+        $paymentRecorded = true;
+        $phase = 'create_invoice';
         $created = tonpaysCreateOrder($orderId, $amount, (string) $from_id, $domainhosts);
+        $phase = 'save_invoice_metadata';
         $pdo->prepare('UPDATE Payment_report SET dec_not_confirmed = ? WHERE id_order = ?')->execute([
             json_encode($created['metadata'], JSON_THROW_ON_ERROR), $orderId,
         ]);
     } catch (Throwable $error) {
-        $pdo->prepare("UPDATE Payment_report SET payment_Status = 'reject' WHERE id_order = ?")->execute([$orderId]);
-        error_log('TonPays order creation failed: ' . $error->getMessage());
-        sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
+        $reference = tonpaysLog('order_creation_failed', ['stage' => $phase, 'order_id' => $orderId, 'amount' => $amount], $error);
+        if ($paymentRecorded) {
+            try { $pdo->prepare("UPDATE Payment_report SET payment_Status = 'reject' WHERE id_order = ?")->execute([$orderId]); }
+            catch (Throwable $cleanupError) { tonpaysLog('order_rejection_failed', ['order_id' => $orderId], $cleanupError); }
+        }
+        sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'] . "\n<code>$reference</code>", $keyboard, 'HTML');
         step('home', $from_id);
         return;
     }
@@ -4856,7 +4867,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $paymentKeyboard = json_encode(['inline_keyboard' => [[['text' => $textbotlang['users']['Balance']['payments'], 'url' => $created['payment_url']]]]]);
     $message = sprintf($textbotlang['users']['Balance']['transactionCreated2'], $orderId, number_format($amount));
     $paymentMessage = sendmessage($from_id, $message, $paymentKeyboard, 'HTML');
-    updatePaymentMessageId($paymentMessage, $orderId);
+    if (!updatePaymentMessageId($paymentMessage, $orderId)) {
+        tonpaysLog('payment_message_failed', ['stage' => 'send_payment_link', 'order_id' => $orderId,
+            'telegram_code' => is_array($paymentMessage) ? ($paymentMessage['error_code'] ?? 0) : 0,
+            'reason' => is_array($paymentMessage) ? tonpaysResponseError($paymentMessage) : 'Invalid Telegram response']);
+    }
 } elseif ($datain === 'tronadopay') {
     if (!tronadoConfigured()) {
         sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');

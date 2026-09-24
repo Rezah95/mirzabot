@@ -83,6 +83,15 @@ function gatewayOrderAdminHandle(string $data): bool
 function paymentGatewayAdminHandle(string $data, string $text, array $user): bool
 {
     global $pdo, $from_id, $message_id, $textbotlang;
+    if ($data === 'tonpays_errors') {
+        step('home', $from_id);
+        $markup = json_encode(['inline_keyboard' => [
+            [['text' => 'تازه‌سازی', 'callback_data' => 'tonpays_errors']],
+            [['text' => 'تنظیمات TonPays', 'callback_data' => 'paygw-tonpays']],
+        ]]);
+        Editmessagetext($from_id, $message_id, htmlspecialchars(tonpaysRecentErrorsText(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $markup);
+        return true;
+    }
     if (gatewayOrderAdminHandle($data)) { return true; }
     if ($data === 'gatewayname_list') {
         step('home', $from_id);

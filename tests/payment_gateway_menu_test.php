@@ -156,6 +156,8 @@ preg_match_all('/\x27keyboard\x27 => \$(\w+)/', $registry, $variables);
 foreach ($variables[1] as $variable) {
     ${$variable} = '{"inline_keyboard":[]}';
 }
+eval(menuSourceBetween($source, '$tonpaysManage =', '$paymentGateways ='));
+expectMenu(str_contains($tonpaysManage, 'tonpays_errors'), 'TonPays diagnostic menu entry missing');
 eval($registry);
 expectMenu(str_contains(paymentGatewaysKeyboard(), 'gatewayorder_list'), 'Order settings entry missing');
 $admin = file_get_contents(dirname(__DIR__) . '/admin.php');
