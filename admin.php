@@ -11,6 +11,7 @@ require_once __DIR__ . '/bulk_queue.php';
 require_once __DIR__ . '/bulk_credit.php';
 require_once __DIR__ . '/discount_rules.php';
 require_once __DIR__ . '/renewal_reminders_admin.php';
+require_once __DIR__ . '/gateway_settings_admin.php';
 $domainhostsEscaped = htmlspecialchars($domainhosts, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
 $miniAppInstructionText = sprintf($textbotlang['Admin']['webpanel']['miniAppHelp'], $domainhostsEscaped);
@@ -116,6 +117,9 @@ if ($adminrulecheck['rule'] != "administrator") {
     }
 }
 if ($adminrulecheck['rule'] === 'administrator' && renewalReminderAdminHandle($datain, $text, $user)) {
+    return;
+}
+if ($adminrulecheck['rule'] === 'administrator' && paymentGatewayAdminHandle($datain, $text, $user)) {
     return;
 }
 $isGatewayOptionClick = preg_match('/^paygwopt-(\w+)$/', $datain, $gatewayOption);
@@ -6131,21 +6135,32 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, $textbotlang['Admin']['price']['amountSaved'], $shopkeyboard, 'HTML');
     step('home', $from_id);
 } elseif ($datain == "paygwlist" && $adminrulecheck['rule'] == "administrator") {
+    step('home', $from_id);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['gateway']['intro'], paymentGatewaysKeyboard());
 } elseif (preg_match('/^paygw(toggle)?-(\w+)$/', $datain, $gatewayMatch) && isset($paymentGateways[$gatewayMatch[2]]) && $adminrulecheck['rule'] == "administrator") {
     [, $isToggle, $gatewayKey] = $gatewayMatch;
+    step('home', $from_id);
     $gateway = $paymentGateways[$gatewayKey];
     $gatewayIsOn = getPaySettingValue($gateway['setting'], $gateway['off']) == $gateway['on'];
     if ($isToggle) {
+        if ($gatewayKey === 'tonpays' && !$gatewayIsOn && !tonpaysCredentialsReady()) {
+            sendmessage($from_id, 'برای فعال‌سازی TonPays ابتدا کلید API را تنظیم کنید.', $tonpaysManage, 'HTML');
+            return;
+        }
         if ($gatewayKey === 'tronado' && !$gatewayIsOn && !tronadoCredentialsReady()) {
             sendmessage($from_id, 'برای فعال‌سازی ترونادو، ابتدا API key، کیف پول مقصد و کلید امضای IPN را تنظیم کنید.', $tronadoManage, 'HTML');
             return;
         }
         $gatewayIsOn = !$gatewayIsOn;
-        update("PaySetting", "ValuePay", $gatewayIsOn ? $gateway['on'] : $gateway['off'], "NamePay", $gateway['setting']);
+        if ($gatewayKey === 'tonpays') {
+            gatewaySaveSetting($pdo, $gateway['setting'], $gatewayIsOn ? $gateway['on'] : $gateway['off']);
+        } else {
+            update("PaySetting", "ValuePay", $gatewayIsOn ? $gateway['on'] : $gateway['off'], "NamePay", $gateway['setting']);
+        }
     }
     $gatewayStatusText = $textbotlang['Admin']['Status'][$gatewayIsOn ? 'statuson' : 'statusoff'];
     $gatewayRows = json_decode($gateway['keyboard'], true)['inline_keyboard'];
+    array_unshift($gatewayRows, [['text' => 'تغییر نام سمت کاربر', 'callback_data' => 'gatewayname_edit_' . $gatewayKey]]);
     array_unshift($gatewayRows, [['text' => $gatewayStatusText, 'callback_data' => "paygwtoggle-$gatewayKey"]]);
     Editmessagetext($from_id, $message_id, sprintf($textbotlang['Admin']['gateway']['detail'], $gateway['label'], $gatewayStatusText), json_encode(['inline_keyboard' => $gatewayRows]));
 } elseif (preg_match('/^editpayment-(.*)-(.*)/', $datain, $dataget)) {

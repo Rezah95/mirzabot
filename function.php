@@ -2,6 +2,8 @@
 require_once 'vendor/autoload.php';
 require 'config.php';
 require_once __DIR__ . '/discount_rules.php';
+require_once __DIR__ . '/gateway_labels.php';
+require_once __DIR__ . '/payment/tonpays_lib.php';
 ini_set('error_log', 'error_log');
 
 use Endroid\QrCode\Builder\Builder;

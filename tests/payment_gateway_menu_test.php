@@ -9,6 +9,8 @@ $source = file_get_contents(dirname(__DIR__) . '/keyboard.php');
 $gatewaySettings = [];
 $sent = [];
 $writes = [];
+require_once dirname(__DIR__) . '/gateway_labels.php';
+require_once dirname(__DIR__) . '/payment/tonpays_lib.php';
 
 function getPaySettingValue($name, $default = '')
 {
@@ -70,6 +72,41 @@ $gatewaySettings = ['tetraminatorstatus' => 'ontetraminator', 'tetraminator_labe
 eval($customerMenu);
 $rows = json_decode($step_payment, true)['inline_keyboard'];
 expectMenu($rows[0][0]['callback_data'] === 'tetraminatorpay' && $rows[0][0]['text'] === 'کارت به کارت', 'Custom Tetraminator label changed');
+
+foreach ([
+    [[], false],
+    [['tonpays_status' => 'ontonpays'], false],
+    [['tonpays_api_key' => 'test-api-key'], false],
+    [['tonpays_status' => 'ontonpays', 'tonpays_api_key' => 'test-api-key'], true],
+] as [$gatewaySettings, $visible]) {
+    eval($customerMenu);
+    expectMenu(str_contains($step_payment, '"callback_data":"tonpays"') === $visible, 'TonPays visibility failed');
+}
+$gatewaySettings = ['Cartstatus' => 'oncard', 'Cartstatuspv' => 'oncardpv', 'CartDirect' => 'merchant',
+    'tetraminatorstatus' => 'ontetraminator', 'tetraminator_label' => 'کارت به کارت',
+    'tonpays_status' => 'ontonpays', 'tonpays_api_key' => 'test-api-key',
+    'paymentstatussnotverify' => 'onverifypay', 'gateway_label_card' => 'واریز مستقیم',
+    'gateway_label_tetraminator' => 'پرداخت ریالی دلخواه', 'gateway_label_tonpays' => 'تون پی',
+    'gateway_label_paymentnotverify' => 'سایر پرداخت‌ها'];
+eval($customerMenu);
+$buttons = array_merge(...json_decode($step_payment, true)['inline_keyboard']);
+expectMenu($buttons[0]['text'] === 'واریز مستقیم' && $buttons[0]['url'] === 'https://t.me/merchant', 'Card URL label failed');
+$byCallback = array_column($buttons, 'text', 'callback_data');
+expectMenu($byCallback['tetraminatorpay'] === 'پرداخت ریالی دلخواه' && $byCallback['tonpays'] === 'تون پی'
+    && $byCallback['paymentnotverify'] === 'سایر پرداخت‌ها', 'Customer labels did not change');
+expectMenu($byCallback['colselist'] === $textbotlang['keyboard']['closeList'], 'Non-gateway button changed');
+$gatewaySettings['gateway_label_tetraminator'] = '';
+expectMenu(gatewayUserLabel('tetraminator') === 'کارت به کارت', 'Reset lost the legacy custom name');
+foreach (gatewayLabelCallbacks() as $key => $callback) {
+    $gatewaySettings['gateway_label_' . $key] = 'نام جدید ' . $key;
+    $markup = ['inline_keyboard' => [[['text' => 'old', 'callback_data' => $callback]]]];
+    $new = gatewayApplyLabels($markup)['inline_keyboard'][0][0];
+    expectMenu($new['text'] === 'نام جدید ' . $key && $new['callback_data'] === $callback, 'Label changed routing');
+}
+foreach (['', '   ', "نام\nدوم", "name\x00", str_repeat('الف', 30)] as $label) {
+    expectMenu(!gatewayValidLabel($label), 'Invalid label accepted');
+}
+expectMenu(gatewayValidLabel('💳 پرداخت آسان'), 'Persian/emoji label rejected');
 
 $registry = menuSourceBetween($source, '$paymentGateways =', '$Exception_auto_cart_keyboard');
 preg_match_all('/\x27keyboard\x27 => \$(\w+)/', $registry, $variables);

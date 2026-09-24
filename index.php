@@ -4676,7 +4676,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     update("user", "Processing_value", $balancelast, "id", $from_id);
     sendmessage($from_id, $textbotlang['users']['Balance']['selectPayment'], $step_payment, 'HTML');
     step('get_step_payment', $from_id);
-} elseif ($user['step'] == "get_step_payment" && in_array($datain, ["cart_to_offline", "aqayepardakht", "zarinpal", "variza", "plisio", "nowpayment", "iranpay1", "iranpay2", "iranpay4", "iranpay3", "digitaltron", "startelegrams", "tronadopay", "tetraminatorpay", "uniquepay"])) {
+} elseif ($user['step'] == "get_step_payment" && in_array($datain, ["cart_to_offline", "aqayepardakht", "zarinpal", "variza", "plisio", "nowpayment", "iranpay1", "iranpay2", "iranpay4", "iranpay3", "digitaltron", "startelegrams", "tronadopay", "tetraminatorpay", "uniquepay", "tonpays"])) {
     if ($datain == "cart_to_offline") {
         $mainbalance = select("PaySetting", "ValuePay", "NamePay", "minbalancecart", "select")['ValuePay'];
         $maxbalance = select("PaySetting", "ValuePay", "NamePay", "maxbalancecart", "select")['ValuePay'];
@@ -4822,6 +4822,41 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         }
         $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
         updatePaymentMessageId($message_id, $randomString);
+} elseif ($datain === 'tonpays') {
+    if (!tonpaysConfigured()) {
+        sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
+        return;
+    }
+    $amount = tonpaysPositiveInt($user['Processing_value']);
+    $minimum = max(1, (int) getPaySettingValue('tonpays_min', '20000'));
+    $maximum = (int) getPaySettingValue('tonpays_max', '1000000');
+    if ($amount === null || $amount < $minimum || $amount > $maximum || $maximum < $minimum) {
+        sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRange'], [
+            '{mainbalance}' => number_format($minimum), '{maxbalance}' => number_format($maximum),
+        ]), null, 'HTML');
+        return;
+    }
+    $orderId = bin2hex(random_bytes(10));
+    $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
+    $statement = $pdo->prepare('INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)');
+    $statement->execute([$from_id, $orderId, date('Y/m/d H:i:s'), $amount, 'Unpaid', 'TonPays', $invoice]);
+    try {
+        $created = tonpaysCreateOrder($orderId, $amount, (string) $from_id, $domainhosts);
+        $pdo->prepare('UPDATE Payment_report SET dec_not_confirmed = ? WHERE id_order = ?')->execute([
+            json_encode($created['metadata'], JSON_THROW_ON_ERROR), $orderId,
+        ]);
+    } catch (Throwable $error) {
+        $pdo->prepare("UPDATE Payment_report SET payment_Status = 'reject' WHERE id_order = ?")->execute([$orderId]);
+        error_log('TonPays order creation failed: ' . $error->getMessage());
+        sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
+        step('home', $from_id);
+        return;
+    }
+    step('home', $from_id);
+    $paymentKeyboard = json_encode(['inline_keyboard' => [[['text' => $textbotlang['users']['Balance']['payments'], 'url' => $created['payment_url']]]]]);
+    $message = sprintf($textbotlang['users']['Balance']['transactionCreated2'], $orderId, number_format($amount));
+    $paymentMessage = sendmessage($from_id, $message, $paymentKeyboard, 'HTML');
+    updatePaymentMessageId($paymentMessage, $orderId);
 } elseif ($datain === 'tronadopay') {
     if (!tronadoConfigured()) {
         sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');

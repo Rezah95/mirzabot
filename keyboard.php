@@ -301,7 +301,7 @@ $step_payment = [
 if ($PaySettingcard == "oncard" && intval($users['cardpayment']) == 1) {
     if ($PaySettingpv == "oncardpv") {
         $step_payment['inline_keyboard'][] = [
-            ['text' => $textbotlang['textbot']['cartToCart'], 'url' => "https://t.me/$usernamecart"],
+            ['text' => gatewayUserLabel('card', $textbotlang['textbot']['cartToCart']), 'url' => "https://t.me/$usernamecart"],
         ];
     } else {
         $step_payment['inline_keyboard'][] = [
@@ -321,6 +321,9 @@ if ($zarinpal == "onzarinpal" && $zarinpalAllowed) {
     $step_payment['inline_keyboard'][] = [
         ['text' => $textbotlang['textbot']['zarinPal'], 'callback_data' => "zarinpal"]
     ];
+}
+if (tonpaysConfigured()) {
+    $step_payment['inline_keyboard'][] = [['text' => '💳 TonPays', 'callback_data' => 'tonpays']];
 }
 /* UNIQUEPAY_KB_START */
 if (function_exists('uniquepay_setting') && uniquepay_setting('uniquepaystatus','offuniquepay') == "onuniquepay") { $step_payment['inline_keyboard'][] = [['text' => uniquepay_setting('uniquepay_label','درگاه پرداخت یونیک‌پی'), 'callback_data' => "uniquepay"]]; }
@@ -401,7 +404,7 @@ if (intval($paymentsstartelegram) == 1) {
 $step_payment['inline_keyboard'][] = [
     ['text' => $textbotlang['keyboard']['closeList'], 'callback_data' => "colselist"]
 ];
-$step_payment = json_encode($step_payment);
+$step_payment = json_encode(gatewayApplyLabels($step_payment));
 $keyboardhelpadmin = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['addEducation']], ['text' => $textbotlang['keyboard']['deleteEducation']]],
@@ -1759,10 +1762,16 @@ $nowpayment_setting_keyboard = json_encode([
         [['text' => $textbotlang['keyboard']['backToGateways'], 'callback_data' => "paygwlist"]],
     ]
 ]);
+$tonpaysManage = json_encode(['inline_keyboard' => [
+    [['text' => 'تنظیم کلید API', 'callback_data' => 'tonpays_set_api_key']],
+    [['text' => 'حداقل مبلغ پرداخت', 'callback_data' => 'tonpays_set_min'], ['text' => 'حداکثر مبلغ پرداخت', 'callback_data' => 'tonpays_set_max']],
+    [['text' => $textbotlang['keyboard']['backToGateways'], 'callback_data' => 'paygwlist']],
+]], JSON_UNESCAPED_UNICODE);
 $paymentGateways = [
     'tronado' => ['label' => 'ترونادو', 'setting' => 'tronado_status', 'on' => 'ontronado', 'off' => 'offtronado', 'keyboard' => $tronadoManage],
     'tetraminator' => ['label' => 'تترامیناتور', 'setting' => 'tetraminatorstatus', 'on' => 'ontetraminator', 'off' => 'offtetraminator', 'keyboard' => $tetraminatorManage],
     'zarinpal' => ['label' => $textbotlang['keyboard']['zarinPalGateway'], 'setting' => 'zarinpalstatus', 'on' => 'onzarinpal', 'off' => 'offzarinpal', 'keyboard' => $keyboardzarinpal],
+    'tonpays' => ['label' => 'TonPays', 'setting' => 'tonpays_status', 'on' => 'ontonpays', 'off' => 'offtonpays', 'keyboard' => $tonpaysManage],
     'uniquepay' => ['label' => 'یونیک‌پی', 'setting' => 'uniquepaystatus', 'on' => 'onuniquepay', 'off' => 'offuniquepay', 'keyboard' => $uniquepayManage],
     'card' => ['label' => $textbotlang['keyboard']['cartToCartGateway'], 'setting' => 'Cartstatus', 'on' => 'oncard', 'off' => 'offcard', 'keyboard' => $CartManage],
     'plisio' => ['label' => 'Plisio', 'setting' => 'nowpaymentstatus', 'on' => 'onnowpayment', 'off' => 'offnowpayment', 'keyboard' => $NowPaymentsManage],
@@ -1784,6 +1793,7 @@ function paymentGatewaysKeyboard()
         $mark = getPaySettingValue($gateway['setting'], $gateway['off']) == $gateway['on'] ? '✅' : '❌';
         $rows[] = [['text' => "$mark {$gateway['label']}", 'callback_data' => "paygw-$key"]];
     }
+    $rows[] = [['text' => 'نام درگاه‌ها برای کاربر', 'callback_data' => 'gatewayname_list']];
     $rows[] = [['text' => $textbotlang['keyboard']['gatewaysGeneralSettings'], 'callback_data' => "none"]];
     $rows[] = [
         ['text' => $textbotlang['keyboard']['maxChargeBalance'], 'callback_data' => "maxbalanceaccount"],
