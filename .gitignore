@@ -18,3 +18,6 @@ graphify-out
 docs
 /lang/override/
 /deploy.sh
+# Generated local audit reports
+/CODE_AUDIT_FA.md
+/FIXES_REPORT_FA.md

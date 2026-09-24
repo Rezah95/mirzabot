@@ -308,7 +308,7 @@ function mini_user_info(array $data, string $method): void
         $stmt->bindValue(':id_user', $user_info['id'], PDO::PARAM_INT);
         $stmt->execute();
         $countorder = (int) $stmt->fetchColumn();
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM Payment_report WHERE id_user = :from_id AND payment_Status = 'paid'");
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM Payment_report WHERE id_user = :from_id AND payment_Status = 'paid' AND (fulfillment_status IS NULL OR fulfillment_status = 'fulfilled')");
         $stmt->execute([
             ':from_id' => $user_info['id']
         ]);
@@ -1158,4 +1158,3 @@ match ($action) {
     'purchase' => mini_purchase($data, $method),
     default => sendJsonResponse(false, "Action Invalid", []),
 };
-

@@ -211,20 +211,20 @@ $trnado = json_encode([
         [['text' => $textbotlang['keyboard']['backToGateways'], 'callback_data' => "paygwlist"]],
     ]
 ]);
+$tronadoManage = json_encode(['inline_keyboard' => [
+    [['text' => '🔑 API ترونادو', 'callback_data' => 'tronado_set_api_key']],
+    [['text' => '👛 کیف پول مقصد', 'callback_data' => 'tronado_set_wallet_address']],
+    [['text' => '🔐 کلید امضای IPN', 'callback_data' => 'tronado_set_ipn_signing_key']],
+    [['text' => '💰 حداقل مبلغ', 'callback_data' => 'tronado_set_min'], ['text' => '💰 حداکثر مبلغ', 'callback_data' => 'tronado_set_max']],
+    [['text' => '🎁 درصد کش‌بک', 'callback_data' => 'tronado_set_cashback']],
+    [['text' => $textbotlang['keyboard']['backToGateways'], 'callback_data' => 'paygwlist']],
+]], JSON_UNESCAPED_UNICODE);
 $keyboardzarinpal = json_encode([
-    'keyboard' => [
-        [['text' => $textbotlang['keyboard']['zarinPalMerchant']]],
-        [['text' => $textbotlang['keyboard']['cashbackZarinPal']]],
-        [['text' => $textbotlang['keyboard']['minAmountZarinPal']], ['text' => $textbotlang['keyboard']['maxAmountZarinPal']]],
-        [['text' => $textbotlang['keyboard']['zarinpalPaymentGate']], ['text' => $textbotlang['keyboard']['zarinpalUserVisibility']]],
-        [['text' => $textbotlang['keyboard']['setEducationZarinPal']]],
-        [['text' => $textbotlang['Admin']['backAdminBtn']], ['text' => $textbotlang['Admin']['backMenuBtn']]]
-    ],
-    'resize_keyboard' => true
     'inline_keyboard' => [
         [['text' => $textbotlang['keyboard']['zarinPalMerchant'], 'callback_data' => "paygwopt-zarinPalMerchant"]],
         [['text' => $textbotlang['keyboard']['cashbackZarinPal'], 'callback_data' => "paygwopt-cashbackZarinPal"]],
         [['text' => $textbotlang['keyboard']['minAmountZarinPal'], 'callback_data' => "paygwopt-minAmountZarinPal"], ['text' => $textbotlang['keyboard']['maxAmountZarinPal'], 'callback_data' => "paygwopt-maxAmountZarinPal"]],
+        [['text' => $textbotlang['keyboard']['zarinpalPaymentGate'], 'callback_data' => "paygwopt-zarinpalPaymentGate"], ['text' => $textbotlang['keyboard']['zarinpalUserVisibility'], 'callback_data' => "paygwopt-zarinpalUserVisibility"]],
         [['text' => $textbotlang['keyboard']['setEducationZarinPal'], 'callback_data' => "paygwopt-setEducationZarinPal"]],
         [['text' => $textbotlang['keyboard']['backToGateways'], 'callback_data' => "paygwlist"]],
     ]
@@ -273,7 +273,7 @@ $usernamecart = getPaySettingValue("CartDirect");
 $Swapino = getPaySettingValue("statusSwapWallet");
 $trnadoo = getPaySettingValue("statustarnado");
 $paymentverify = getPaySettingValue("checkpaycartfirst");
-$stmt = $pdo->prepare("SELECT COUNT(*) FROM Payment_report WHERE id_user = :user_id AND payment_Status = 'paid'");
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM Payment_report WHERE id_user = :user_id AND payment_Status = 'paid' AND (fulfillment_status IS NULL OR fulfillment_status = 'fulfilled')");
 $stmt->bindValue(':user_id', $from_id);
 $stmt->execute();
 $paymentexits = (int) $stmt->fetchColumn();
@@ -287,21 +287,6 @@ $zarinpalAllowed = canUserUseZarinpalGateway($users, $paymentexits);
 $step_payment = [
     'inline_keyboard' => []
 ];
-/* TETRA_KB_START */
-if (function_exists('tetra_setting') && tetra_setting('tetraminatorstatus','offtetraminator') == "ontetraminator") { $step_payment['inline_keyboard'][] = [['text' => tetra_setting('tetraminator_label','درگاه پرداخت ریالی'), 'callback_data' => "tetraminatorpay"]]; }
-/* TETRA_KB_END */
-/* UNIQUEPAY_KB_START */
-if (function_exists('uniquepay_setting') && uniquepay_setting('uniquepaystatus','offuniquepay') == "onuniquepay") { $step_payment['inline_keyboard'][] = [['text' => uniquepay_setting('uniquepay_label','درگاه پرداخت یونیک‌پی'), 'callback_data' => "uniquepay"]]; }
-/* UNIQUEPAY_KB_END */
-
-/* TRONADO_START*/
-if ($trnadoo == "onternado") {
-    $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['iranPay3'], 'callback_data' => "iranpay2"]
-    ];
-}
-/* TRONADO_END*/
-
 if ($PaySettingcard == "oncard" && intval($users['cardpayment']) == 1) {
     if ($PaySettingpv == "oncardpv") {
         $step_payment['inline_keyboard'][] = [
@@ -315,6 +300,20 @@ if ($PaySettingcard == "oncard" && intval($users['cardpayment']) == 1) {
 }
 if (($paymentexits == 0 && $paymentverify == "onpayverify"))
     unset($step_payment['inline_keyboard']);
+if (function_exists('tronadoConfigured') && tronadoConfigured()) {
+    $step_payment['inline_keyboard'][] = [['text' => '⚡ ترونادو', 'callback_data' => 'tronadopay']];
+}
+/* TETRA_KB_START */
+if (function_exists('tetra_setting') && tetra_setting('tetraminatorstatus','offtetraminator') == "ontetraminator") { $step_payment['inline_keyboard'][] = [['text' => tetra_setting('tetraminator_label','💎 تترامیناتور'), 'callback_data' => "tetraminatorpay"]]; }
+/* TETRA_KB_END */
+if ($zarinpal == "onzarinpal" && $zarinpalAllowed) {
+    $step_payment['inline_keyboard'][] = [
+        ['text' => $textbotlang['textbot']['zarinPal'], 'callback_data' => "zarinpal"]
+    ];
+}
+/* UNIQUEPAY_KB_START */
+if (function_exists('uniquepay_setting') && uniquepay_setting('uniquepaystatus','offuniquepay') == "onuniquepay") { $step_payment['inline_keyboard'][] = [['text' => uniquepay_setting('uniquepay_label','درگاه پرداخت یونیک‌پی'), 'callback_data' => "uniquepay"]]; }
+/* UNIQUEPAY_KB_END */
 if ($PaySettingnow == "onnowpayment") {
     $step_payment['inline_keyboard'][] = [
         ['text' => $textbotlang['textbot']['nowPayment'], 'callback_data' => "plisio"]
@@ -337,7 +336,7 @@ if ($Swapino == "onSwapinoBot") {
 }
 if ($trnadoo == "onternado") {
     $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['iranPay3'], 'callback_data' => "iranpay2"]
+        ['text' => '💸 CubePay', 'callback_data' => "iranpay2"]
     ];
 }
 // Both halves matter: the admin has switched it on, *and* the key and endpoint
@@ -361,11 +360,6 @@ if ($arzireyali3 == "oniranpay3" && $paymentexits >= 2) {
 if ($PaySettingaqayepardakht == "onaqayepardakht") {
     $step_payment['inline_keyboard'][] = [
         ['text' => $textbotlang['textbot']['aqayePardakht'], 'callback_data' => "aqayepardakht"]
-    ];
-}
-if ($zarinpal == "onzarinpal" && $zarinpalAllowed) {
-    $step_payment['inline_keyboard'][] = [
-        ['text' => $textbotlang['textbot']['zarinPal'], 'callback_data' => "zarinpal"]
     ];
 }
 $variza = getPaySettingValue("variza_status", "offvariza");
@@ -1554,6 +1548,8 @@ function KeyboardProduct($location, $query, $pricediscount, $datakeyboard, $stat
         $hide_panel = json_decode($result['hide_panel'], true);
         if (in_array($location, $hide_panel))
             continue;
+        if ($datakeyboard === 'serviceextendselects-' && $result['one_buy_status'] == '1')
+            continue;
         if ($result['one_buy_status'] == "1") {
             if ($countorder === null) {
                 $stmts2 = $pdo->prepare("SELECT COUNT(*) FROM invoice WHERE Status != 'Unpaid' AND id_user = :id_user");
@@ -1738,6 +1734,7 @@ $nowpayment_setting_keyboard = json_encode([
     ]
 ]);
 $paymentGateways = [
+    'tronado' => ['label' => 'ترونادو', 'setting' => 'tronado_status', 'on' => 'ontronado', 'off' => 'offtronado', 'keyboard' => $tronadoManage],
     'card' => ['label' => $textbotlang['keyboard']['cartToCartGateway'], 'setting' => 'Cartstatus', 'on' => 'oncard', 'off' => 'offcard', 'keyboard' => $CartManage],
     'plisio' => ['label' => 'Plisio', 'setting' => 'nowpaymentstatus', 'on' => 'onnowpayment', 'off' => 'offnowpayment', 'keyboard' => $NowPaymentsManage],
     'nowpayment' => ['label' => 'NOWPayments', 'setting' => 'statusnowpayment', 'on' => '1', 'off' => '0', 'keyboard' => $nowpayment_setting_keyboard],

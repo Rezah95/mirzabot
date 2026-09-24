@@ -598,7 +598,7 @@ function countSuccessfulPaymentsForUser($userId): int
         return 0;
     }
 
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM Payment_report WHERE id_user = :user_id AND payment_Status = 'paid'");
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM Payment_report WHERE id_user = :user_id AND payment_Status = 'paid' AND (fulfillment_status IS NULL OR fulfillment_status = 'fulfilled')");
     $stmt->bindValue(':user_id', (string) $userId, PDO::PARAM_STR);
     $stmt->execute();
 
@@ -1055,15 +1055,32 @@ function addBalance($userId, $amount)
     }
     $stmt = $pdo->prepare("UPDATE user SET Balance = Balance + ? WHERE id = ?");
     $stmt->execute([$amount, $userId]);
+    clearSelectCache('user');
 }
 function claimPaymentPaid($order_id)
 {
     global $pdo;
-    $stmt = $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid' WHERE id_order = :id_order AND payment_Status <> 'paid'");
+    $orders = $pdo->prepare('SELECT id FROM Payment_report WHERE id_order = ? LIMIT 2');
+    $orders->execute([$order_id]);
+    if (count($orders->fetchAll(PDO::FETCH_COLUMN)) !== 1) {
+        error_log('Payment order is missing or duplicated: ' . $order_id);
+        return false;
+    }
+    $stmt = $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid' WHERE id_order = :id_order AND payment_Status NOT IN ('paid', 'reject')");
     $stmt->bindValue(':id_order', $order_id);
     $stmt->execute();
     clearSelectCache('Payment_report');
     return $stmt->rowCount() >= 1;
+}
+
+function markPaymentFulfillment($order_id, $status)
+{
+    global $pdo;
+    $statement = $pdo->prepare(
+        "UPDATE Payment_report SET fulfillment_status = ?, fulfillment_updated_at = NOW() WHERE id_order = ?"
+    );
+    $statement->execute([$status, $order_id]);
+    clearSelectCache('Payment_report');
 }
 
 function DirectPayment($order_id, $image = 'images.jpg')
@@ -1077,6 +1094,10 @@ function DirectPayment($order_id, $image = 'images.jpg')
     $porsantreport = select("topicid", "idreport", "report", "porsantreport", "select")['idreport'];
     $setting = select("setting", "*");
     $Payment_report = select("Payment_report", "*", "id_order", $order_id, "select");
+    if (!$Payment_report) {
+        throw new RuntimeException('Payment order not found: ' . $order_id);
+    }
+    markPaymentFulfillment($order_id, 'processing');
     $format_price_cart = number_format($Payment_report['price']);
     $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
     $steppay = explode("|", $Payment_report['id_invoice']);
@@ -1086,7 +1107,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
     if ($steppay[0] == "getconfigafterpay") {
         $get_invoice = select("invoice", "*", "username", $steppay[1], "select");
         if ($get_invoice['Status'] == "active") {
-            return;
+            markPaymentFulfillment($order_id, 'fulfilled');
+            return true;
         }
         $stmt = $pdo->prepare("SELECT * FROM product WHERE name_product = :name_product AND (Location = :Service_location  or Location = '/all')");
         $stmt->bindParam(':name_product', $get_invoice['name_product'], PDO::PARAM_STR);
@@ -1123,7 +1145,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
             $claimInvoice->execute([$get_invoice['id_invoice']]);
             clearSelectCache('invoice');
             if ($claimInvoice->rowCount() === 0) {
-                return;
+                markPaymentFulfillment($order_id, 'fulfilled');
+                return true;
             }
             $invoiceClaimed = true;
         }
@@ -1133,8 +1156,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
                 update("invoice", "Status", $invoiceStatusBefore, "id_invoice", $get_invoice['id_invoice']);
             }
             $dataoutput['msg'] = json_encode($dataoutput['msg'] ?? $dataoutput ?? 'unknown error');
-            $balance = $Balance_id['Balance'] + $Payment_report['price'];
-            update("user", "Balance", $balance, "id", $Balance_id['id']);
+            addBalance($Balance_id['id'], intval($Payment_report['price']));
+            $balance = select("user", "Balance", "id", $Balance_id['id'], "select")['Balance'];
             sendmessage($Balance_id['id'], $textbotlang['users']['sell']['errorConfig'], $keyboard, 'HTML');
             sendmessage($Balance_id['id'], sprintf($textbotlang['users']['Balance']['refundCreateFailed'], $balance), $keyboard, 'HTML');
             $texterros = sprintf($textbotlang['Admin']['reportgroup']['errorConfigCreate'], $dataoutput['msg'], $Balance_id['id'], $Balance_id['username'], $marzban_list_get['name_panel']);
@@ -1146,7 +1169,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
                     'parse_mode' => "HTML"
                 ]);
             }
-            return;
+            markPaymentFulfillment($order_id, 'refunded');
+            return false;
         }
         $Shoppinginfo = json_encode([
             'inline_keyboard' => [
@@ -1216,9 +1240,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
                         $scorenew = $user_Balance['score'] + 2;
                         update("user", "score", $scorenew, "id", $Balance_id['affiliates']);
                     }
-                    $Balance_prim = $user_Balance['Balance'] + $result;
                     $dateacc = date('Y/m/d H:i:s');
-                    update("user", "Balance", $Balance_prim, "id", $Balance_id['affiliates']);
+                    addBalance($Balance_id['affiliates'], $result);
                     $result = number_format($result);
                     $textadd = sprintf($textbotlang['users']['affiliates']['commissionPaidFn'], $result);
                     $textreportport = sprintf($textbotlang['Admin']['reportgroup']['commissionPaidFn'], $result, $Balance_id['affiliates'], $Balance_id['id'], $dateacc);
@@ -1241,9 +1264,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
                     $scorenew = $user_Balance['score'] + 2;
                     update("user", "score", $scorenew, "id", $Balance_id['affiliates']);
                 }
-                $Balance_prim = $user_Balance['Balance'] + $result;
                 $dateacc = date('Y/m/d H:i:s');
-                update("user", "Balance", $Balance_prim, "id", $Balance_id['affiliates']);
+                addBalance($Balance_id['affiliates'], $result);
                 $result = number_format($result);
                 $textadd = sprintf($textbotlang['users']['affiliates']['commissionPaidFn2'], $result);
                 $textreportport = sprintf($textbotlang['Admin']['reportgroup']['commissionPaidFn2'], $result, $Balance_id['affiliates'], $Balance_id['id'], $dateacc);
@@ -1266,10 +1288,6 @@ function DirectPayment($order_id, $image = 'images.jpg')
                 update("setting", "numbercount", $value);
             }
         }
-        $Balance_prims = $Balance_id['Balance'] - $get_invoice['price_product'];
-        if ($Balance_prims <= 0)
-            $Balance_prims = 0;
-        update("user", "Balance", $Balance_prims, "id", $Balance_id['id']);
         $balanceformatsell = select("user", "Balance", "id", $get_invoice['id_user'], "select")['Balance'];
         $balanceformatsell = number_format($balanceformatsell, 0);
         $balancebefore = number_format($Balance_id['Balance'], 0);
@@ -1321,8 +1339,10 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $data_order = $stmt->fetch(PDO::FETCH_ASSOC);
         $service_other = $data_order;
         if ($service_other == false) {
+            addBalance($Balance_id['id'], intval($Payment_report['price']));
             sendmessage($Balance_id['id'], $textbotlang['users']['extend']['genericError'], $keyboard, 'HTML');
-            return;
+            markPaymentFulfillment($order_id, 'refunded');
+            return false;
         }
         $service_other = json_decode($service_other['value'], true);
         $codeproduct = $service_other['code_product'];
@@ -1345,12 +1365,10 @@ function DirectPayment($order_id, $image = 'images.jpg')
         }
         $dateacc = date('Y/m/d H:i:s');
         $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $nameloc['username']);
-        $Balance_Low_user = 0;
-        update("user", "Balance", $Balance_Low_user, "id", $Balance_id['id']);
         $extend = $ManagePanel->extend($marzban_list_get['Methodextend'], $prodcut['Volume_constraint'], $prodcut['Service_time'], $nameloc['username'], $prodcut['code_product'], $marzban_list_get['code_panel']);
         if ($extend['status'] == false) {
-            $balance = $Balance_id['Balance'] + $Payment_report['price'];
-            update("user", "Balance", $balance, "id", $Balance_id['id']);
+            addBalance($Balance_id['id'], intval($Payment_report['price']));
+            $balance = select("user", "Balance", "id", $Balance_id['id'], "select")['Balance'];
             sendmessage($Balance_id['id'], $textbotlang['users']['sell']['errorConfig'], $keyboard, 'HTML');
             sendmessage($Balance_id['id'], sprintf($textbotlang['users']['Balance']['refundRenewFailed'], $balance), $keyboard, 'HTML');
             $extend['msg'] = json_encode($extend['msg']);
@@ -1364,7 +1382,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
                     'parse_mode' => "HTML"
                 ]);
             }
-            return;
+            markPaymentFulfillment($order_id, 'refunded');
+            return false;
         }
 
         update("service_other", "output", json_encode($extend), "id", $data_order['id']);
@@ -1404,8 +1423,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
         }
         if (intval($valurcashbackextend) != 0) {
             $result = ($prodcut['price_product'] * $valurcashbackextend) / 100;
-            $pricelastextend = $result;
-            update("user", "Balance", $pricelastextend, "id", $Balance_id['id']);
+            addBalance($Balance_id['id'], $result);
             sendmessage($Balance_id['id'], sprintf($textbotlang['users']['extend']['giftChargedFn'], $result), null, 'HTML');
         }
         $priceproductformat = number_format($prodcut['price_product']);
@@ -1439,8 +1457,6 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $volume = $steppay[1];
         $nameloc = select("invoice", "*", "username", $steppay[0], "select");
         $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
-        $Balance_Low_user = 0;
-        update("user", "Balance", $Balance_Low_user, "id", $Balance_id['id']);
         $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $steppay[0]);
         $data_for_database = json_encode(array(
             'volume_value' => $volume,
@@ -1451,6 +1467,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $type = "extra_user";
         $extra_volume = $ManagePanel->extra_volume($nameloc['username'], $marzban_list_get['code_panel'], $volume);
         if ($extra_volume['status'] == false) {
+            addBalance($Balance_id['id'], intval($Payment_report['price']));
             $extra_volume['msg'] = json_encode($extra_volume['msg']);
             $textreports = sprintf($textbotlang['Admin']['reportgroup']['errorExtraVolumeFn'], $marzban_list_get['name_panel'], $nameloc['username'], $extra_volume['msg']);
             sendmessage($nameloc['id_user'], $textbotlang['users']['extraVolume']['serviceError'], null, 'HTML');
@@ -1462,7 +1479,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
                     'parse_mode' => "HTML"
                 ]);
             }
-            return;
+            markPaymentFulfillment($order_id, 'refunded');
+            return false;
         }
         $stmt = $pdo->prepare("INSERT IGNORE INTO service_other (id_user, username,value,type,time,price,output) VALUES (:id_user,:username,:value,:type,:time,:price,:output)");
         $stmt->bindParam(':id_user', $Balance_id['id']);
@@ -1511,8 +1529,6 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $tmieextra = $steppay[1];
         $nameloc = select("invoice", "*", "username", $steppay[0], "select");
         $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
-        $Balance_Low_user = 0;
-        update("user", "Balance", $Balance_Low_user, "id", $nameloc['id_user']);
         $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $steppay[0]);
         $data_for_database = json_encode(array(
             'day' => $tmieextra,
@@ -1523,9 +1539,10 @@ function DirectPayment($order_id, $image = 'images.jpg')
         $type = "extra_time_user";
         $extra_time = $ManagePanel->extra_time($nameloc['username'], $marzban_list_get['code_panel'], $tmieextra);
         if ($extra_time['status'] == false) {
+            addBalance($Balance_id['id'], intval($Payment_report['price']));
             $extra_time['msg'] = json_encode($extra_time['msg']);
             $textreports = sprintf($textbotlang['Admin']['reportgroup']['errorExtraTimeFn'], $marzban_list_get['name_panel'], $nameloc['username'], $extra_time['msg']);
-            sendmessage($from_id, $textbotlang['users']['extraVolume']['serviceError'], null, 'HTML');
+            sendmessage($Balance_id['id'], $textbotlang['users']['extraVolume']['serviceError'], null, 'HTML');
             if (strlen($setting['Channel_Report']) > 0) {
                 telegram('sendmessage', [
                     'chat_id' => $setting['Channel_Report'],
@@ -1534,7 +1551,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
                     'parse_mode' => "HTML"
                 ]);
             }
-            return;
+            markPaymentFulfillment($order_id, 'refunded');
+            return false;
         }
         $stmt = $pdo->prepare("INSERT IGNORE INTO service_other (id_user, username,value,type,time,price,output) VALUES (:id_user,:username,:value,:type,:time,:price,:output)");
         $stmt->bindParam(':id_user', $Balance_id['id']);
@@ -1578,8 +1596,7 @@ function DirectPayment($order_id, $image = 'images.jpg')
             ]);
         }
     } else {
-        $Balance_confrim = intval($Balance_id['Balance']) + intval($Payment_report['price']);
-        update("user", "Balance", $Balance_confrim, "id", $Payment_report['id_user']);
+        addBalance($Payment_report['id_user'], intval($Payment_report['price']));
         update("Payment_report", "payment_Status", "paid", "id_order", $Payment_report['id_order']);
         $Payment_report['price'] = number_format($Payment_report['price'], 0);
         $format_price_cart = $Payment_report['price'];
@@ -1591,6 +1608,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
         }
         sendmessage($Payment_report['id_user'], sprintf($textbotlang['users']['Balance']['chargedThanks'], $Payment_report['price'], $Payment_report['id_order']), null, 'HTML');
     }
+    markPaymentFulfillment($order_id, 'fulfilled');
+    return true;
 }
 function plisio($order_id, $price, $from_id)
 {
@@ -2241,7 +2260,7 @@ function languagechange($path_dir = null, string $lang = 'fa')
     global $from_id;
     $user_lang = select("user", "*", "id", $from_id);
     $lang = $user_lang ? $user_lang['lang'] : $lang;
-    $allowed = ['fa', 'en', 'ar', 'ru', 'zh'];
+    $allowed = ['fa', 'en', 'ru', 'zh'];
     if (!in_array($lang, $allowed, true))
         $lang = 'fa';
     $base_dir = $path_dir ?: __DIR__;

@@ -58,8 +58,9 @@ if (is_object($result) && $result->code == "1") {
     if(claimPaymentPaid($invoice_id)){
     $textbotlang = languagechange();
     try {
-        DirectPayment($invoice_id,"../images.jpg");
+        if (DirectPayment($invoice_id,"../images.jpg") === false) return;
     } catch (Throwable $directPaymentError) {
+        markPaymentFulfillment($invoice_id, 'failed');
         error_log("DirectPayment failed for order {$invoice_id}: " . $directPaymentError->getMessage());
         return;
     }
@@ -70,8 +71,7 @@ if (is_object($result) && $result->code == "1") {
     $Balance_id = $__q16->fetch(PDO::FETCH_ASSOC);
     if($pricecashback != "0"){
         $result = ($Payment_report['price'] * $pricecashback) / 100;
-        $Balance_confrim = intval($Balance_id['Balance']) +$result;
-        update("user","Balance",$Balance_confrim, "id",$Balance_id['id']); 
+        addBalance($Balance_id['id'], $result);
         $pricecashback =  number_format($pricecashback);
         $text_report = sprintf($textbotlang['paymentGateway']['giftReport'], $result);
         sendmessage($Balance_id['id'], $text_report, null, 'HTML');

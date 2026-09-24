@@ -48,6 +48,7 @@ final class Schema
                 $this->apply($table, $this->loadDefinition($file));
             } catch (Throwable $e) {
                 $this->logFailure("table:$table", $e);
+                throw $e;
             }
         }
     }
@@ -144,6 +145,7 @@ final class Schema
                 }
             } catch (Throwable $e) {
                 $this->logFailure("migration:$name", $e);
+                throw $e;
             }
         }
     }
@@ -163,6 +165,7 @@ final class Schema
                 $this->indexCatalog[strtolower($table)][strtolower($name)] = true;
             } catch (Throwable $e) {
                 $this->logFailure("index:$table.$name", $e);
+                throw $e;
             }
         }
     }

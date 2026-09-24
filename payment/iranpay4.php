@@ -97,8 +97,11 @@ if (!claimPaymentPaid($order_id)) {
 }
 
 try {
-    DirectPayment($order_id, "../images.jpg");
+    if (DirectPayment($order_id, "../images.jpg") === false) {
+        iranpay4_finish(false, $failedTitle, 'پرداخت تایید شد اما تحویل سرویس انجام نشد و مبلغ به کیف پول بازگشت.');
+    }
 } catch (Throwable $error) {
+    markPaymentFulfillment($order_id, 'failed');
     error_log("iranpay4: DirectPayment failed for {$order_id}: " . $error->getMessage());
     iranpay4_finish(false, $failedTitle, 'پرداخت تایید شد ولی تحویل سرویس خطا داد. با پشتیبانی تماس بگیرید.');
 }
@@ -116,7 +119,7 @@ $cashback = intval(getPaySettingValue('chashbackiranpay4', '0'));
 if ($cashback > 0 && $buyer) {
     $reward = intval($price * $cashback / 100);
     if ($reward > 0) {
-        update("user", "Balance", intval($buyer['Balance']) + $reward, "id", $payment['id_user']);
+        addBalance($payment['id_user'], $reward);
         sendmessage(
             $buyer['id'],
             sprintf($textbotlang['paymentGateway']['giftReport'], number_format($reward)),

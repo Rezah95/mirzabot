@@ -2,7 +2,9 @@
 require_once 'function.php';
 require_once 'config.php';
 require_once 'botapi.php';
+require_once __DIR__ . '/db/bootstrap.php';
 global $pdo;
+$textbotlang = languagechange();
 //-----------------------------------------------------------------
 try {
 
@@ -980,27 +982,7 @@ try {
     file_put_contents('error_log', $e->getMessage());
 }
 //----------------------- [ remove requests ] --------------------- //
-try {
-    $result = $pdo->query("SHOW TABLES LIKE 'cancel_service'");
-    $table_exists = ($result->rowCount() > 0);
-
-require_once __DIR__ . '/db/bootstrap.php';
-
-global $domainhosts;
-
-$webhookSecret = ensureWebhookSecret();
-
-telegram('setWebhook', [
-    'url' => "https://$domainhosts/index.php?secret={$webhookSecret['secret']}",
-]);
-
-
-
-
-    }
-} catch (Exception $e) {
-    file_put_contents('error_log topicid', $e->getMessage());
-}
+// cancel_service is created and updated by db/bootstrap.php.
 try {
     $result = $pdo->query("SHOW TABLES LIKE 'manualsell'");
     $table_exists = ($result->rowCount() > 0);
@@ -1253,6 +1235,7 @@ foreach ($performanceIndexes as $indexDef) {
         error_log("[INDEX:$idxTable.$idxName] " . $e->getMessage());
     }
 }
-telegram('setwebhook', [
-    'url' => "https://$domainhosts/index.php"
+$webhookSecret = ensureWebhookSecret();
+telegram('setWebhook', [
+    'url' => "https://$domainhosts/index.php?secret={$webhookSecret['secret']}"
 ]);

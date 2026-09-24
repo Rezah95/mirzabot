@@ -66,8 +66,9 @@ $payment_status = $textbotlang['paymentGateway']['zarinpalErrors'][$response['er
     if(claimPaymentPaid($invoice_id)){
     $textbotlang = languagechange();
     try {
-        DirectPayment($invoice_id,"../images.jpg");
+        if (DirectPayment($invoice_id,"../images.jpg") === false) return;
     } catch (Throwable $directPaymentError) {
+        markPaymentFulfillment($invoice_id, 'failed');
         error_log("DirectPayment failed for order {$invoice_id}: " . $directPaymentError->getMessage());
         return;
     }
@@ -75,8 +76,7 @@ $payment_status = $textbotlang['paymentGateway']['zarinpalErrors'][$response['er
     $Balance_id = select("user","*","id",$Payment_report['id_user'],"select");
     if($pricecashback != "0"){
         $result = ($Payment_report['price'] * $pricecashback) / 100;
-        $Balance_confrim = intval($Balance_id['Balance']) +$result;
-        update("user","Balance",$Balance_confrim, "id",$Balance_id['id']); 
+        addBalance($Balance_id['id'], $result);
         $pricecashback =  number_format($pricecashback);
         $text_report = sprintf($textbotlang['paymentGateway']['giftReport'], $result);
         sendmessage($Balance_id['id'], $text_report, null, 'HTML');

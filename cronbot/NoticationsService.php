@@ -143,8 +143,12 @@ class ServiceMonitor
         ][$userData['status']];
         $remainingVolume = formatBytes($userData['data_limit'] - $userData['used_traffic']);
         if ($result) {
+            $removeResult = $this->Panel->RemoveUser($invoice['Service_location'], $username);
+            if (!is_array($removeResult) || ($removeResult['status'] ?? null) !== 'successful') {
+                error_log('Service removal failed for ' . $username . ': ' . json_encode($removeResult));
+                return false;
+            }
             update("invoice", "status", "removeTime", "username", $username);
-            $this->Panel->RemoveUser($invoice['Service_location'], $username);
             $message = sprintf($this->textBotLang['users']['notify']['serviceDeleted'], $invoice['username']);
             $reportMessage = sprintf($this->textBotLang['users']['notify']['deleteInfo'], $invoice['username'], $statusText, $daysRemaining, $remainingVolume);
             $this->send_notifactions($invoice, $user, $message, false, $invoice['bottype']);
@@ -186,8 +190,12 @@ class ServiceMonitor
         ][$userData['status']];
         $remainingVolume = formatBytes($userData['data_limit'] - $userData['used_traffic']);
         if ($result) {
+            $removeResult = $this->Panel->RemoveUser($invoice['Service_location'], $username);
+            if (!is_array($removeResult) || ($removeResult['status'] ?? null) !== 'successful') {
+                error_log('Service removal failed for ' . $username . ': ' . json_encode($removeResult));
+                return false;
+            }
             update("invoice", "status", "removevolume", "username", $username);
-            $this->Panel->RemoveUser($invoice['Service_location'], $username);
             $message = sprintf($this->textBotLang['users']['notify']['serviceDeleted2'], $username);
             $reportMessage = sprintf($this->textBotLang['users']['notify']['volumeDeleteInfo'], $username, $statusText, $daysRemaining, $remainingVolume, $userData['online_at']);
             $this->send_notifactions($invoice, $user, $message, false, $invoice['bottype']);

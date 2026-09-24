@@ -1,4 +1,9 @@
 <?php
+// Archived, incomplete installer patch. Running it would alter admin.php and
+// keyboard.php without finishing the matching index.php change.
+fwrite(STDERR, "This archived Tetraminator patch is incomplete; use the maintained gateway files.\n");
+exit(1);
+
 $MIRZA = getenv("MIRZA");
 function patch_file($path, $applies) {
     $orig = file_get_contents($path);
@@ -116,3 +121,4 @@ $ixHandler = <<<'PHP'
     $u_method = "Tetraminator";
     
     $stmt = $connect->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
+PHP;

@@ -8,6 +8,7 @@ foreach (['config.php', 'botapi.php', 'Marzban.php', 'function.php', 'panels.php
     }
 }
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/tronado_lib.php';
 
 if (class_exists('ManagePanel')) {
     $ManagePanel = new ManagePanel();
@@ -71,52 +72,85 @@ if ($paymentId === '' || strlen($paymentId) > 2000 || $orderStatusId === false |
     tronadoCallbackRespond(400, ['ok' => false, 'error' => 'PaymentId and OrderStatusID are required']);
 }
 
+$paymentReport = select('Payment_report', '*', 'id_order', $paymentId, 'select');
+if (!$paymentReport) {
+    error_log('Tronado callback received for an unknown payment: ' . $paymentId);
+    tronadoCallbackRespond(404, ['ok' => false, 'error' => 'Unknown payment']);
+}
+
+if (($paymentReport['Payment_Method'] ?? '') !== 'Tronado') {
+    error_log('Tronado callback ignored for a non-Tronado order: ' . $paymentId);
+    tronadoCallbackRespond(404, ['ok' => false, 'error' => 'Unknown payment']);
+}
+
+$isPaid = filter_var($callback['IsPaid'] ?? false, FILTER_VALIDATE_BOOLEAN);
+$paymentAccepted = !in_array((int) $orderStatusId, [40, 200], true)
+    && ($isPaid || (int) $orderStatusId === 30);
+if ($paymentAccepted) {
+    // With 100% business-paid fees the customer's payment approximates the
+    // invoice; delivered TRX is lower after fees. Allow the provider's stated
+    // few-thousand-toman rounding variance, but reject material underpayment.
+    if (!tronadoPaidCallbackMatchesOrder($callback, $paymentReport)) {
+        error_log('Tronado callback amount mismatch for ' . $paymentId);
+        tronadoCallbackRespond(409, ['ok' => false, 'error' => 'Amount does not match order']);
+    }
+}
+
 $callbackRegistration = tronadoRegisterCallback($paymentId, (int) $orderStatusId, $rawBody);
 if ($callbackRegistration === 'error') {
     tronadoCallbackRespond(503, ['ok' => false, 'error' => 'Unable to persist callback']);
 }
 if ($callbackRegistration === 'duplicate') {
+    $current = select('Payment_report', '*', 'id_order', $paymentId, 'select');
+    if (($current['fulfillment_status'] ?? null) === 'failed'
+        || ($current['fulfillment_status'] ?? null) === 'processing') {
+        tronadoCallbackRespond(503, ['ok' => false, 'error' => 'Payment requires reconciliation']);
+    }
     tronadoCallbackRespond(204);
 }
 
-$paymentReport = select('Payment_report', '*', 'id_order', $paymentId, 'select');
-if (!$paymentReport) {
-    error_log('Tronado callback received for an unknown payment: ' . $paymentId);
-    tronadoCallbackRespond(204);
-}
-
-// Currency Rial 2 is kept only for invoices created by the legacy implementation.
-if (!in_array((string) ($paymentReport['Payment_Method'] ?? ''), ['Tronado', 'Currency Rial 2'], true)) {
-    error_log('Tronado callback ignored for a non-Tronado order: ' . $paymentId);
-    tronadoCallbackRespond(204);
-}
-
-update('Payment_report', 'dec_not_confirmed', $rawBody, 'id_order', $paymentId);
-
-$isPaid = filter_var($callback['IsPaid'] ?? false, FILTER_VALIDATE_BOOLEAN);
-if (!$isPaid && (int) $orderStatusId !== 30) {
+if (!$paymentAccepted) {
     // Tronado sends a callback for every state transition. It is recorded above,
     // but only PaymentAccepted/IsPaid may fulfil the invoice.
+    if ((int) $orderStatusId === 200 && ($paymentReport['payment_Status'] ?? '') === 'paid') {
+        error_log('Tronado previously paid order was cancelled and needs manual reconciliation: ' . $paymentId);
+        $reportSetting = select('setting', '*');
+        if (!empty($reportSetting['Channel_Report'])) {
+            telegram('sendmessage', [
+                'chat_id' => $reportSetting['Channel_Report'],
+                'text' => '⚠️ Tronado order ' . $paymentId . ' was cancelled after fulfilment. Reconcile the service and wallet manually.',
+            ]);
+        }
+    }
     tronadoCallbackRespond(204);
 }
 
 if (!claimPaymentPaid($paymentId)) {
+    $current = select('Payment_report', '*', 'id_order', $paymentId, 'select');
+    if (($current['fulfillment_status'] ?? null) === 'failed'
+        || ($current['fulfillment_status'] ?? null) === 'processing') {
+        tronadoCallbackRespond(503, ['ok' => false, 'error' => 'Payment requires reconciliation']);
+    }
     tronadoCallbackRespond(204);
 }
 
 $textbotlang = languagechange();
 try {
-    DirectPayment($paymentId, '../images.jpg');
+    $delivered = DirectPayment($paymentId, '../images.jpg');
 } catch (Throwable $directPaymentError) {
+    markPaymentFulfillment($paymentId, 'failed');
     error_log('Tronado DirectPayment failed for order ' . $paymentId . ': ' . $directPaymentError->getMessage());
     tronadoCallbackRespond(500, ['ok' => false, 'error' => 'Order fulfilment failed']);
 }
+if ($delivered === false) {
+    tronadoCallbackRespond(200, ['ok' => true, 'payment_id' => $paymentId, 'fulfillment' => 'refunded']);
+}
 
-$cashback = getPaySettingValue('chashbackiranpay2', '0');
+$cashback = getPaySettingValue('tronado_cashback', '0');
 $buyer = select('user', '*', 'id', $paymentReport['id_user'], 'select');
 if (is_numeric($cashback) && (float) $cashback > 0 && $buyer) {
     $cashbackAmount = ((float) $paymentReport['price'] * (float) $cashback) / 100;
-    update('user', 'Balance', (float) $buyer['Balance'] + $cashbackAmount, 'id', $buyer['id']);
+    addBalance($buyer['id'], $cashbackAmount);
     sendmessage(
         $buyer['id'],
         sprintf($textbotlang['paymentGateway']['giftReport'], $cashbackAmount),

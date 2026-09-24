@@ -116,8 +116,11 @@ if (!claimPaymentPaid($order_id)) {
 }
 
 try {
-    DirectPayment($order_id, __DIR__ . "/../images.jpg");
+    if (DirectPayment($order_id, __DIR__ . "/../images.jpg") === false) {
+        variza_webhook_respond(200, 'payment refunded to wallet');
+    }
 } catch (Throwable $e) {
+    markPaymentFulfillment($order_id, 'failed');
     error_log("variza webhook: DirectPayment failed for {$order_id}: " . $e->getMessage());
     variza_webhook_respond(500, 'delivery failed');
 }
@@ -129,7 +132,7 @@ if ($cashback > 0) {
     if ($buyer) {
         $reward = intval($billed * $cashback / 100);
         if ($reward > 0) {
-            update("user", "Balance", intval($buyer['Balance']) + $reward, "id", $payment['id_user']);
+            addBalance($payment['id_user'], $reward);
             $text_gift = sprintf($textbotlang['paymentGateway']['giftReport'], $reward);
             sendmessage($payment['id_user'], $text_gift, null, 'HTML');
         }

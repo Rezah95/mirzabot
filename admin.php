@@ -56,6 +56,7 @@ $backmenu_register([
 ], $CartManage);
 $backmenu_register(["getidExceptio", "getidExceptioremove"], $Exception_auto_cart_keyboard);
 $backmenu_register(["apiternado", "getcashiranpay2", "getfeeiranpay2", "getmaaxiranpay2", "getmainiranpay2", "helpiranpay2"], $trnado);
+$backmenu_register(["tronado_input_api_key", "tronado_input_wallet_address", "tronado_input_ipn_signing_key", "tronado_input_min", "tronado_input_max", "tronado_input_cashback"], $tronadoManage);
 $backmenu_register(["merchant_zarinpal", "getcashzarinpal", "getmaaxzarinpal", "getmainaqzarinpal", "helpzarinpal"], $keyboardzarinpal);
 $backmenu_register(["merchant_id_aqayepardakht", "getcashahaypar", "getmaaxaqayepardakht", "getmainaqayepardakht", "helpaqayepardakht"], $aqayepardakht);
 $backmenu_register(["apinowpayment", "getcashplisio", "gethelpplisio", "getmainplisio", "getmaxplisio"], $NowPaymentsManage);
@@ -1947,13 +1948,20 @@ elseif ($datain == "systemsms") {
         Editmessagetext($from_id, $message_id, $textconfrom, $Confirm_pay);
         return;
     }
-    DirectPayment($order_id);
+    try {
+        if (DirectPayment($order_id) === false) {
+            return;
+        }
+    } catch (Throwable $deliveryError) {
+        markPaymentFulfillment($order_id, 'failed');
+        error_log('Manual payment delivery failed for ' . $order_id . ': ' . $deliveryError->getMessage());
+        return;
+    }
     $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackcart", "select")['ValuePay'];
     $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
     if ($pricecashback != "0") {
         $result = ($Payment_report['price'] * $pricecashback) / 100;
-        $Balance_confrim = intval($Balance_id['Balance']) + $result;
-        update("user", "Balance", $Balance_confrim, "id", $Balance_id['id']);
+        addBalance($Balance_id['id'], $result);
         $pricecashback = number_format($pricecashback);
         $text_report = sprintf($textbotlang['users']['Balance']['giftDepositAlt'], $result);
         sendmessage($Balance_id['id'], $text_report, null, 'HTML');
@@ -5500,6 +5508,37 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         'show_alert' => false,
         'cache_time' => 5,
     ));
+} elseif (preg_match('/^tronado_set_(api_key|wallet_address|ipn_signing_key|min|max|cashback)$/', $datain, $tronadoFieldMatch) && $adminrulecheck['rule'] == "administrator") {
+    $field = $tronadoFieldMatch[1];
+    $current = getPaySettingValue('tronado_' . $field, '0');
+    if (in_array($field, ['api_key', 'ipn_signing_key'], true)) {
+        $current = ($current === '0' || $current === '') ? 'تنظیم نشده' : '********';
+    }
+    sendmessage($from_id, 'مقدار جدید را برای ' . $field . ' ارسال کنید. مقدار فعلی: ' . htmlspecialchars((string) $current, ENT_QUOTES, 'UTF-8'), $backadmin, 'HTML');
+    step('tronado_input_' . $field, $from_id);
+} elseif (preg_match('/^tronado_input_(api_key|wallet_address|ipn_signing_key|min|max|cashback)$/', (string) $user['step'], $tronadoFieldMatch) && $adminrulecheck['rule'] == "administrator") {
+    $field = $tronadoFieldMatch[1];
+    $value = trim((string) $text);
+    $valid = $value !== '' && $value !== '0' && strlen($value) <= 500;
+    if ($field === 'wallet_address') {
+        $valid = preg_match('/^T[1-9A-HJ-NP-Za-km-z]{33}$/', $value) === 1;
+    } elseif (in_array($field, ['min', 'max'], true)) {
+        $other = (int) getPaySettingValue($field === 'min' ? 'tronado_max' : 'tronado_min', $field === 'min' ? '1000000' : '20000');
+        $valid = ctype_digit($value) && (int) $value > 0
+            && ($field === 'min' ? (int) $value <= $other : (int) $value >= $other);
+    } elseif ($field === 'cashback') {
+        $valid = ctype_digit($value) && (int) $value <= 100;
+    }
+    if (!$valid) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
+    update('PaySetting', 'ValuePay', $value, 'NamePay', 'tronado_' . $field);
+    if (in_array($field, ['api_key', 'ipn_signing_key'], true)) {
+        deletemessage($from_id, $message_id);
+    }
+    step('home', $from_id);
+    sendmessage($from_id, 'تنظیمات ترونادو ذخیره شد ✅', $tronadoManage, 'HTML');
 } elseif ($datain == "iranpay2setting" && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $trnado, 'HTML');
 } elseif ($datain == "iranpay3setting" && $adminrulecheck['rule'] == "administrator") {
@@ -5602,7 +5641,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     }
     update("PaySetting", "ValuePay", $signingKey, "NamePay", "tronado_ipn_signing_key");
     step('home', $from_id);
-    sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $trnado, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $tronadoManage, 'HTML');
 } elseif ($datain == "affilnecurrencysetting") {
     sendmessage($from_id, $textbotlang['users']['selectoption'], $tronnowpayments, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['inboundDeactivate'] && $adminrulecheck['rule'] == "administrator") {
@@ -5999,15 +6038,16 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, "💎 <b>شارژ کیف پول با تترامیناتور</b>\nمبلغ موردنظر را به «تومان» وارد کنید:", null, 'HTML');
 } elseif ($user['step'] == "tmamount") {
     $amount = (int) preg_replace('/\D/', '', $text);
-    $min = (int) tetra_setting('tetraminator_min','50000'); $max = (int) tetra_setting('tetraminator_max','100000000');
+    $min = max(50000, (int) tetra_setting('tetraminator_min','50000')); $max = min(10000000, (int) tetra_setting('tetraminator_max','10000000'));
     if ($amount < $min || $amount > $max) { sendmessage($from_id, "مبلغ باید بین ".number_format($min)." و ".number_format($max)." تومان باشد.", null, 'HTML'); return; }
     step('home', $from_id);
     $tm_order = tetraminatorCreateOrder($from_id, $amount);
     $tm_res = createPayTetraminator($amount, $tm_order);
-    if (!empty($tm_res['success']) && !empty($tm_res['data']['payment_url'])) {
+    if (!empty($tm_res['success']) && !empty($tm_res['data']['payment_url']) && !empty($tm_res['data']['pay_id'])) {
+        update('Payment_report', 'dec_not_confirmed', $tm_res['data']['pay_id'], 'id_order', $tm_order);
         $tm_kb = json_encode(['inline_keyboard'=>[[['text'=>'💳 پرداخت فاکتور','url'=>$tm_res['data']['payment_url']]]]]);
         sendmessage($from_id, "✅ <b>فاکتور پرداخت ایجاد شد</b>\n\n💰 مبلغ: <b>".number_format($amount)." تومان</b>\n\n🕊 پس از پرداخت حساب شما خودکار شارژ می‌شود.", $tm_kb, 'HTML');
-    } else { sendmessage($from_id, "❌ ".($tm_res['detail'] ?? 'خطا در ساخت فاکتور'), null, 'HTML'); }
+    } else { update('Payment_report', 'payment_Status', 'reject', 'id_order', $tm_order); sendmessage($from_id, "❌ ".($tm_res['detail'] ?? 'خطا در ساخت فاکتور'), null, 'HTML'); }
 } elseif ($datain == "tmtoggle" && $adminrulecheck['rule'] == "administrator") {
     $cur = tetra_setting('tetraminatorstatus','offtetraminator'); $new = $cur=='ontetraminator'?'offtetraminator':'ontetraminator';
     update("PaySetting","ValuePay",$new,"NamePay","tetraminatorstatus");
@@ -6017,9 +6057,9 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $tm_kb = json_encode(['inline_keyboard'=>[[['text'=>'تغییر وضعیت','callback_data'=>'tmtoggle']],[['text'=>'ویرایش کلید API','callback_data'=>'tmset_key'],['text'=>'ویرایش آدرس','callback_data'=>'tmset_base']],]]);
     sendmessage($from_id, $tm_cfg, $tm_kb, 'HTML');
 } elseif ($datain == "tmset_key" && $adminrulecheck['rule'] == "administrator") { step('tmsetkey', $from_id); sendmessage($from_id, "کلید API جدید تترامیناتور را ارسال کنید:", null, 'HTML');
-} elseif ($user['step'] == "tmsetkey") { update("PaySetting","ValuePay",trim($text),"NamePay","tetraminator_apikey"); step('home',$from_id); sendmessage($from_id, "کلید API ذخیره شد ✅", null, 'HTML');
+} elseif ($user['step'] == "tmsetkey" && $adminrulecheck['rule'] == "administrator") { update("PaySetting","ValuePay",trim($text),"NamePay","tetraminator_apikey"); step('home',$from_id); sendmessage($from_id, "کلید API ذخیره شد ✅", null, 'HTML');
 } elseif ($datain == "tmset_base" && $adminrulecheck['rule'] == "administrator") { step('tmsetbase', $from_id); sendmessage($from_id, "آدرس پایه‌ی API را ارسال کنید:", null, 'HTML');
-} elseif ($user['step'] == "tmsetbase") { update("PaySetting","ValuePay",rtrim(trim($text),'/'),"NamePay","tetraminator_baseurl"); step('home',$from_id); sendmessage($from_id, "آدرس شد ✅", null, 'HTML');
+} elseif ($user['step'] == "tmsetbase" && $adminrulecheck['rule'] == "administrator") { update("PaySetting","ValuePay",rtrim(trim($text),'/'),"NamePay","tetraminator_baseurl"); step('home',$from_id); sendmessage($from_id, "آدرس شد ✅", null, 'HTML');
 /* TETRA_HANDLERS_END */
 /* UNIQUEPAY_HANDLERS_START */
 } elseif ($datain == "uptoggle" && $adminrulecheck['rule'] == "administrator") {
@@ -6167,6 +6207,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
                 ['text' => $zarinpalstatus, 'callback_data' => "editpayment-zarinpal-$zarinpal"],
                 ['text' => $textbotlang['keyboard']['zarinPalGateway'], 'callback_data' => "zarinpal"],
             ],
+            [
+                ['text' => '⚙️', 'callback_data' => 'paygw-tronado'],
+                ['text' => (getPaySettingValue('tronado_status', 'offtronado') === 'ontronado' ? '🟢 ترونادو' : '🔴 ترونادو'), 'callback_data' => 'paygwtoggle-tronado'],
+                ['text' => '⚡ ترونادو', 'callback_data' => 'paygw-tronado'],
+            ],
 /* TETRA_MENU_START */
             [
                 ['text' => '⚙️', 'callback_data' => "tmsettings"],
@@ -6235,6 +6280,10 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $gateway = $paymentGateways[$gatewayKey];
     $gatewayIsOn = getPaySettingValue($gateway['setting'], $gateway['off']) == $gateway['on'];
     if ($isToggle) {
+        if ($gatewayKey === 'tronado' && !$gatewayIsOn && !tronadoCredentialsReady()) {
+            sendmessage($from_id, 'برای فعال‌سازی ترونادو، ابتدا API key، کیف پول مقصد و کلید امضای IPN را تنظیم کنید.', $tronadoManage, 'HTML');
+            return;
+        }
         $gatewayIsOn = !$gatewayIsOn;
         update("PaySetting", "ValuePay", $gatewayIsOn ? $gateway['on'] : $gateway['off'], "NamePay", $gateway['setting']);
     }
@@ -6425,6 +6474,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
                 ['text' => $textbotlang['keyboard']['settings'], 'callback_data' => "zarinpalsetting"],
                 ['text' => $zarinpalstatus, 'callback_data' => "editpayment-zarinpal-$zarinpal"],
                 ['text' => $textbotlang['keyboard']['zarinPalGateway'], 'callback_data' => "zarinpal"],
+            ],
+            [
+                ['text' => '⚙️', 'callback_data' => 'paygw-tronado'],
+                ['text' => (getPaySettingValue('tronado_status', 'offtronado') === 'ontronado' ? '🟢 ترونادو' : '🔴 ترونادو'), 'callback_data' => 'paygwtoggle-tronado'],
+                ['text' => '⚡ ترونادو', 'callback_data' => 'paygw-tronado'],
             ],
 /* TETRA_MENU_START */
             [

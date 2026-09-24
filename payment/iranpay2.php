@@ -183,8 +183,9 @@ if (!claimPaymentPaid($Payment_report['id_order']))
     return;
 $textbotlang = languagechange();
 try {
-    DirectPayment($data_order_id, "../images.jpg");
+    if (DirectPayment($data_order_id, "../images.jpg") === false) return;
 } catch (Throwable $directPaymentError) {
+    markPaymentFulfillment($data_order_id, 'failed');
     error_log("DirectPayment failed for order {$data_order_id}: " . $directPaymentError->getMessage());
     return;
 }
@@ -192,8 +193,7 @@ $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackiranpay2"
 $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
 if ($pricecashback != "0") {
     $result_cashback = ($Payment_report['price'] * $pricecashback) / 100;
-    $Balance_confrim = intval($Balance_id['Balance']) + $result_cashback;
-    update("user", "Balance", $Balance_confrim, "id", $Balance_id['id']);
+    addBalance($Balance_id['id'], $result_cashback);
     $pricecashback = number_format($pricecashback);
     $text_report = sprintf($textbotlang['paymentGateway']['giftReport'], $result_cashback);
     sendmessage($Balance_id['id'], $text_report, null, 'HTML');

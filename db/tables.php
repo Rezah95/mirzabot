@@ -10,6 +10,7 @@ return [
     'product',
     'invoice',
     'Payment_report',
+    'Tronado_callback',
     'Discount',
     'Giftcodeconsumed',
     'PaySetting',

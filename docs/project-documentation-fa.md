@@ -2,9 +2,24 @@
 
 > این سند بر اساس خروجی Graphify، کد اجرایی مخزن و فایل راهنمای پروژه تهیه شده است. هدف آن توضیح رفتار واقعی سیستم، مسیرهای اصلی داده و قواعدی است که هنگام نگهداری، توسعه یا عیب‌یابی باید در نظر گرفته شوند.
 
-**وضعیت مبنا:** commit `daf84861a9ef24218b4b67f99536142b93807dee` در تاریخ ۲۰۲۶-۰۸-۲۱
+**وضعیت مبنا:** commit `c1402e16e6d901866196e8861b3b408ce91e89bd` در تاریخ ۲۰۲۶-۰۹-۲۴ (نسخه 0.5.8)
 
 **مخزن و منابع اصلی:** [README](../README.md)، [گزارش Graphify](../graphify-out/GRAPH_REPORT.md)، [ورودی اصلی ربات](../index.php)، [توابع عمومی و پرداخت](../function.php)، [کیبوردها](../keyboard.php)، [لایه پنل‌ها](../panels.php)، [Mini App API](../api/miniapp.php)
+
+**روش استفاده از این سند:** بخش‌های ۲ تا ۱۹ رفتار محصول و جریان‌های اجرایی را شرح می‌دهند؛ بخش‌های ۲۰ تا ۲۵ مرجع پوشه‌ها، API، دیتابیس، نصب و عملیات نسخهٔ فعلی هستند. نام فیلدها و statusها دقیقاً مطابق کد حفظ شده‌اند. مقدار تنظیمات هر نصب ممکن است متفاوت باشد. هیچ کلید یا گذرواژهٔ واقعی در این سند ثبت نشده است.
+
+## فهرست بخش‌ها
+
+| بخش | موضوع |
+|---|---|
+| ۱ تا ۳ | روش بررسی، معماری و قابلیت‌ها |
+| ۴ تا ۷ | مدل داده، کاربر، کاتالوگ و پنل‌های VPN |
+| ۸ تا ۱۰ | پرداخت، قواعد درگاه و چرخهٔ سرویس |
+| ۱۱ تا ۱۲ | Mini App، API و مدیریت وب |
+| ۱۳ تا ۱۵ | کران، کنترل‌های امنیتی و نصب |
+| ۱۶ تا ۱۹ | سناریو، توسعه، محدودیت‌ها و پذیرش |
+| ۲۰ تا ۲۵ | نقشهٔ فایل‌ها، قراردادهای API، شِما، نصب وب، عملیات و انتشار |
+| ۲۶ | ارجاع سریع |
 
 ## خلاصه اجرایی
 
@@ -24,7 +39,7 @@ Mirza Bot یک سامانه فروش و مدیریت اشتراک VPN روی Tel
 
 ## ۱. روش استخراج و درجه اطمینان
 
-Graphify برای این snapshot شامل **۱۳۶ فایل، ۳۰۴۴ node، ۶۳۶۵ edge و ۱۸۴ community** است. حدود ۹۱٪ روابط به‌صورت استخراج‌شده و ۹٪ به‌صورت استنباطی ثبت شده‌اند؛ گزارش گراف ۵۸۲ edge استنباطی را اعلام می‌کند. commit ثبت‌شده در گزارش با commit فعلی مخزن یکسان است، بنابراین گراف برای کد موجود stale نیست.
+Graphify برای این snapshot شامل **۱۹۶ فایل، ۳۲۹۶ گره، ۶۹۶۹ یال و ۲۳۴ خوشه** است. گزارش، حدود ۹۱٪ روابط را استخراج‌شده و ۹٪ را استنباطی می‌داند و ۶۵۸ یال استنباطی ثبت کرده است. commit کوتاه `c1402e16` در گزارش با commit مبنای این سند یکسان است. گراف نقشهٔ مسیرهاست؛ ادعاهای اجرایی این سند با فایل‌های PHP فعلی تطبیق داده شده‌اند.
 
 در این سند:
 
@@ -32,7 +47,7 @@ Graphify برای این snapshot شامل **۱۳۶ فایل، ۳۰۴۴ node، �
 - روابطی که فقط در Graphify با برچسب `INFERRED` آمده‌اند، برای جهت‌یابی معماری استفاده شده‌اند و به‌عنوان قرارداد قطعی API تلقی نمی‌شوند.
 - مقادیر فعال/غیرفعال تنظیمات از دیتابیس و `PaySetting`/`setting` خوانده می‌شوند؛ بنابراین ممکن است دو نصب با کد یکسان، UI متفاوتی نشان دهند.
 
-گزارش Graphify شامل فایل‌های JavaScript فشرده و نسخه‌های قدیمی/جایگزین زیر `vpnbot/` نیز هست. به همین دلیل بعضی nodeهای گراف عمومی یا noisy هستند. شرح این سند روی مسیر اجرایی ریشه پروژه، API، پنل و cronهای فعال متمرکز است.
+گزارش Graphify شامل JavaScript فشردهٔ Mini App و نسخه‌های جایگزین زیر `vpnbot/` نیز هست. بنابراین بعضی گره‌های عمومی مانند `$` یا `select()` مرکز گراف شده‌اند؛ مرکزی‌بودن آن‌ها به‌تنهایی نشانهٔ اهمیت کسب‌وکاری یا قرارداد قطعی نیست. مسیرهای ریشه، API، پنل، نصب و cronهای فعلی جداگانه در این سند بررسی شده‌اند.
 
 ## ۲. معماری کلان
 
@@ -207,12 +222,10 @@ README پنل‌های Marzban، Marzneshin، Sanaei/Alireza، S-UI، Hiddify، 
 3. محصول به agent کاربر تعلق داشته باشد یا برای عموم فعال شده باشد.
 4. پنل/محصول با `hide_panel` مخفی نشده باشد.
 5. category و time range انتخابی، در صورت ارسال، منطبق باشند.
-6. اگر `one_buy_status=1` باشد، محصولی که برای کاربر فاکتور غیر `Unpaid` دارد دوباره نمایش داده نشود.
+6. اگر `one_buy_status=1` باشد، محصول فقط برای کاربری نمایش داده شود که هنوز هیچ فاکتور غیر `Unpaid` ندارد.
 7. قیمت کاربر با `pricediscount` در صورت فعال بودن تخفیف اصلاح شود.
 
-عبارت «خرید یک‌باره» در اینجا به `one_buy_status` مربوط است و با شرط «کاربر چند بار خرید کرده است» یکی نیست. این flag محصول را برای کاربری که قبلاً آن محصول را گرفته، پنهان/غیرقابل خرید می‌کند.
-
-در snapshot فعلی، query این شرط بر اساس `id_user` و `Status != 'Unpaid'` است و شناسه محصول را در همان شمارش محدود نمی‌کند؛ بنابراین یک فاکتور غیر `Unpaid` دیگر برای همان کاربر نیز می‌تواند خرید محصول one-buy را مسدود کند. این نکته باید هنگام اصلاح rule یا نوشتن تست پذیرش صریحاً تعیین تکلیف شود.
+این flag در رابط مدیر با عنوان «خرید اول» تنظیم می‌شود. query بر اساس `id_user` و `Status != 'Unpaid'` است و به شناسهٔ همان محصول محدود نیست. کیبورد خرید ربات نیز همین قاعده را دارد و این محصولات در تمدید نمایش داده نمی‌شوند.
 
 ### قیمت سفارشی
 
@@ -270,6 +283,17 @@ README پنل‌های Marzban، Marzneshin، Sanaei/Alireza، S-UI، Hiddify، 
 
 در `createUser`، نوع پنل dispatch می‌شود؛ برای نمونه:
 
+| مقدار `marzban_panel.type` | adapter | ویژگی مسیر |
+|---|---|---|
+| `marzban`، `marzneshin` | [`Marzban.php`](../Marzban.php)، [`marzneshin.php`](../marzneshin.php) | API کاربر و subscription |
+| `x-ui_single`، `alireza_single`، `s_ui` | [`x-ui_single.php`](../x-ui_single.php)، [`alireza_single.php`](../alireza_single.php)، [`s_ui.php`](../s_ui.php) | client و inbound/proxy |
+| `hiddify`، `rebecca` | [`hiddify.php`](../hiddify.php)، [`Rebecca.php`](../Rebecca.php) | API اختصاصی و خروجی کانفیگ |
+| `WGDashboard` | [`WGDashboard.php`](../WGDashboard.php) | peer و فایل WireGuard `.conf` |
+| `ibsng`، `mikrotik` | [`ibsng.php`](../ibsng.php)، [`mikrotik.php`](../mikrotik.php) | حساب شبکه با adapter اختصاصی |
+| `mirza_agent`، `Manualsale` | [`mirza_agent.php`](../mirza_agent.php)، شاخهٔ داخلی [`panels.php`](../panels.php) | فروش agent یا تحویل دستی |
+
+نوع `Pasarguard` در README معرفی شده، اما در dispatchهای فعلی `ManagePanel` شاخه‌ای با همین نام دیده نمی‌شود؛ پشتیبانی آن برای نسخهٔ حاضر نباید صرفاً از روی README فرض شود. قابلیت هر عملیات برای همهٔ typeها یکسان نیست و شاخهٔ همان متد در `panels.php` مرجع قطعی است.
+
 - Marzban از `adduser` و عملیات subscription استفاده می‌کند.
 - Marzneshin token و output link تولید می‌کند.
 - x-ui/Sanaei/S-UI از client/inboundهای پنل استفاده می‌کنند.
@@ -282,7 +306,7 @@ README پنل‌های Marzban، Marzneshin، Sanaei/Alireza، S-UI، Hiddify، 
 
 ### تحویل کانفیگ
 
-[`sendMessageService`](../function.php#L1948) با توجه به تنظیم پنل تصمیم می‌گیرد subscription link یا config خام ارسال شود. برای WGDashboard فایل `.conf` به‌صورت document ارسال می‌شود. در مسیرهای دیگر QR با Endroid QR ساخته می‌شود و در صورت خطا، متن کانفیگ یا لینک به‌عنوان fallback ارسال می‌گردد. مسیر QR از `createqrcode` استفاده می‌کند و keyboard سرویس نیز می‌تواند همراه پیام فرستاده شود.
+[`sendMessageService`](../function.php#L2480) با توجه به تنظیم پنل تصمیم می‌گیرد subscription link یا config خام ارسال شود. برای WGDashboard فایل `.conf` به‌صورت document ارسال می‌شود. در مسیرهای دیگر QR با Endroid QR ساخته می‌شود و در صورت خطا، متن کانفیگ یا لینک به‌عنوان fallback ارسال می‌گردد. مسیر QR از `createqrcode` استفاده می‌کند و keyboard سرویس نیز می‌تواند همراه پیام فرستاده شود.
 
 ## ۸. پرداخت و کیف پول
 
@@ -293,25 +317,41 @@ README روش‌های زیر را معرفی می‌کند و کد نیز adapt
 | دسته | روش‌ها | نوع تأیید |
 |---|---|---|
 | دستی | کارت‌به‌کارت، ارز دیجیتال آفلاین | رسید کاربر، مدیر یا cron خودکار |
-| آنلاین ریالی | Zarinpal، Aqayepardakht، IranPay | callback و verify درگاه |
-| رمزارزی | NowPayments، Plisio، Tronado v5، Tetraminator، CubePay/Swapino و UniquePay در مسیرهای مربوط | callback یا polling |
+| آنلاین ریالی | Zarinpal، Aqayepardakht، IranPay و AbanGateway (شناسهٔ داخلی `iranpay4`) | callback و verify درگاه |
+| رمزارزی/سایر | NowPayments، Plisio، Tetraminator و UniquePay در مسیرهای مربوط | callback یا polling |
+| پرداخت CubePay | مسیر داخلی `iranpay2` با API سرویس CubePay | callback امضاشده یا verify با authority |
+| پرداخت ترونادو | مسیر مستقل `tronadopay` با API رسمی v5 | IPN امضاشده و تطبیق سفارش |
 | Telegram | Telegram Stars | `pre_checkout` و payment موفق |
+| انتقال کارت خودکار | Variza | لینک پرداخت و webhook امضاشده |
 | سایر | روش‌هایی که با flag و function موجود فعال می‌شوند | وابسته به تنظیمات و provider |
 
-بعضی درگاه‌ها کارمزد دارند. در اتصال Tronado v5، کارمزد provider با `wageFromBusinessPercentage` کنترل می‌شود؛ این پروژه آن را روی `100` می‌فرستد تا کسب‌وکار کارمزد را جذب کند و مبلغ پرداختی کاربر تقریباً برابر مبلغ فاکتور تومانی باشد.
+### CubePay و ترونادو
 
-### ترونادو (API v5)
+در نسخهٔ فعلی، انتخاب `iranpay2` در ربات، رکوردی با `Payment_Method='Currency Rial 2'` می‌سازد و تابع با نام تاریخی `trnado()` را فراخوانی می‌کند. با وجود نام تابع و متن بعضی دکمه‌ها، این تابع اکنون مبلغ را با `cubepayPayableAmount()` محاسبه و سفارش را به `https://cubevps.ir/pay/create-order.php` با Bearer token تنظیم `apiternado` ارسال می‌کند. callback این سفارش `payment/iranpay2.php` است و لینک بازگشتی از `payment_link` یا `pay_page_url` گرفته می‌شود.
 
-مسیر کاربر `iranpay2` برای ترونادو از قرارداد جدید استفاده می‌کند:
+[`payment/iranpay2.php`](../payment/iranpay2.php) دو شکل تأیید دارد: callback دارای `sig` را با HMAC-SHA256 روی `order_id|status|amount` و token بررسی می‌کند، یا با `authority` به endpoint verify سرویس درخواست می‌زند. در هر دو حالت شناسهٔ سفارش و مبلغ پاسخ باید با رکورد محلی مطابق باشد؛ وضعیت `expire` پذیرفته نمی‌شود. پس از تأیید، `claimPaymentPaid()` و `DirectPayment()` اجرا می‌شوند. نام‌های `Tronado` در متن گزارش و تنظیمات تاریخی لزوماً به معنای استفاده از API ترونادو در این مسیر نیستند.
 
-1. ابتدا `POST /api/Price/Tron/GetPriceToToman` با هدر `x-api-key` دریافت می‌شود.
-2. مقدار `TronAmount` از `price ÷ TronPriceToman` با دقت شش رقم اعشار محاسبه می‌شود.
-3. سفارش به `POST /api/v5/GetOrderToken?wageFromBusinessPercentage=100` با `PaymentID`، آدرس کیف پول، مقدار TRX و callback ارسال می‌شود.
-4. فقط `FullPaymentUrl` پاسخ برای دکمهٔ پرداخت کاربر استفاده می‌شود؛ پاسخ کامل نیز برای audit در `Payment_report.dec_not_confirmed` ذخیره می‌شود.
+ترونادو اکنون مسیر مستقل `tronadopay` دارد. [`payment/tronado_lib.php`](../payment/tronado_lib.php) ابتدا با `POST /Tron/GetPriceToToman` قیمت تومانی ترون را می‌گیرد، مبلغ فاکتور را تا ۶ رقم اعشار به بالا تبدیل می‌کند و با `POST /api/v5/GetOrderToken?wageFromBusinessPercentage=100` سفارش می‌سازد. این مقدار ۱۰۰ همان سیاست قبلی پروژه است: کسب‌وکار کل کارمزد را جذب می‌کند. لینک پرداخت و `Payment_Method='Tronado'` مستقل از CubePay هستند. کلید API، کیف پول مقصد، کلید IPN، حدود مبلغ و کش‌بک همگی با پیشوند `tronado_` ذخیره می‌شوند؛ `apiternado` و `statustarnado` همچنان متعلق به CubePay هستند.
 
-تنظیمات لازم در `PaySetting` عبارت‌اند از `apiternado` (API Key)، `walletaddress` (کیف پول TRC20) و `tronado_ipn_signing_key` (کلید اختصاصی IPN). کلید IPN از منوی تنظیمات ترونادو در پنل ادمین قابل ثبت است و نباید با API Key یکی فرض شود.
+[`payment/tronado.php`](../payment/tronado.php) امضای HMAC-SHA512 بدنهٔ خام را با `X-Tronado-Sig` و `tronado_ipn_signing_key` بررسی می‌کند. `(PaymentId, OrderStatusID)` در `Tronado_callback` حذف تکرار می‌شود. تحویل فقط برای سفارش ترونادو، وضعیت ۳۰ یا `IsPaid=true`، کیف پول مقصد برابر کیف پول ثبت‌شده و `UserPaidTomanAmount` نزدیک به مبلغ فاکتور انجام می‌شود؛ حداکثر ۵٬۰۰۰ تومان تفاوت ناشی از گردکردن مجاز است. `TomanAmountWithoutWage` نیز باید مثبت باشد ولی در سیاست جذب کامل کارمزد معیار اعتبار کیف پول نیست. دادهٔ ایجاد سفارش در `dec_not_confirmed` نگه داشته می‌شود و callback خام در `Tronado_callback` ثبت می‌شود. [مرجع رسمی ترونادو](https://miniapp.tronado.cloud/assets/api-docs.md).
 
-callback در `payment/tronado.php` قرار دارد و باید به‌صورت `https://<domain>/payment/tronado.php` در ترونادو ثبت شود. این endpoint فقط POST را می‌پذیرد، HMAC-SHA512 بدنهٔ خام را با هدر `X-Tronado-Sig` و کلید IPN بررسی می‌کند و callbackها را با کلید یکتای `(PaymentId, OrderStatusID)` در جدول `Tronado_callback` حذف تکرار می‌کند. فقط `IsPaid=true` یا وضعیت `30` باعث `claimPaymentPaid` و سپس `DirectPayment` می‌شود؛ وضعیت‌های دیگر ثبت و با پاسخ 2xx تأیید می‌شوند.
+برای سفارش‌های بازِ نسخهٔ قدیمی ترونادو که تنها پاسخ provider را ذخیره کرده‌اند، callback با توکن `UniqueCode` و کیف پول تاریخی `walletaddress` تطبیق داده می‌شود. اگر کیف پول تاریخی حذف یا تغییر کرده باشد، این سفارش‌ها به آشتی دستی نیاز دارند. سفارش‌های قدیمی با `Payment_Method='Currency Rial 2'` به‌دلیل اشتراک نام با CubePay خودکار به ترونادو نسبت داده نمی‌شوند.
+
+اگر ترونادو پس از تحویل، وضعیت ۲۰۰ (لغو) بفرستد، رویداد در جدول callback ثبت و برای آشتی دستی در log و کانال گزارش اعلام می‌شود. برگشت خودکار سرویس یا برداشت موجودی انجام نمی‌شود، چون ممکن است سرویس قبلاً مصرف شده باشد. webhook اختیاری اعتراض‌های `AmountAdjusted` در این نسخه متصل نشده و فعال‌سازی آن نیازمند طراحی چرخهٔ تعدیل سفارش است.
+
+برای راه‌اندازی، در پنل مدیریت از تنظیمات مالی ← ترونادو، کلید API، آدرس کیف پول TRON و کلید امضای IPN را ثبت و سپس درگاه را فعال کنید. آدرس `https://DOMAIN/payment/tronado.php` و دامنهٔ آن باید نزد ترونادو مجاز شده باشند. اطلاعات قدیمی `apiternado` به ترونادو منتقل نمی‌شود، چون همین کلید در CubePay مصرف می‌شود. ترتیب در فهرست پرداخت، ترونادو، تترامیناتور و سپس زرین‌پال است؛ زرین‌پال فقط در صورت فعال‌سازی و مجاز بودن کاربر نمایش داده می‌شود و مقدار اولیهٔ آن غیرفعال است. UniquePay و CubePay در صورت فعال بودن، گزینه‌های جداگانه‌اند.
+
+### درگاه‌های سفارشی
+
+**Tetraminator:** `index.php` مبلغ ۵۰٬۰۰۰ تا ۱۰٬۰۰۰٬۰۰۰ تومان را می‌پذیرد، `/invoice/create` را فراخوانی می‌کند و `pay_id` را در `Payment_report.dec_not_confirmed` می‌گذارد. callback ابتدا token آدرس را بررسی می‌کند، سپس `/payment/inquiry/{pay_id}` را با کلید API استعلام می‌گیرد و `status=true`، `payment_status=paid`، `pay_id` و `amount` را با سفارش محلی تطبیق می‌دهد؛ پس از آن claim و تحویل انجام می‌شود. فایل نصب منتشرشده در [مرجع نصب تترامیناتور](https://api.tetraminator.com/installer.sh) برای مشاهدهٔ قرارداد استفاده شده است؛ اجرای دوبارهٔ نصب‌کننده روی سورس سفارشی می‌تواند فایل‌های درگاه را بازنویسی کند.
+
+**UniquePay:** پاسخ `/api/create-invoice` شامل `hashId`، `refId` و `paymentLink` در سطح اصلی JSON است. هنگام بازگشت، `/api/check-invoice` با همان `hashId` استعلام می‌شود. `invoice.id` باید با `refId` زمان ساخت و `invoice.amount` با مبلغ سفارش برابر باشد؛ `isPaid`، `isVerified` و `invoice.status=paid` نیز لازم‌اند. کارمزد احتمالی در `payableAmount` است و مبلغ پایهٔ سفارش همان `amount` به تومان است. حداقل مبلغ طبق API بیش از ۵۰٬۰۰۰ تومان است. [مستندات UniquePay](https://uniquepay.top/api-docs).
+
+### واریزا و آبان‌گیت‌وی
+
+**Variza:** نمایش دکمه به `variza_status=onvariza` و وجود token و secret webhook وابسته است. `createPayVariza()` سفارش را به API واریزا می‌فرستد؛ `index.php` مبلغ را با `minbalancevariza`/`maxbalancevariza` می‌سنجد، `Payment_report` را با روش `variza` و slug در `dec_not_confirmed` ثبت و URL پرداخت را ارسال می‌کند. [`payment/variza.php`](../payment/variza.php) فقط صفحهٔ انتظار برگشت کاربر است. تسویه در [`payment/variza_webhook.php`](../payment/variza_webhook.php) انجام می‌شود: امضای HMAC-SHA256 بدنهٔ خام از `X-Webhook-Signature` بررسی می‌شود، رویداد `payment.paid` و slug/مبلغ با سفارش تطبیق داده می‌شوند و سپس `claimPaymentPaid()` و `DirectPayment()` اجرا می‌شوند. مبلغ webhook باید دست‌کم مبلغ ثبت‌شدهٔ سفارش باشد.
+
+**AbanGateway:** شناسهٔ داخلی مسیر `iranpay4` و نام `Payment_Method` برابر `AbanGateway` است. دکمه فقط وقتی فعال است که `statusiranpay4=oniranpay4`، API key موجود و `endpointiranpay4` یک URL معتبر HTTPS باشد. `index.php` بازهٔ مبلغ و سقف روزانهٔ تنظیم‌شده را بررسی و پیش از درخواست لینک، رکورد `Unpaid` را می‌سازد. `createPayiranpay4()` به `/create` endpoint درگاه درخواست می‌زند. [`payment/iranpay4.php`](../payment/iranpay4.php) در برگشت، `/verify` را با order، authority و مبلغ صدا می‌زند و موفقیت، تطابق order و کافی بودن مبلغ پاسخ را کنترل می‌کند؛ سپس claim و تحویل را انجام می‌دهد. تنظیمات مرتبط در `PaySetting` شامل کلید، endpoint، وضعیت، حداقل/حداکثر، سقف روزانه و cashback است.
 
 ### چرخه عمومی `Payment_report`
 
@@ -341,11 +381,11 @@ DirectPayment(id_order)
 ارسال نتیجه، cashback/affiliate و گزارش مدیریتی
 ```
 
-`claimPaymentPaid` وضعیت را فقط زمانی به `paid` تغییر می‌دهد که قبلاً paid نشده باشد و از دوباره‌پردازش ساده یک order جلوگیری می‌کند. پس از آن، `DirectPayment` با توجه به context داخل `id_invoice` عملیات واقعی را اجرا می‌کند.
+`claimPaymentPaid` وضعیت را فقط زمانی به `paid` تغییر می‌دهد که قبلاً `paid` یا `reject` نشده باشد و از دوباره‌پردازش ساده یک order جلوگیری می‌کند. پس از آن، `DirectPayment` با توجه به context داخل `id_invoice` عملیات واقعی را اجرا می‌کند. `fulfillment_status` نتیجهٔ `processing`، `fulfilled`، `refunded` یا `failed` را ثبت می‌کند. شمارش پرداخت موفق، رکوردهای بازپرداخت‌شده و تحویل ناموفق را کنار می‌گذارد و رکوردهای قدیمی با وضعیت تحویل خالی را همچنان می‌شمارد. تغییر وضعیت `paid` و تحویل سرویس یک تراکنش واحد نیستند؛ سفارش `failed` باید با وضعیت واقعی پنل آشتی داده شود و تکرار خودکار کورکورانه مجاز نیست.
 
 ### `DirectPayment` و انواع عملیات
 
-تابع [`DirectPayment`](../function.php#L857) عملیات پرداخت را به چند مسیر تقسیم می‌کند:
+تابع [`DirectPayment`](../function.php#L1069) عملیات پرداخت را به چند مسیر تقسیم می‌کند:
 
 - `getconfigafterpay`: ساخت حساب جدید، محاسبه زمان/حجم، ساخت config و ارسال به کاربر.
 - `getextenduser`: تمدید سرویس از طریق `ManagePanel->extend()` و ثبت `service_other`.
@@ -357,9 +397,9 @@ DirectPayment(id_order)
 
 ## ۹. قاعده دقیق نمایش درگاه‌ها و مثال کارت‌به‌کارت
 
-این بخش پاسخ دقیق به نمونه‌ای است که در درخواست مطرح شد.
+این بخش قاعدهٔ فعلی نمایش گزینه‌های پرداخت در ربات را شرح می‌دهد؛ شرط نمایش دکمه با شرط پذیرش و تسویهٔ پرداخت یکسان فرض نمی‌شود.
 
-در [`keyboard.php`](../keyboard.php#L247)، ابتدا تعداد پرداخت‌های موفق کاربر محاسبه می‌شود:
+در [`keyboard.php`](../keyboard.php#L279)، ابتدا تعداد پرداخت‌های موفق کاربر محاسبه می‌شود:
 
 ```sql
 SELECT COUNT(*)
@@ -397,7 +437,7 @@ IranPay3:
 
 مدیر می‌تواند از مسیر مدیریت نمایش کارت، مقدار `cardpayment` کاربران را تغییر دهد؛ حالت فعال‌سازی سراسری مقدار این flag را برای کاربران تنظیم می‌کند و حالت غیرفعال‌سازی می‌تواند همه کاربران یا فقط agentهای عادی را پوشش دهد.
 
-### اگر نیاز واقعی «کارت‌به‌کارت فقط بعد از دو خرید» باشد
+### تفاوت با قاعدهٔ احتمالی «کارت‌به‌کارت فقط بعد از دو خرید»
 
 کد فعلی این acceptance criterion را پیاده نکرده است. برای پیاده‌سازی دقیق باید شرط مستقل زیر به مسیر ساخت keyboard کارت‌به‌کارت اضافه شود و همان شرط در handler ایجاد Payment_report نیز سمت سرور enforce شود:
 
@@ -412,7 +452,7 @@ IranPay3:
 
 ### کارت‌به‌کارت و رسید
 
-در مسیر `cart_to_offline` در [`index.php`](../index.php#L4633):
+در مسیر `cart_to_offline` در [`index.php`](../index.php#L4647):
 
 1. حداقل و حداکثر مبلغ بررسی می‌شود.
 2. یک کارت از `card_number` انتخاب می‌شود.
@@ -421,7 +461,7 @@ IranPay3:
 5. `id_invoice` context عملیات را نگه می‌دارد.
 6. پیام کارت، مبلغ و دکمه ارسال رسید برای کاربر فرستاده می‌شود.
 
-رسید پس از کنترل cooldown و وضعیت order به `waiting` یا وضعیت بررسی مربوط منتقل می‌شود. مدیر از [`admin.php`](../admin.php#L2689) می‌تواند پرداخت را تأیید یا رد کند. `cronbot/croncard.php` نیز پرداخت‌های waiting کارت‌به‌کارت/ارز آفلاین را طبق زمان و exceptionها بررسی و در شرایط مجاز auto-confirm می‌کند.
+رسید پس از کنترل cooldown و وضعیت order به `waiting` یا وضعیت بررسی مربوط منتقل می‌شود. مدیر از [`admin.php`](../admin.php#L1936) می‌تواند پرداخت را تأیید یا رد کند. `cronbot/croncard.php` نیز پرداخت‌های waiting کارت‌به‌کارت/ارز آفلاین را طبق زمان و exceptionها بررسی و در شرایط مجاز auto-confirm می‌کند.
 
 ### قانون نمایش زرین‌پال
 
@@ -529,9 +569,23 @@ Pagination به‌صورت پیش‌فرض محدود است و حداکثر ث�
 
 در Telegram نیز نقش‌های `administrator`، `Seller` و `support` وجود دارد. تغییر تنظیمات حساس، مدیریت مدیران، درگاه‌ها و فعال‌سازی‌های گسترده به administrator محدود است؛ تأیید پرداخت برای administrator/Seller در مسیرهای مربوط مجاز است و support در برخی عملیات فقط مشاهده/پشتیبانی دارد.
 
+نقشهٔ صفحه‌های وب از منوی [`panel/inc/layout_head.php`](../panel/inc/layout_head.php) به دست می‌آید:
+
+| صفحه | کار اصلی |
+|---|---|
+| `panel/index.php` | داشبورد، آمار و خلاصهٔ فاکتورها/کاربران |
+| `panel/users.php`, `user.php`, `user_action.php` | فهرست و جزئیات کاربر، موجودی، وضعیت، agent و عملیات فردی |
+| `panel/invoice.php`, `service.php` | فاکتور و وضعیت سرویس |
+| `panel/product.php`, `category.php` | محصول، دسته‌بندی و تنظیمات فروش |
+| `panel/payment.php` | فهرست پرداخت‌ها و فیلتر وضعیت تحویل (`processing`، `failed`، `fulfilled`، `refunded`) |
+| `panel/keyboard.php`, `bottext.php` | ترتیب دکمه‌های ربات و متن‌های قابل ویرایش |
+| `panel/settings.php` | تنظیمات عمومی و حساب مدیر |
+
+صفحه‌ها از `panel/inc/config.php` برای bootstrap و session و از `panel/inc/layout_head.php`/`layout_foot.php` برای چیدمان مشترک استفاده می‌کنند. فایل‌های `panel/js/` و `panel/css/` رابط را تشکیل می‌دهند؛ منطق معتبرسازی نهایی و تغییر DB در PHP/API است.
+
 ## ۱۳. Cronها و عملیات خودکار
 
-تابع `activecron()` در [`function.php`](../function.php#L1665) jobهای زیر را نصب/مدیریت می‌کند. فواصل زیر از commandهای ثبت‌شده در کد خوانده شده‌اند:
+تابع `activecron()` در [`function.php`](../function.php) ابتدا cronهای قدیمی تک‌فایلی را حذف می‌کند و فقط یک فرمان دقیقه‌ای برای [`cronbot/run.php`](../cronbot/run.php) ثبت می‌کند. dispatcher زمان‌بندی jobها را از [`cronbot/jobs.php`](../cronbot/jobs.php) می‌خواند و jobهای موعدرسیده را اجرا می‌کند. جدول زیر از رجیستری نسخهٔ فعلی استخراج شده است:
 
 | فایل | تناوب | مسئولیت |
 |---|---:|---|
@@ -544,13 +598,16 @@ Pagination به‌صورت پیش‌فرض محدود است و حداکثر ث�
 | `cronbot/activeconfig.php` | هر ۱ دقیقه | فعال‌سازی configهای مشخص‌شده |
 | `cronbot/disableconfig.php` | هر ۱ دقیقه | غیرفعال‌سازی configهای مدیریتی |
 | `cronbot/iranpay1.php` | هر ۱ دقیقه | بررسی پرداخت‌های IranPay1 |
-| `cronbot/backupbot.php` | هر ۵ ساعت | zip داده‌ها و mysqldump و ارسال backup |
+| `cronbot/backupbot.php` | ساعت‌های ۰، ۵، ۱۰، ۱۵ و ۲۰ | ساخت archive و dump دیتابیس و ارسال backup |
 | `cronbot/gift.php` | هر ۲ دقیقه | اعمال هدیه حجم/زمان |
 | `cronbot/expireagent.php` | هر ۳۰ دقیقه | پایان agent و بازگردانی نقش |
 | `cronbot/on_hold.php` | هر ۱۵ دقیقه | reminder و مدیریت on-hold |
 | `cronbot/configtest.php` | هر ۲ دقیقه | بررسی configهای test |
 | `cronbot/uptime_node.php` | هر ۱۵ دقیقه | سلامت node |
 | `cronbot/uptime_panel.php` | هر ۱۵ دقیقه | سلامت panel |
+| `cronbot/lottery.php` | هر ۱ دقیقه در صورت فعال بودن `scorestatus` | قرعه‌کشی و امتیاز |
+
+`run.php` با فایل `.run.lock` اجرای هم‌زمان همان نصب را محدود می‌کند، برای حداکثر سه جایگاه سراسری هاست تلاش می‌کند و آخرین زمان/خطای هر job را در `storage/cron_status.json` می‌نویسد. فرمان cron با تأخیر ثابت صفر تا ۱۹ ثانیه بر اساس دامنه ساخته می‌شود. [`cronbot/migrate-crontab.php`](../cronbot/migrate-crontab.php) ابزار CLI برای مهاجرت cronهای قدیمی است؛ حالت پیش‌فرض آن dry-run است و فقط `--apply` crontab را تغییر می‌دهد.
 
 پرداخت‌های callbackمحور نیز فایل‌های مستقل زیر `payment/` دارند؛ مانند `zarinpal.php`، `aqayepardakht.php`، `iranpay1.php`، `iranpay2.php`، `nowpayment.php`، `tetraminator.php` و `uniquepay.php`.
 
@@ -592,7 +649,7 @@ README محیط پیشنهادی را Ubuntu 22.04/24.04، دامنه، PHP 8.2�
 curl -o install.sh -L https://raw.githubusercontent.com/Rezah95/mirzabot/master/install.sh && bash install.sh
 ```
 
-منوی نصب/به‌روزرسانی/حذف، migration، تمدید SSL و مدیریت نسخه را پوشش می‌دهد. مقادیر ضروری `config.php` شامل host/name/user/password دیتابیس، API key، شناسه مدیران/گزارش، domain و username ربات است. timeout درخواست پنل برای نصب‌هایی که latency بالا دارند قابل تنظیم است.
+منوی نصب/به‌روزرسانی/حذف، migration، تمدید SSL و مدیریت نسخه را پوشش می‌دهد. مقادیر ضروری `config.php` شامل host/name/user/password دیتابیس، API key ربات، شناسه مدیر، domain و username ربات است؛ شناسهٔ کانال گزارش در `setting.Channel_Report` نگهداری می‌شود. timeout درخواست پنل برای نصب‌هایی که latency بالا دارند قابل تنظیم است.
 
 بعد از نصب باید این موارد کنترل شوند:
 
@@ -639,7 +696,7 @@ curl -o install.sh -L https://raw.githubusercontent.com/Rezah95/mirzabot/master/
   → شارژ کیف پول یا اجرای operation داخل id_invoice
 ```
 
-در صورت رد، وضعیت `reject` و توضیح بررسی ثبت می‌شود. در صورت طولانی شدن، `payment_expire` آن را expire می‌کند.
+در صورت رد، وضعیت `reject` و توضیح بررسی ثبت می‌شود. `payment_expire` رکوردهای `Unpaid` قدیمی‌تر از حدود یک روز را expire می‌کند؛ وضعیت‌های دیگر در شرط همان job نیستند.
 
 ### سناریو C: پرداخت درگاه آنلاین
 
@@ -704,13 +761,15 @@ NoticationsService
 - بعضی callbackها علاوه بر claim، منطق cashback/report مخصوص همان provider دارند. هنگام refactor باید order idempotency و عدم دوباره‌شارژ کیف پول حفظ شود.
 - gatewayها و adapterهای پنل وابسته به سرویس بیرونی، credential و schema پاسخ provider هستند؛ تست unit بدون mock کافی نیست و تست integration لازم است.
 - `payment_expire` بر اساس مقدار زمانی موجود در کد، حدود یک روز را بررسی می‌کند؛ سیاست کسب‌وکار باید با این مقدار تطبیق داده شود.
-- schema متمرکز و قرارداد رسمی versioned برای تمام جدول‌ها در مسیرهای بررسی‌شده به اندازه منطق اجرایی مستند نیست؛ ایجاد یک migration/schema مرجع، ریسک onboarding و upgrade را کاهش می‌دهد.
+- شِمای ماژولار جدید در `db/tables/` و مهاجرت‌های `db/migrations/` وجود دارد، اما `table.php` قدیمی نیز همچنان در مسیر نصب shell و بعضی مسیرهای بروزرسانی استفاده می‌شود. هر تغییر شِما باید در هر دو مسیر نصب بررسی شود.
+- ستون `zarinpalpayment`، تنظیمات gate زرین‌پال و کلید IPN ترونادو در شِمای ماژولار افزوده شده‌اند. چهار فایل زبان موجود `fa`، `en`، `ru` و `zh` هستند و کد `ar` به `fa` برمی‌گردد.
 
 ## ۱۹. چک‌لیست پذیرش و تست رگرسیون
 
 ### کاربران و دسترسی
 
 - [ ] کاربر جدید ساخته و پیام ثبت‌نام گزارش می‌شود.
+- [ ] نصب تازه با wizard وب ستون‌های لازم ثبت‌نام، از جمله `zarinpalpayment`، را دارد و `api/users.php` بدون خطای ستون اجرا می‌شود.
 - [ ] referral معتبر ثبت و self-referral رد می‌شود.
 - [ ] blocked، عضویت کانال و verification درست اعمال می‌شوند.
 - [ ] ضداسپم کاربر را بیش از حد مجاز block می‌کند.
@@ -726,6 +785,7 @@ NoticationsService
 ### پرداخت
 
 - [ ] پرداخت Unpaid، waiting، paid، reject و expire قابل ردیابی است.
+- [ ] مسیر `iranpay2` با callback CubePay و مسیر `tronadopay` با سفارش v5 و IPN امضاشدهٔ ترونادو، هر کدام جداگانه در محیط عملیاتی آزمایش می‌شوند.
 - [ ] callback تکراری باعث دوباره‌شارژ یا دوباره‌ساختن سرویس نمی‌شود.
 - [ ] mismatch مبلغ و signature رد می‌شود.
 - [ ] کارت‌به‌کارت فقط بر اساس setting و `cardpayment` نمایش داده می‌شود.
@@ -741,7 +801,143 @@ NoticationsService
 - [ ] backup ساخته و restore می‌شود.
 - [ ] نقش administrator، Seller و support جداگانه تست می‌شود.
 
-## ۲۰. نقشه ارجاع سریع فایل‌ها
+## ۲۰. نقشهٔ پوشه‌ها و ورودی‌های اجرا
+
+| مسیر | نقش و نقطهٔ ورود | وابستگی/خروجی اصلی |
+|---|---|---|
+| [`index.php`](../index.php)، [`admin.php`](../admin.php)، [`keyboard.php`](../keyboard.php) | webhook ربات اصلی، state machine کاربران و مدیران، ساخت دکمه‌ها | `config.php`، `function.php`، Telegram API، دیتابیس |
+| [`botapi.php`](../botapi.php)، [`request.php`](../request.php)، [`jdf.php`](../jdf.php) | wrapper تلگرام، درخواست HTTP و تاریخ جلالی | پاسخ API و متن/رسانه |
+| [`panels.php`](../panels.php) و adapterهای ریشه | قرارداد واحد `ManagePanel` برای پنل‌های VPN | API پنل بیرونی، لینک و کانفیگ |
+| [`api/`](../api/) | endpointهای JSON مدیریت و Mini App | token مدیریتی یا Bearer کاربر، دیتابیس |
+| [`panel/`](../panel/) | رابط وب مدیریت، login، صفحه‌ها و assetهای CSS/JS | session مدیر، APIهای مدیریت |
+| [`app/`](../app/) | Mini App آمادهٔ انتشار؛ `index.php` صفحهٔ HTML و فایل‌های hashدار JS/CSS و فونت | `api/verify.php` و `api/miniapp.php` |
+| [`payment/`](../payment/) | برگشت کاربر، callback و webhook درگاه‌ها | `Payment_report` و `DirectPayment` |
+| [`cronbot/`](../cronbot/) | dispatcher و jobهای زمان‌بندی‌شده | اعلان، تسویه، انقضا، backup و سلامت |
+| [`db/`](../db/) و [`table.php`](../table.php) | مسیر ماژولار و مسیر قدیمی ساخت/تغییر جداول | MySQL/MariaDB |
+| [`install.sh`](../install.sh)، [`install/`](../install/) | نصب VPS و راه‌انداز وب هاست اشتراکی | config، جداول، cron، webhook |
+| [`sub/index.php`](../sub/index.php) | دریافت محتوای subscription از روی شناسهٔ فاکتور | `invoice` و `ManagePanel->DataUser()` |
+| [`vpnbot/`](../vpnbot/) | کپی‌های ربات ساخته‌شده برای agent؛ `Default` الگو و `update` نسخهٔ جایگزین | جدول `botsaz` و توابع ریشه |
+| [`lang/`](../lang/) | ترجمه‌های `fa`، `en`، `ru` و `zh` و overrideهای نصب | `languagechange()` و متن کیبورد |
+| [`storage/`](../storage/) | وضعیت runtime مانند cron، cache و فایل‌های موقت | قابل نوشتن برای فرایند PHP |
+
+`app/assets/` خروجی build فرانت‌اند است؛ سورس React/Vite در همین snapshot دیده نمی‌شود. ویرایش مستقیم فایل‌های hashدار پس از انتشار با تغییر نام assetها و cache همراه است. `.htaccess` ریشه و پوشه‌ها دسترسی وب به فایل‌های حساس و listing را محدود می‌کنند و در زمان وجود `install/index.php`، سایر مسیرهای سایت را می‌بندند.
+
+متن‌های پایه از `lang/<code>.php` در `languagechange()` بارگذاری می‌شوند. `bottext_apply_overrides()` متن‌های ویرایش‌شدهٔ نصب را روی آن‌ها می‌نشاند؛ منوی اصلی نیز از JSON ستون `setting.keyboardmain` ساخته می‌شود. بنابراین تغییر متن و جابه‌جایی دکمه‌ها لزوماً نیاز به ویرایش فایل زبان ندارد. ربات‌های ساخته‌شده زیر `vpnbot/Default` و `vpnbot/update` کد/تنظیمات محلی خود را با `function.php`، `panels.php` و دیتابیس ریشه ترکیب می‌کنند؛ رکورد `botsaz` و webhook مخصوص agent هویت هر نمونه را تعیین می‌کند.
+
+## ۲۱. قرارداد endpointهای داخلی
+
+### احراز هویت و شکل درخواست
+
+- APIهای مدیریت مانند `users.php`، `panels.php` و `payment.php` از `apiRequestContext()` استفاده می‌کنند: JSON body خوانده می‌شود، action از کلید `actions` می‌آید و header `Token` با مقدار `api/hash.txt` یا در نبود آن با `$APIKEY` مقایسه می‌شود. این endpointها معمولاً حتی برای actionهای خواندنی با body JSON کار می‌کنند؛ متد مجاز داخل هر handler بررسی می‌شود.
+- `api/keyboard.php` استثنا است: token یا session مدیر با نقش `administrator` را می‌پذیرد. `api/statbot.php` و `api/log.php` token می‌خواهند. `api/index.php` endpoint عملیاتی نیست و دسترسی مستقیم را 404 می‌کند.
+- `api/verify.php` دادهٔ Telegram Web App و `auth_date` را بررسی و token کاربر را برمی‌گرداند. `api/miniapp.php` از `Authorization: Bearer <token>` استفاده می‌کند؛ شناسهٔ کاربر ارسالی کلاینت را با شناسهٔ رکورد token جایگزین می‌کند.
+- پاسخ رایج مدیریت `{"status": true|false, "msg": "...", "obj": ...}` است. خروجی موفق `purchase` در Mini App شکل اختصاصی `success`، `order_id` و `service` دارد؛ مصرف‌کننده نباید همهٔ endpointها را یکسان parse کند.
+
+### فهرست ماژول‌های مدیریت
+
+| فایل | actionهای اصلی | داده/اثر |
+|---|---|---|
+| [`api/panels.php`](../api/panels.php) | `panels`, `panel`, `panel_add`, `panel_edit`, `panel_delete`, `set_inbounds`, `remove_inbounds` | پنل، اعتبار اتصال، inbound و proxy؛ رمز پنل از پاسخ فهرست/جزئیات حذف می‌شود |
+| [`api/product.php`](../api/product.php) | `products`, `product`, `product_add`, `product_edit`, `product_delete`, `set_inbounds`, `remove_inbounds` | محصول، location، قیمت و پروتکل |
+| [`api/category.php`](../api/category.php) | `categorys`, `category`, `category_add`, `category_edit`, `category_delete` | دسته‌بندی محصول |
+| [`api/discount.php`](../api/discount.php) | `discounts`, `discount`, `discount_add`, `discount_delete`, `discount_sell_lists`, `discount_sell`, `discount_sell_delete`, `discount_sell_add` | تخفیف عمومی و فروشنده |
+| [`api/invoice.php`](../api/invoice.php) | `invoices`, `services`, `invoice`, `remove_service`, `invoice_add`, `change_status_config`, `extend_service_admin` | فاکتور و عملیات مدیریتی سرویس |
+| [`api/payment.php`](../api/payment.php) | `payments`, `payment` | گزارش تراکنش‌ها و جزئیات سفارش |
+| [`api/service.php`](../api/service.php) | `services` | فهرست سرویس‌ها |
+| [`api/users.php`](../api/users.php) | `users`, `user`, `user_add`, `block_user`, `verify_user`, `change_status_user`, `add_balance`, `withdrawal`, `send_message` و actionهای agent/affiliate/نمایش درگاه | کاربران، موجودی، نقش و استثناها |
+| [`api/settings.php`](../api/settings.php) | `keyboard_set`, `setting_info`, `save_setting_shop` | چیدمان منو و تنظیمات فروشگاه |
+| [`api/keyboard.php`](../api/keyboard.php)، [`api/statbot.php`](../api/statbot.php)، [`api/log.php`](../api/log.php) | بدون router مشترک | فهرست دکمه‌ها، آمار و گزارش API |
+
+برای تمام actionها، قرارداد دقیق فیلد اجباری و متد را باید از همان handler خواند. `api/utils.php` اعتبارسنجی متد، ورودی‌های الزامی، صفحه‌بندی با پیش‌فرض ۵۰ و سقف ۱۰۰۰، پاک‌سازی ورودی و ثبت `logs_api` را متمرکز کرده است.
+
+`api/users.php` علاوه بر عملیات پایه، actionهای `accept_number`، `set_limit_test`، `transfer_account`، `join_channel_exception`، `cron_notif`، `manage_show_cart`، `manage_show_zarinpal` و `zero_balance` را برای کنترل حساب دارد. گروه دعوت/نماینده شامل `affiliates_users`، `remove_affiliates`، `remove_affiliate_user`، `set_agent`، `set_expire_agent`، `set_becoming_negative`، `set_percentage_discount`، `active_bot_agent`، `remove_agent_bot`، `set_price_volume_agent_bot`، `set_price_time_agent_bot`، `SetPanelAgentShow` و `SetLimitChangeLocation` است. املای بزرگ/کوچک و غلط‌های تاریخی مثل `categorys` بخشی از نام action فعلی‌اند و در کلاینت باید همان مقدار ارسال شود.
+
+### مسیرهای عمومی وب
+
+| endpoint | ورودی | نتیجه |
+|---|---|---|
+| `/index.php` | Telegram update و webhook secret نصب | پردازش پیام/دکمه/پرداخت ربات |
+| `/app/` | Telegram WebView | رابط Mini App آمادهٔ build |
+| `/api/verify.php` | init data تلگرام | شناسایی کاربر و token |
+| `/api/miniapp.php` | `actions` در GET یا JSON POST + Bearer | سرویس، کاتالوگ، پروفایل و خرید |
+| `/panel/login.php` | session و فرم ورود | ورود مدیر وب |
+| `/sub/<id_invoice>` | شناسهٔ فاکتور در URL | متن لینک‌های subscription؛ در نبود فاکتور `ERROR!` |
+| `/payment/*.php` | شناسهٔ سفارش و دادهٔ برگشت/وبهوک | verify و سپس تسویهٔ سفارش |
+
+## ۲۲. مرجع شِما و مهاجرت دیتابیس
+
+### مسیر ایجاد و ارتقا
+
+[`db/bootstrap.php`](../db/bootstrap.php) شیء `Schema` را می‌سازد، جدول‌ها را به ترتیب [`db/tables.php`](../db/tables.php) اعمال می‌کند، migrationهای شماره‌دار را اجرا و ایندکس‌های [`db/indexes.php`](../db/indexes.php) را اضافه می‌کند. تعریف هر جدول در `db/tables/<Table>.php` شامل SQL ساخت، ستون‌های الحاقی، seed و گاهی `after` است. `Schema` وجود جدول/ستون/ایندکس را از `information_schema` می‌سنجد و خطای هر مورد را log کرده و به نصب‌کننده منتقل می‌کند.
+
+[`table.php`](../table.php) مسیر قدیمی و بزرگ bootstrap است که هنوز `install.sh` هنگام نصب و بروزرسانی اجرا می‌کند و اکنون `db/bootstrap.php` را نیز فراخوانی می‌کند. wizard وب از `db/bootstrap.php` استفاده می‌کند. تغییر شِما در هر دو مسیر باید بررسی شود.
+
+ستون `zarinpalpayment`، تنظیمات gate زرین‌پال، ردیف‌های درگاه‌های اختصاصی و `Tronado_callback` در شِمای ماژولار موجودند. migration شمارهٔ ۰۱۳ برای سفارش‌های فاقد تکرار، شاخص یکتا می‌سازد؛ اگر شناسه یا پیشوند ۱۹۱ نویسه‌ای تکراری باشد، رکوردها را خودکار دست‌کاری نمی‌کند و رفع داده را به آشتی دستی واگذار می‌کند.
+
+### گروه‌بندی جدول‌ها
+
+| حوزه | جدول‌ها | مالکیت داده |
+|---|---|---|
+| هویت، مدیریت و پشتیبانی | `user`, `admin`, `channels`, `departman`, `support_message`, `help`, `topicid` | کاربر Telegram، مدیر، عضویت، تیکت/پیام و موضوع گزارش |
+| کاتالوگ و سرویس | `marzban_panel`, `product`, `category`, `invoice`, `service_other`, `manualsell`, `cancel_service` | پنل، محصول، فاکتور، تاریخچه و فروش دستی |
+| پرداخت و رشد | `Payment_report`, `PaySetting`, `card_number`, `Discount`, `DiscountSell`, `Giftcodeconsumed`, `affiliates`, `wheel_list`, `reagent_report`, `Requestagent` | تراکنش، درگاه، کارت، تخفیف، دعوت، قرعه‌کشی و درخواست agent |
+| تنظیمات و زیرسامانه | `setting`, `shopSetting`, `botsaz`, `app`, `logs_api` | feature flag، متن/کیبورد، ربات‌های ساخته‌شده، Mini App و لاگ API |
+| ثبت callback | `Tronado_callback` | حذف تکرار IPN ترونادو در نصب تازه و نصب قدیمی |
+
+رابطهٔ اصلی فروش `user.id` ← `invoice.id_user` و `Payment_report.id_user` است. `invoice.Service_location` به نام/شناسهٔ مکان پنل متکی است و محصول از `product.Location` به پنل یا `/all` وصل می‌شود. `Payment_report.id_order` شناسهٔ تسویه و `id_invoice` آن context عملیات خرید/تمدید/شارژ را نگه می‌دارد؛ این فیلد در همهٔ مسیرها یک کلید خارجی ساده نیست. schema فعلی عمدتاً از `VARCHAR` برای برخی قیمت‌ها و زمان‌ها استفاده می‌کند؛ مقایسهٔ عددی/زمانی را باید مطابق تبدیل‌های کد انجام داد.
+
+### migrationها و ایندکس‌ها
+
+| نسخه | هدف |
+|---|---|
+| 001 و 009 | نرمال‌سازی کلیدهای روش تمدید و ساخت username پنل |
+| 002 | پر کردن `code_panel`های خالی |
+| 003 و 004 | اصلاح charset کارت و نوع چند ستون |
+| 005 | بازسازی پیش‌فرض min/max پرداخت بر اساس نوع agent |
+| 006، 010 و 011 | حذف فیلدهای قدیمی کاربر/تنظیمات و انتقال وضعیت دکمه‌ها به `keyboardmain` |
+| 007 | حذف `departman` تکراری پیش از ایندکس یکتا |
+| 008 | افزودن تنظیمات پیش‌فرض AbanGateway به نصب‌های موجود |
+| 012 | آماده‌سازی اعتبارنامه‌های مدیر پنل |
+
+ایندکس‌های کاربردی روی شناسهٔ کاربر/وضعیت/نام سرویس در `invoice`، شناسهٔ کاربر/سفارش/وضعیت در `Payment_report`، code پنل و محصول و شناسهٔ فروش دستی تعریف شده‌اند. [`db/indexes.php`](../db/indexes.php) مرجع نام و ستون دقیق ایندکس‌هاست.
+
+## ۲۳. نصب، راه‌اندازی و ارتقا
+
+### نصب روی سرور اختصاصی با shell
+
+`install.sh` برای Ubuntu 22.04/24.04 و اجرای root طراحی شده است. منوی آن نصب، بروزرسانی، حذف، مهاجرت Free به Pro، تمدید SSL و راهنما را دارد؛ دستور CLI `mirza install|update|remove|migrate|renew` نیز در README توضیح داده شده است. پیش‌نیازهای runtime شامل PHP 8.2، Apache، MySQL/MariaDB، HTTPS و Composer است. `composer.json` وابستگی‌های Endroid QR و PhpSpreadsheet را تعریف می‌کند. اسکریپت shell فایل‌ها، دیتابیس، SSL، webhook، cron و وابستگی‌ها را آماده می‌کند و برای شِما از `table.php` استفاده می‌کند.
+
+### نصب وب روی هاست بدون دسترسی shell
+
+[`install/index.php`](../install/index.php) wizard مرحله‌ای است. ترتیب منطقی آن: بررسی PHP و افزونه‌ها، وب‌سرور/SSL و فایل‌ها؛ تست دیتابیس؛ بررسی token با `getMe`؛ نوشتن `config.php`؛ bootstrap جداول از `db/bootstrap.php`؛ نمایش یک فرمان cron dispatcher و اجرای probe؛ حذف پوشهٔ نصب؛ ثبت Telegram webhook و پیام آغاز به مدیر. اگر `shell_exec` قابل استفاده نباشد، پایان نصب به probe موفق cron و تأیید مورد لازم وابسته است.
+
+تا وقتی `install/index.php` وجود دارد، قواعد `.htaccess` درخواست‌های خارج از پوشهٔ نصب را رد می‌کنند. wizard برای نصب پیکربندی‌شده، احراز هویت session می‌خواهد و در پایان تلاش می‌کند پوشهٔ `install/` را حذف کند. اگر حذف نشود، webhook را غیرفعال می‌کند و دستور حذف دستی و فعال‌سازی مجدد ارائه می‌دهد. این رفتار بخشی از چرخهٔ نصب است؛ فایل نصب نباید بعد از راه‌اندازی روی وب باقی بماند.
+
+### پیکربندی و کنترل پس از نصب
+
+`config.php` متغیرهای اتصال DB، `$APIKEY`، شناسهٔ مدیر، دامنه، نام ربات و timeout درخواست را نگه می‌دارد. `setting` و `shopSetting` رفتار فروشگاه و `PaySetting` وضعیت، بازهٔ مبلغ، کارمزد و کلید درگاه‌ها را نگه می‌دارند. در آغاز باید اتصال DB، HTTPS، `getWebhookInfo` تلگرام، یک ساخت سرویس آزمایشی، cron دقیقه‌ای، `storage/cron_status.json`، پرداخت آزمایشی و restore backup کنترل شود. مقادیر محرمانه نباید در مستند یا log عمومی کپی شوند.
+
+## ۲۴. عملیات، عیب‌یابی و بازیابی
+
+| نشانه | مسیر بررسی |
+|---|---|
+| پیام ربات پاسخ نمی‌دهد | وجود `install/`، وضعیت webhook، secret، `error_log` و دسترسی Telegram API |
+| Mini App ورود نمی‌کند | اعتبار و تازگی `initData` در `api/verify.php`، Bearer token کاربر و status کاربر |
+| محصول دیده نمی‌شود | `marzban_panel.status`، `product.Location`، agent، `hide_panel`، دسته، زمان و `one_buy_status` |
+| پول پرداخت شده ولی سرویس تحویل نشده | `Payment_report` بر اساس `id_order`، وضعیت `paid`، log callback و نتیجهٔ `DirectPayment`/`ManagePanel`؛ قبل از اجرای دستی، وجود invoice و سرویس بیرونی بررسی شود |
+| اعلان یا انقضا اجرا نمی‌شود | crontab تک‌خطی dispatcher، `.run.lock`، `storage/cron_status.json`، تنظیمات `setting.cron_status` و log هر job |
+| لینک اشتراک خالی است | شناسهٔ `/sub/`، فاکتور متناظر، پنل و خروجی `DataUser().links` |
+| پنل وب ورود نمی‌دهد | `admin`، session، CSRF، rate limit IP و log خطا |
+
+`cronbot/backupbot.php` archive را با `ZipArchive`، ابزار `zip` یا `PharData` می‌سازد و برای دادهٔ DB از dump استفاده می‌کند. backup بدون آزمون restore تضمین بازیابی نیست. هنگام خطای callback پس از claim شدن `paid`، تکرار همان callback لزوماً `DirectPayment` را دوباره اجرا نمی‌کند؛ باید وضعیت واقعی سرویس و فاکتور دستی آشتی داده شود. لاگ و فایل‌های وضعیت runtime زیر `storage/` و پوشه‌های cron نگهداری می‌شوند و از وب باید بسته باشند.
+
+## ۲۵. انتشار، محدودیت‌ها و مسیر توسعه
+
+[`composer.json`](../composer.json) حداقل PHP 8.2 و دو وابستگی اصلی QR/Spreadsheet را ثبت کرده است. workflow [`release.yml`](../.github/workflows/release.yml) روی tag یا اجرای دستی، PHP 8.2 و افزونه‌های لازم را آماده می‌کند، `composer install --no-dev` می‌زند و ZIP میزبانی را به release پیوست می‌کند. در ZIP، `.git`، workflow، `graphify-out`، `.gitignore` و `install.sh` حذف می‌شوند؛ `vendor/` نصب‌شده داخل بسته می‌ماند. در مخزن، `vendor/` و فایل‌های runtime در `.gitignore` هستند.
+
+کد PHP عمدتاً monolith تابعی است و تست خودکار جامع در این snapshot دیده نمی‌شود. برای تغییر پنل، درگاه، قیمت یا cron باید مسیر UI/handler، DB، callback یا job و اثر آن روی سرویس بیرونی با هم بررسی شوند. دو مسیر `table.php` و `db/bootstrap.php` همچنان نیازمند کنترل سازگاری در هر تغییر شِما هستند. سند قابلیت‌های معرفی‌شده در README را از رفتار قطعی همهٔ نصب‌ها جدا می‌کند؛ فعال بودن هر گزینه به تنظیمات و سرویس بیرونی وابسته است.
+
+## ۲۶. نقشه ارجاع سریع فایل‌ها
 
 | موضوع | مرجع |
 |---|---|
@@ -764,4 +960,4 @@ NoticationsService
 
 Mirza Bot یک monolith PHP با سه رابط کاربری و یک abstraction چندپنلی است. نقطه اتصال تقریباً همه جریان‌های مالی، `Payment_report`، `claimPaymentPaid` و `DirectPayment` است؛ نقطه اتصال همه عملیات VPN نیز `ManagePanel` است. برای تحلیل یا تغییر هر قابلیت، باید هر دو زنجیره هم‌زمان بررسی شوند: **قواعد نمایش/ورودی** و **اعتبارسنجی و اجرای سمت سرور**.
 
-در مثال مشخص‌شده، نتیجه قطعی snapshot این است: کارت‌به‌کارت به‌طور عمومی به «بیش از یک خرید» محدود نشده؛ gate صفر پرداخت موفق می‌تواند گزینه‌های ابتدایی کیبورد، از جمله کارت‌به‌کارت، را حذف کند، و شرط صریح حداقل دو پرداخت موفق مربوط به IranPay3 است. این تفکیک باید در مستند محصول، تست پذیرش و هر تغییر بعدی کد حفظ شود.
+برای پیگیری هر قابلیت، ابتدا جدول‌ها و action مربوط را در بخش‌های ۲۱ و ۲۲ پیدا کنید؛ سپس مسیر ورودی، منطق پرداخت/سرویس و jobهای مرتبط را با هم بخوانید. خروجی Graphify مسیر شروع است و قرارداد نهایی از کد و تنظیمات نصب به دست می‌آید.

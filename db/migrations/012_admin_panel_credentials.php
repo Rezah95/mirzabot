@@ -9,9 +9,7 @@ return static function (PDO $pdo, Schema $schema): void {
     foreach ($admins as $admin) {
         $password = (string) $admin['password'];
         $isHashed = str_starts_with($password, '$2') || str_starts_with($password, '$argon2');
-        if ($admin['username'] === 'root') {
-            $statement->execute([$admin['id_admin'], password_hash(bin2hex(random_bytes(16)), PASSWORD_BCRYPT), $admin['id_admin']]);
-        } elseif (!$isHashed) {
+        if (!$isHashed) {
             $statement->execute([$admin['username'], password_hash($password, PASSWORD_BCRYPT), $admin['id_admin']]);
         }
     }

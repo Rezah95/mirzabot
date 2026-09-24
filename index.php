@@ -8,6 +8,7 @@ require_once 'config.php';
 require_once 'botapi.php';
 require_once 'jdf.php';
 require_once 'function.php';
+require_once 'payment/tronado_lib.php';
 mirzaEnsureInstallerRemoved();
 require_once 'keyboard.php';
 require_once 'vendor/autoload.php';
@@ -4643,7 +4644,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     update("user", "Processing_value", $balancelast, "id", $from_id);
     sendmessage($from_id, $textbotlang['users']['Balance']['selectPayment'], $step_payment, 'HTML');
     step('get_step_payment', $from_id);
-} elseif ($user['step'] == "get_step_payment" && in_array($datain, ["cart_to_offline", "aqayepardakht", "zarinpal", "variza", "plisio", "nowpayment", "iranpay1", "iranpay2", "iranpay4", "iranpay3", "digitaltron", "startelegrams"])) {
+} elseif ($user['step'] == "get_step_payment" && in_array($datain, ["cart_to_offline", "aqayepardakht", "zarinpal", "variza", "plisio", "nowpayment", "iranpay1", "iranpay2", "iranpay4", "iranpay3", "digitaltron", "startelegrams", "tronadopay", "tetraminatorpay", "uniquepay"])) {
     if ($datain == "cart_to_offline") {
         $mainbalance = select("PaySetting", "ValuePay", "NamePay", "minbalancecart", "select")['ValuePay'];
         $maxbalance = select("PaySetting", "ValuePay", "NamePay", "maxbalancecart", "select")['ValuePay'];
@@ -4789,11 +4790,51 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         }
         $message_id = sendmessage($from_id, $textnowpayments, $paymentkeyboard, 'HTML');
         updatePaymentMessageId($message_id, $randomString);
+} elseif ($datain === 'tronadopay') {
+    if (!tronadoConfigured()) {
+        sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
+        return;
+    }
+    $amount = (int) $user['Processing_value'];
+    $minimum = max(1, (int) tronadoSetting('tronado_min', '20000'));
+    $maximum = (int) tronadoSetting('tronado_max', '1000000');
+    if ($amount < $minimum || $amount > $maximum || $maximum < $minimum) {
+        sendmessage($from_id, strtr($textbotlang['users']['Balance']['depositRange'], [
+            '{mainbalance}' => number_format($minimum), '{maxbalance}' => number_format($maximum),
+        ]), null, 'HTML');
+        return;
+    }
+    $orderId = bin2hex(random_bytes(5));
+    $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
+    $statement = $pdo->prepare('INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)');
+    $statement->execute([$from_id, $orderId, date('Y/m/d H:i:s'), $amount, 'Unpaid', 'Tronado', $invoice]);
+    try {
+        $created = tronadoCreateOrder($orderId, $amount, $domainhosts);
+        $orderMetadata = json_encode([
+            'token' => $created['token'],
+            'tron_amount' => $created['tron_amount'],
+            'tron_price_toman' => $created['tron_price_toman'],
+            'wallet' => tronadoSetting('tronado_wallet_address'),
+            'wage_from_business_percentage' => 100,
+            'estimated_toman_amount' => $created['estimated_toman_amount'],
+        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        update('Payment_report', 'dec_not_confirmed', $orderMetadata, 'id_order', $orderId);
+    } catch (Throwable $error) {
+        update('Payment_report', 'payment_Status', 'reject', 'id_order', $orderId);
+        error_log('Tronado order creation failed: ' . $error->getMessage());
+        sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
+        step('home', $from_id);
+        return;
+    }
+    $paymentKeyboard = json_encode(['inline_keyboard' => [[['text' => $textbotlang['users']['Balance']['payments'], 'url' => $created['payment_url']]]]]);
+    $message = sprintf($textbotlang['users']['Balance']['transactionCreated2'], $orderId, number_format($amount));
+    $paymentMessage = sendmessage($from_id, $message, $paymentKeyboard, 'HTML');
+    updatePaymentMessageId($paymentMessage, $orderId);
 /* TETRA_PAY_START */
 } elseif ($datain == "tetraminatorpay") {
     if (!function_exists('createPayTetraminator')) { sendmessage($from_id, "درگاه در دسترس نیست.", null, 'HTML'); return; }
-    $mainbalance = (int) tetra_setting('tetraminator_min', '50000');
-    $maxbalance  = (int) tetra_setting('tetraminator_max', '100000000');
+    $mainbalance = max(50000, (int) tetra_setting('tetraminator_min', '50000'));
+    $maxbalance  = min(10000000, (int) tetra_setting('tetraminator_max', '10000000'));
     if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
         $msgErr = isset($textbotlang['extracted']['index_php']['depositAmountRange']) ? strtr($textbotlang['extracted']['index_php']['depositAmountRange'], ['{mainbalance}' => number_format($mainbalance), '{maxbalance}' => number_format($maxbalance)]) : "مبلغ باید بین ".number_format($mainbalance)." و ".number_format($maxbalance)." تومان باشد.";
         sendmessage($from_id, $msgErr, null, 'HTML'); return;
@@ -4803,7 +4844,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
 
     $randomString = bin2hex(random_bytes(5));
     $tm_res = createPayTetraminator($user['Processing_value'], $randomString);
-    if (empty($tm_res['success']) || empty($tm_res['data']['payment_url'])) {
+    if (empty($tm_res['success']) || empty($tm_res['data']['payment_url']) || empty($tm_res['data']['pay_id'])) {
         sendmessage($from_id, (isset($textbotlang['users']['Balance']['errorLinkPayment']) ? $textbotlang['users']['Balance']['errorLinkPayment'] : "خطا در ایجاد فاکتور."), $keyboard, 'HTML');
         step('home', $from_id);
         if (!empty($setting['Channel_Report'])) { telegram('sendmessage', ['chat_id' => $setting['Channel_Report'], 'text' => "🔴 <b>Tetraminator Error:</b>\n<code>" . print_r($tm_res['detail'] ?? $tm_res, true) . "</code>", 'parse_mode' => "HTML"]); }
@@ -4816,9 +4857,8 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $u_status = "Unpaid";
     $u_method = "Tetraminator";
 
-    $stmt = $connect->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
-    $stmt->bind_param("sssisss", $from_id, $randomString, $dateacc, $u_val, $u_status, $u_method, $invoice);
-    $stmt->execute();
+    $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
+    $stmt->execute([$from_id, $randomString, $dateacc, $u_val, $u_status, $u_method, $invoice, $tm_res['data']['pay_id']]);
 
     $paymentkeyboard = json_encode(['inline_keyboard' => [[['text' => '💳 پرداخت فاکتور', 'url' => $tm_res['data']['payment_url']]]]]);
     $price_format = number_format($user['Processing_value'], 0);
@@ -4829,7 +4869,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
 /* UNIQUEPAY_PAY_START */
 } elseif ($datain == "uniquepay") {
     if (!function_exists('createPayUniquePay')) { sendmessage($from_id, "درگاه یونیک‌پی در دسترس نیست.", null, 'HTML'); return; }
-    $mainbalance = (int) uniquepay_setting('minbalanceuniquepay', '20000');
+    $mainbalance = max(50001, (int) uniquepay_setting('minbalanceuniquepay', '20000'));
     $maxbalance  = (int) uniquepay_setting('maxbalanceuniquepay', '1000000');
     if ($user['Processing_value'] < $mainbalance || $user['Processing_value'] > $maxbalance) {
         $msgErr = isset($textbotlang['extracted']['index_php']['depositAmountRange']) ? strtr($textbotlang['extracted']['index_php']['depositAmountRange'], ['{mainbalance}' => number_format($mainbalance), '{maxbalance}' => number_format($maxbalance)]) : "مبلغ باید بین " . number_format($mainbalance) . " و " . number_format($maxbalance) . " تومان باشد.";
@@ -5488,10 +5528,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $dateacc = date('Y/m/d H:i:s');
         $randomString = bin2hex(random_bytes(5));
         $invoice = "{$user['Processing_value_tow']}|{$user['Processing_value_one']}";
-        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice) VALUES (?,?,?,?,?,?,?)");
+        $stmt = $pdo->prepare("INSERT INTO Payment_report (id_user,id_order,time,price,payment_Status,Payment_Method,id_invoice,dec_not_confirmed) VALUES (?,?,?,?,?,?,?,?)");
         $payment_Status = "Unpaid";
         $Payment_Method = "Star Telegram";
-        $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice]);
+        $stmt->execute([$from_id, $randomString, $dateacc, $user['Processing_value'], $payment_Status, $Payment_Method, $invoice, json_encode(['star_amount' => $starAmount])]);
         $affilnecurrency = select("PaySetting", "*", "NamePay", "walletaddress", "select")['ValuePay'];
         $straCreateLink = telegram('createInvoiceLink', [
             'title' => "Buy for Price {$user['Processing_value']}",
@@ -6627,32 +6667,62 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         ]);
     }
 } elseif (isset($update['pre_checkout_query'])) {
-    $userid = $update['pre_checkout_query']['from']['id'];
-    $id_order = $update['pre_checkout_query']['invoice_payload'];
+    $preCheckout = $update['pre_checkout_query'];
+    $userid = $preCheckout['from']['id'];
+    $id_order = $preCheckout['invoice_payload'];
     $Payment_report = select("Payment_report", "*", "id_order", $id_order, "select");
-    if ($Payment_report == false) {
-        return;
-    } else {
-        telegram('answerPreCheckoutQuery', [
-            'pre_checkout_query_id' => $update['pre_checkout_query']['id'],
-            'ok' => true,
-        ]);
+    $starOrder = $Payment_report ? json_decode((string) $Payment_report['dec_not_confirmed'], true) : null;
+    $validStarOrder = $Payment_report
+        && $Payment_report['Payment_Method'] === 'Star Telegram'
+        && $Payment_report['payment_Status'] === 'Unpaid'
+        && (string) $Payment_report['id_user'] === (string) $userid
+        && ($preCheckout['currency'] ?? '') === 'XTR'
+        && isset($starOrder['star_amount'])
+        && (int) $starOrder['star_amount'] === (int) ($preCheckout['total_amount'] ?? -1);
+    $preCheckoutAnswer = [
+        'pre_checkout_query_id' => $preCheckout['id'],
+        'ok' => $validStarOrder,
+    ];
+    if (!$validStarOrder) {
+        $preCheckoutAnswer['error_message'] = 'فاکتور معتبر نیست؛ لطفاً فاکتور جدید بسازید.';
     }
-    if ($Payment_report['payment_Status'] == "paid") {
+    telegram('answerPreCheckoutQuery', $preCheckoutAnswer);
+    if (!$validStarOrder) {
         return;
     }
-    update("Payment_report", "dec_not_confirmed", json_encode($update['pre_checkout_query']), "id_order", $Payment_report['id_order']);
+    $starOrder['pre_checkout'] = $preCheckout;
+    update("Payment_report", "dec_not_confirmed", json_encode($starOrder), "id_order", $Payment_report['id_order']);
 } elseif (isset($update['message']['successful_payment'])) {
-    $id_order = $update['message']['successful_payment']['invoice_payload'];
+    $successfulPayment = $update['message']['successful_payment'];
+    $id_order = $successfulPayment['invoice_payload'];
     $Payment_report = select("Payment_report", "*", "id_order", $id_order, "select");
     if ($Payment_report == false) {
         return;
     }
-    if ($Payment_report['payment_Status'] == "paid") {
+    $starOrder = json_decode((string) $Payment_report['dec_not_confirmed'], true);
+    if ($Payment_report['Payment_Method'] !== 'Star Telegram'
+        || (string) $Payment_report['id_user'] !== (string) ($update['message']['from']['id'] ?? '')
+        || ($successfulPayment['currency'] ?? '') !== 'XTR'
+        || !isset($starOrder['star_amount'])
+        || (int) $starOrder['star_amount'] !== (int) ($successfulPayment['total_amount'] ?? -1)
+        || empty($successfulPayment['telegram_payment_charge_id'])) {
+        error_log('Telegram Stars payment does not match order ' . $id_order);
         return;
     }
-    update("Payment_report", "dec_not_confirmed", $Payment_report['dec_not_confirmed'] . json_encode($update['message']['successful_payment']), "id_order", $Payment_report['id_order']);
-    DirectPayment($Payment_report['id_order']);
+    if (!claimPaymentPaid($Payment_report['id_order'])) {
+        return;
+    }
+    $starOrder['successful_payment'] = $successfulPayment;
+    update("Payment_report", "dec_not_confirmed", json_encode($starOrder), "id_order", $Payment_report['id_order']);
+    try {
+        if (DirectPayment($Payment_report['id_order']) === false) {
+            return;
+        }
+    } catch (Throwable $deliveryError) {
+        markPaymentFulfillment($id_order, 'failed');
+        error_log('Telegram Stars delivery failed for ' . $id_order . ': ' . $deliveryError->getMessage());
+        return;
+    }
     $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackstar", "select")['ValuePay'];
     $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
     if ($pricecashback != "0") {
@@ -6666,11 +6736,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         telegram('sendmessage', [
             'chat_id' => $setting['Channel_Report'],
             'message_thread_id' => $paymentreports,
-            'text' => sprintf($textbotlang['Admin']['reportgroup']['newPaymentStar'], $Balance_id['username'], $Balance_id['id'], $Payment_report['price'], $update['pre_checkout_query']['total_amount']),
+            'text' => sprintf($textbotlang['Admin']['reportgroup']['newPaymentStar'], $Balance_id['username'], $Balance_id['id'], $Payment_report['price'], $successfulPayment['total_amount']),
             'parse_mode' => "HTML"
         ]);
     }
-    update("Payment_report", "payment_Status", "paid", "id_order", $Payment_report['id_order']);
 } elseif (preg_match('/extends_(\w+)_(.*)/', $datain, $dataget)) {
     $username = $dataget[1];
     $location = select("marzban_panel", "*", "code_panel", $user['Processing_value_four'], "select");
@@ -6711,7 +6780,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         ':code_product' => $codeproduct,
     ]);
     $prodcut = $stmt->fetch(PDO::FETCH_ASSOC);
-    if ($prodcut == false) {
+    if ($prodcut == false || $prodcut['one_buy_status'] == '1') {
         sendmessage($from_id, $textbotlang['users']['erroroccurred'], $keyboard, 'html');
         return;
     }
@@ -6734,6 +6803,10 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         ':code_product' => $codeproduct,
     ]);
     $prodcut = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$prodcut || $prodcut['one_buy_status'] == '1') {
+        sendmessage($from_id, $textbotlang['users']['erroroccurred'], $keyboard, 'html');
+        return;
+    }
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
     $DataUserOut = $ManagePanel->DataUser($marzban_list_get['name_panel'], $usernamePanelExtends);
     if ($DataUserOut['status'] == "Unsuccessful") {
