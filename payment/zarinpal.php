@@ -8,21 +8,25 @@ require_once __DIR__ . '/../function.php';
 require_once __DIR__ . '/../keyboard.php';
 require_once __DIR__ . '/../panels.php';
 require __DIR__ . '/../vendor/autoload.php';
-use Endroid\QrCode\Builder\Builder;
-use Endroid\QrCode\Encoding\Encoding;
-use Endroid\QrCode\ErrorCorrectionLevel;
-use Endroid\QrCode\Label\Font\OpenSans;
-use Endroid\QrCode\Label\LabelAlignment;
-use Endroid\QrCode\RoundBlockSizeMode;
-use Endroid\QrCode\Writer\PngWriter;
 
 $ManagePanel = new ManagePanel();
 
-$Authority = htmlspecialchars($_GET['Authority'], ENT_QUOTES, 'UTF-8');
-$StatusPayment = htmlspecialchars($_GET['Status'], ENT_QUOTES, 'UTF-8');
+$Authority = htmlspecialchars($_GET['Authority'] ?? '', ENT_QUOTES, 'UTF-8');
+$StatusPayment = htmlspecialchars($_GET['Status'] ?? '', ENT_QUOTES, 'UTF-8');
+if ($Authority === '') {
+    http_response_code(400);
+    exit('invalid request');
+}
 $setting = select("setting", "*");
 $PaySetting = select("PaySetting", "ValuePay", "NamePay", "merchant_zarinpal","select")['ValuePay'];
 $Payment_reports = select("Payment_report", "*", "dec_not_confirmed", $Authority,"select");
+if (!is_array($Payment_reports)) {
+    http_response_code(404);
+    exit('order not found');
+}
+if ($Payment_reports['payment_Status'] == "expire") {
+    exit('order expired');
+}
 $price = $Payment_reports['price'];
 $invoice_id = $Payment_reports['id_order'];
 // verify Transaction
@@ -54,16 +58,17 @@ curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode([
 $response = curl_exec($curl);
 curl_close($curl);
 $response = json_decode($response,true);
-       $payment_status = $textbotlang['paymentGateway']['zarinpalErrors'][$response['errors']['code']];
- if($response['data']['message'] == "Verified" || $response['data']['message'] == "Paid"){
+$payment_status = $textbotlang['paymentGateway']['zarinpalErrors'][$response['errors']['code'] ?? ''] ?? '';
+ if(($response['data']['message'] ?? '') == "Verified" || ($response['data']['message'] ?? '') == "Paid"){
     $payment_status = $textbotlang['paymentGateway']['statusSuccess'];
     $dec_payment_status = $textbotlang['paymentGateway']['descThanks'];
     $Payment_report = select("Payment_report", "*", "id_order", $invoice_id,"select");
     if(claimPaymentPaid($invoice_id)){
     $textbotlang = languagechange();
     try {
-        DirectPayment($invoice_id,"../images.jpg");
+        if (DirectPayment($invoice_id,"../images.jpg") === false) return;
     } catch (Throwable $directPaymentError) {
+        markPaymentFulfillment($invoice_id, 'failed');
         error_log("DirectPayment failed for order {$invoice_id}: " . $directPaymentError->getMessage());
         return;
     }
@@ -71,8 +76,7 @@ $response = json_decode($response,true);
     $Balance_id = select("user","*","id",$Payment_report['id_user'],"select");
     if($pricecashback != "0"){
         $result = ($Payment_report['price'] * $pricecashback) / 100;
-        $Balance_confrim = intval($Balance_id['Balance']) +$result;
-        update("user","Balance",$Balance_confrim, "id",$Balance_id['id']); 
+        addBalance($Balance_id['id'], $result);
         $pricecashback =  number_format($pricecashback);
         $text_report = sprintf($textbotlang['paymentGateway']['giftReport'], $result);
         sendmessage($Balance_id['id'], $text_report, null, 'HTML');
@@ -92,7 +96,7 @@ $text_report = sprintf($textbotlang['paymentGateway']['reportZarinpal'], $Paymen
     }
 }
 }else {
-        $payment_status = $textbotlang['paymentGateway']['zarinpalResultCodes'][$response['errors']['code']];
+        $payment_status = $textbotlang['paymentGateway']['zarinpalResultCodes'][$response['errors']['code'] ?? ''] ?? $textbotlang['paymentGateway']['statusFailed'];
      $dec_payment_status = "";
 }
 }

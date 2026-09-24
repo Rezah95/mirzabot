@@ -70,12 +70,15 @@ if (!function_exists('createPayUniquePay')) {
         }
 
         $data = $result['data'];
-        if (!empty($data['status']) && (int) ($data['code'] ?? 0) === 200 && !empty($data['invoice']['paymentLink'])) {
+        if (($result['http_code'] ?? 0) >= 200 && ($result['http_code'] ?? 0) < 300
+            && ($data['status'] ?? null) === true && (int) ($data['code'] ?? 0) === 200
+            && (string) ($data['hashId'] ?? '') === (string) $order_id
+            && !empty($data['paymentLink']) && !empty($data['refId'])) {
             return [
                 'success' => true,
                 'data' => [
-                    'payment_url' => $data['invoice']['paymentLink'],
-                    'ref_id' => $data['invoice']['refId'] ?? null,
+                    'payment_url' => $data['paymentLink'],
+                    'ref_id' => $data['refId'],
                     'raw' => $data,
                 ],
             ];
@@ -94,10 +97,14 @@ if (!function_exists('checkPayUniquePay')) {
         }
 
         $data = $result['data'];
-        if (!empty($data['status']) && (int) ($data['code'] ?? 0) === 200 && isset($data['invoice'])) {
+        if (($result['http_code'] ?? 0) >= 200 && ($result['http_code'] ?? 0) < 300
+            && ($data['status'] ?? null) === true && (int) ($data['code'] ?? 0) === 200
+            && isset($data['invoice']) && is_array($data['invoice'])) {
             return [
                 'success' => true,
-                'paid' => !empty($data['invoice']['isPaid']),
+                'paid' => ($data['invoice']['isPaid'] ?? null) === true
+                    && ($data['invoice']['isVerified'] ?? null) === true
+                    && ($data['invoice']['status'] ?? null) === 'paid',
                 'invoice' => $data['invoice'],
                 'data' => $data,
             ];

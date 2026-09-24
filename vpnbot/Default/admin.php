@@ -80,7 +80,9 @@ if ($text == "📞 تنظیم نام کاربری پشتیبانی") {
             ]
         ]
     ]);
-    $Payment_report = select("Payment_report", "*", "id_order", $order_id, "select");
+    $stmt = $pdo->prepare("SELECT * FROM Payment_report WHERE id_order = ? AND bottype = ?");
+    $stmt->execute([$order_id, $ApiToken]);
+    $Payment_report = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($Payment_report == false) {
         telegram('answerCallbackQuery', array(
             'callback_query_id' => $callback_query_id,
@@ -132,7 +134,9 @@ if ($text == "📞 تنظیم نام کاربری پشتیبانی") {
     update("user", "Processing_value_four", "none", "id", $Balance_id['id']);
 } elseif (preg_match('/reject_pay_(\w+)/', $datain, $datagetr)) {
     $id_order = $datagetr[1];
-    $Payment_report = select("Payment_report", "*", "id_order", $id_order, "select");
+    $stmt = $pdo->prepare("SELECT * FROM Payment_report WHERE id_order = ? AND bottype = ?");
+    $stmt->execute([$id_order, $ApiToken]);
+    $Payment_report = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($Payment_report == false) {
         telegram('answerCallbackQuery', array(
             'callback_query_id' => $callback_query_id,
@@ -706,6 +710,11 @@ if ($text == "📞 تنظیم نام کاربری پشتیبانی") {
     $textupdate = "📍 مدیر عزیز  برای آپدیت گزینه زیر را انتخاب نمایید";
     sendmessage($from_id, $textupdate, $Response, 'HTML');
 } elseif ($datain == "update") {
+    if (!isShellExecAvailable()) {
+        sendmessage($from_id, "❌ آپدیت روی این سرور امکان‌پذیر نیست.\n\nتابع shell_exec غیرفعال است و فایل‌های نسخه جدید بدون آن کپی نمی‌شوند. برای آپدیت باید ربات روی سروری با دسترسی shell_exec اجرا شود.", null, 'HTML');
+        return;
+    }
+
     $source = dirname(__DIR__) . "/update";
     $getversionnow = file_get_contents($source . '/version');
 

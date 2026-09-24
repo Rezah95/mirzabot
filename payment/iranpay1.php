@@ -8,22 +8,26 @@ require_once __DIR__ . '/../function.php';
 require_once __DIR__ . '/../keyboard.php';
 require_once __DIR__ . '/../panels.php';
 require __DIR__ . '/../vendor/autoload.php';
-use Endroid\QrCode\Builder\Builder;
-use Endroid\QrCode\Encoding\Encoding;
-use Endroid\QrCode\ErrorCorrectionLevel;
-use Endroid\QrCode\Label\Font\OpenSans;
-use Endroid\QrCode\Label\LabelAlignment;
-use Endroid\QrCode\RoundBlockSizeMode;
-use Endroid\QrCode\Writer\PngWriter;
 
 $ManagePanel = new ManagePanel();
 $data = json_decode(file_get_contents("php://input"), true);
+if (!is_array($data) || !isset($data['hashid'], $data['authority'], $data['status'])) {
+    http_response_code(400);
+    exit('invalid request');
+}
 $hashid = $data['hashid'];
 $authority = $data['authority'];
 $StatusPayment = $data['status'];
 $setting = select("setting", "*");
 $PaySetting = select("PaySetting", "*", "NamePay", "marchent_floypay", "select")['ValuePay'];
 $Payment_reports = select("Payment_report", "*", "id_order", $hashid, "select");
+if (!is_array($Payment_reports)) {
+    http_response_code(404);
+    exit('order not found');
+}
+if ($Payment_reports['payment_Status'] == "expire") {
+    exit('order expired');
+}
 $invoice_id = $Payment_reports['id_order'];
 $price = $Payment_reports['price'];
 // verify Transaction
@@ -61,8 +65,9 @@ if ($StatusPayment == 100) {
         if (claimPaymentPaid($invoice_id)) {
             $textbotlang = languagechange();
             try {
-                DirectPayment($invoice_id, "../images.jpg");
+                if (DirectPayment($invoice_id, "../images.jpg") === false) return;
             } catch (Throwable $directPaymentError) {
+                markPaymentFulfillment($invoice_id, 'failed');
                 error_log("DirectPayment failed for order {$invoice_id}: " . $directPaymentError->getMessage());
                 return;
             }
@@ -70,8 +75,7 @@ if ($StatusPayment == 100) {
             $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
             if ($pricecashback != "0") {
                 $result = ($Payment_report['price'] * $pricecashback) / 100;
-                $Balance_confrim = intval($Balance_id['Balance']) + $result;
-                update("user", "Balance", $Balance_confrim, "id", $Balance_id['id']);
+                addBalance($Balance_id['id'], $result);
                 $pricecashback = number_format($pricecashback);
                 $text_report = sprintf($textbotlang['paymentGateway']['giftReport'], $result);
                 sendmessage($Balance_id['id'], $text_report, null, 'HTML');

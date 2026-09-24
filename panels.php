@@ -12,6 +12,7 @@ require_once __DIR__ . '/ibsng.php';
 require_once __DIR__ . '/mikrotik.php';
 require_once __DIR__ . '/mirza_agent.php';
 require_once __DIR__ . '/Rebecca.php';
+require_once __DIR__ . '/bulk_audience.php';
 
 class ManagePanel
 {
@@ -85,11 +86,9 @@ class ManagePanel
                     $Output['msg'] = '';
                 }
             } else {
-                if (!preg_match('/^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?((\/[^\s\/]+)+)?$/', $data_Output['subscription_url'])) {
-                    $data_Output['subscription_url'] = $Get_Data_Panel['url_panel'] . "/" . ltrim($data_Output['subscription_url'], "/");
-                }
+                $data_Output['subscription_url'] = absoluteSubscriptionUrl($data_Output['subscription_url'], $Get_Data_Panel['url_panel']);
                 if ($Get_Data_Panel['version_panel'] == "1") {
-                    $out_put_link = outputlink($data_Output['subscription_url']);
+                    $out_put_link = outputlink($data_Output['subscription_url']."/links");
 
                     $links = isBase64($out_put_link)
                         ? base64_decode($out_put_link)
@@ -132,9 +131,7 @@ class ManagePanel
                     $Output['msg'] = '';
                 }
             } else {
-                if (!preg_match('/^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?((\/[^\s\/]+)+)?$/', $data_Output['subscription_url'])) {
-                    $data_Output['subscription_url'] = $Get_Data_Panel['url_panel'] . "/" . ltrim($data_Output['subscription_url'], "/");
-                }
+                $data_Output['subscription_url'] = absoluteSubscriptionUrl($data_Output['subscription_url'], $Get_Data_Panel['url_panel']);
                 $data_Output['links'] = outputlink($data_Output['subscription_url']);
                 if (isBase64($data_Output['links'])) {
                     $data_Output['links'] = base64_decode($data_Output['links']);
@@ -432,9 +429,7 @@ class ManagePanel
                 $Output['msg'] = $data_Output['detail'] ?? 'Unsuccessful';
             } else {
                 $sub_url = $data_Output['subscription_url'];
-                if (!preg_match('/^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?((\/[^\s\/]+)+)?$/', $sub_url)) {
-                    $sub_url = $Get_Data_Panel['url_panel'] . "/" . ltrim($sub_url, "/");
-                }
+                $sub_url = absoluteSubscriptionUrl($sub_url, $Get_Data_Panel['url_panel']);
                 if ($invoice != false) {
                     $sub_url = "https://$domainhosts/sub/" . $invoice['id_invoice'];
                 }
@@ -446,6 +441,9 @@ class ManagePanel
         } else {
             $Output['status'] = 'Unsuccessful';
             $Output['msg'] = 'Panel Not Found';
+        }
+        if (($Output['status'] ?? null) === 'successful' && isset($Data_Config['expire']) && is_numeric($Data_Config['expire'])) {
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = ? WHERE username = ? AND Service_location = ?', [(int) $Data_Config['expire'], $usernameC, $name_panel]);
         }
         return $Output;
     }
@@ -485,12 +483,13 @@ class ManagePanel
                         'msg' => is_array($UsernameData) ? ($UsernameData['detail'] ?? 'Unsuccessful') : 'Unsuccessful'
                     );
                 }
-                if (!preg_match('/^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?((\/[^\s\/]+)+)?$/', $UsernameData['subscription_url'] ?? '')) {
-                    $UsernameData['subscription_url'] = $Get_Data_Panel['url_panel'] . "/" . ltrim($UsernameData['subscription_url'] ?? '', "/");
-                }
+                $UsernameData['subscription_url'] = absoluteSubscriptionUrl($UsernameData['subscription_url'] ?? '', $Get_Data_Panel['url_panel']);
                 if ($Get_Data_Panel['version_panel'] == "1") {
                     $UsernameData['expire'] = strtotime($UsernameData['expire'] ?? '');
-                    $links = $UsernameData['links'] ?? base64_decode(outputlink($UsernameData['subscription_url']));
+                    $links = $UsernameData['links'] ?? outputlink($UsernameData['subscription_url']."/links");
+                    if(isBase64($links)) {
+                        $links = base64_decode($links);
+                    }
                     $UsernameData['links'] = is_array($links) ? $links : explode("\n", (string) $links);
                     $sublist_update = get_list_update($name_panel, $username);
                     if (!empty($sublist_update['error'])) {
@@ -562,9 +561,7 @@ class ManagePanel
                         'msg' => "Unsuccessful"
                     );
                 } else {
-                    if (!preg_match('/^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?((\/[^\s\/]+)+)?$/', $UsernameData['subscription_url'])) {
-                        $UsernameData['subscription_url'] = $Get_Data_Panel['url_panel'] . "/" . ltrim($UsernameData['subscription_url'], "/");
-                    }
+                    $UsernameData['subscription_url'] = absoluteSubscriptionUrl($UsernameData['subscription_url'], $Get_Data_Panel['url_panel']);
                     $UsernameData['status'] = "active";
                     if (!$UsernameData['enabled']) {
                         $UsernameData['status'] = "disabled";
@@ -795,7 +792,6 @@ class ManagePanel
                 } else {
                     $UsernameData['enable'] = "deactivev";
                 }
-                $subId = $UsernameData2['subId'];
                 $status_user = get_onlineclialireza($Get_Data_Panel['name_panel'], $username);
                 if ((intval($UsernameData['total'])) != 0) {
                     if ((intval($UsernameData['total']) - ($UsernameData['up'] + $UsernameData['down'])) <= 0)
@@ -821,7 +817,6 @@ class ManagePanel
         } elseif ($Get_Data_Panel['type'] == "WGDashboard") {
             $UsernameData = get_userwg($username, $Get_Data_Panel['name_panel']);
             $invoiceinfo = select("invoice", "*", "username", $username, "select");
-            $infoconfig = isset($invoiceinfo['user_info']) ? json_decode($invoiceinfo['user_info'], true) : json_encode(array());
             if (!isset($UsernameData['id'])) {
                 $Output = array(
                     'status' => 'Unsuccessful',
@@ -853,7 +848,7 @@ class ManagePanel
                     $status = "expired";
                 }
                 $data_useage = ($UsernameData['total_data'] * pow(1024, 3)) + ($UsernameData['cumu_data'] * pow(1024, 3));
-                if (($jobvolume['Value'] * pow(1024, 3)) < $data_useage) {
+                if (isset($jobvolume['Value']) && ($jobvolume['Value'] * pow(1024, 3)) < $data_useage) {
                     $status = "limited";
                 }
                 $download_config = downloadconfig($Get_Data_Panel['name_panel'], $UsernameData['id']);
@@ -1040,9 +1035,7 @@ class ManagePanel
                     );
                 } else {
                     $sub_url = $UsernameData['subscription_url'];
-                    if (!preg_match('/^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?((\/[^\s\/]+)+)?$/', $sub_url)) {
-                        $sub_url = $Get_Data_Panel['url_panel'] . "/" . ltrim($sub_url, "/");
-                    }
+                    $sub_url = absoluteSubscriptionUrl($sub_url, $Get_Data_Panel['url_panel']);
                     if ($invoice != false) {
                         $sub_url = "https://$domainhosts/sub/" . $invoice['id_invoice'];
                     }
@@ -1090,9 +1083,7 @@ class ManagePanel
                 );
             } else {
                 $Data_User = $this->DataUser($name_panel, $username);
-                if (!preg_match('/^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?((\/[^\s\/]+)+)?$/', $Data_User['subscription_url'])) {
-                    $Data_User['subscription_url'] = $Get_Data_Panel['url_panel'] . "/" . ltrim($Data_User['subscription_url'], "/");
-                }
+                $Data_User['subscription_url'] = absoluteSubscriptionUrl($Data_User['subscription_url'], $Get_Data_Panel['url_panel']);
                 $Output = array(
                     'status' => 'successful',
                     'configs' => $Data_User['links'],
@@ -1378,10 +1369,11 @@ class ManagePanel
             }
         } elseif ($Get_Data_Panel['type'] == "alireza_single") {
             $UsernameData = removeClientalireza_single($Get_Data_Panel['name_panel'], $username);
-            if (!$UsernameData['success']) {
+            $alirezaBody = is_array($UsernameData) ? json_decode($UsernameData['body'] ?? '', true) : null;
+            if (!empty($UsernameData['error']) || !is_array($alirezaBody) || empty($alirezaBody['success'])) {
                 $Output = array(
                     'status' => 'Unsuccessful',
-                    'msg' => $UsernameData['msg']
+                    'msg' => $UsernameData['error'] ?? ($alirezaBody['msg'] ?? 'delete failed')
                 );
             } else {
                 $Output = array(
@@ -1391,11 +1383,18 @@ class ManagePanel
             }
         } elseif ($Get_Data_Panel['type'] == "hiddify") {
             $data_user = getdatauser($username, $name_panel);
-            removeuserhi($name_panel, $data_user['uuid']);
-            $Output = array(
-                'status' => 'successful',
-                'msg' => ""
-            );
+            if (!is_array($data_user) || empty($data_user['uuid'])) {
+                $Output = array(
+                    'status' => 'Unsuccessful',
+                    'msg' => 'user not found on panel'
+                );
+            } else {
+                removeuserhi($name_panel, $data_user['uuid']);
+                $Output = array(
+                    'status' => 'successful',
+                    'msg' => ""
+                );
+            }
         } elseif ($Get_Data_Panel['type'] == "Manualsale") {
             update("manualsell", "status", "delete", "username", $username);
             $Output = array(
@@ -1430,10 +1429,11 @@ class ManagePanel
             }
         } elseif ($Get_Data_Panel['type'] == "ibsng") {
             $UsernameData = deleteUserIBSng($Get_Data_Panel['name_panel'], $username);
-            if (!$UsernameData['status']) {
+            $ibsngDeleted = $UsernameData === true || (is_array($UsernameData) && !empty($UsernameData['status']));
+            if (!$ibsngDeleted) {
                 $Output = array(
                     'status' => 'Unsuccessful',
-                    'msg' => $UsernameData['msg']
+                    'msg' => is_array($UsernameData) ? ($UsernameData['msg'] ?? 'delete failed') : 'delete failed'
                 );
             } else {
                 $Output = array(
@@ -1509,7 +1509,6 @@ class ManagePanel
     }
     function Modifyuser($username, $name_panel, $config = array())
     {
-        $Output = array();
         $Get_Data_Panel = select("marzban_panel", "*", "name_panel", $name_panel, "select");
         if ($Get_Data_Panel['type'] == "marzban") {
             if ($Get_Data_Panel['version_panel'] == "1") {
@@ -1581,52 +1580,6 @@ class ManagePanel
 
             $modify = updateClient($Get_Data_Panel, $username, $data);
             attach_service($Get_Data_Panel, $username, json_decode($Get_Data_Panel['inbounds']));
-            if (!empty($modify['error'])) {
-                return array(
-                    'status' => false,
-                    'msg' => $modify['error']
-                );
-            } elseif (!empty($modify['status']) && $modify['status'] != 200) {
-                return array(
-                    'status' => false,
-                    'msg' => 'error code : ' . $modify['status']
-                );
-            }
-            $modify = json_decode($modify['body'], true);
-            if (!$modify['success']) {
-                return array(
-                    'status' => false,
-                    'msg' => 'error :' . $modify['msg']
-                );
-            }
-            return array(
-                'status' => true,
-                'data' => $modify
-            );
-        } elseif ($Get_Data_Panel['type'] == "alireza_single") {
-            $clients = get_clinetsalireza($username, $name_panel)[0];
-            $configs = array(
-                'id' => intval($Get_Data_Panel['inboundid']),
-                'settings' => json_encode(
-                    array(
-                        'clients' => array(
-                            array(
-                                "id" => $clients['id'],
-                                "flow" => $clients['flow'],
-                                "email" => $clients['email'],
-                                "totalGB" => $clients['totalGB'],
-                                "expiryTime" => $clients['expiryTime'],
-                                "enable" => true,
-                                "subId" => $clients['subId'],
-                            )
-                        ),
-                        'decryption' => 'none',
-                        'fallbacks' => array(),
-                    )
-                ),
-            );
-            $configs['settings'] = json_encode(array_replace_recursive(json_decode($configs['settings'], true), json_decode($config['settings'], true)));
-            $modify = updateClientalireza($Get_Data_Panel['name_panel'], $username, $configs);
             if (!empty($modify['error'])) {
                 return array(
                     'status' => false,
@@ -2065,7 +2018,6 @@ class ManagePanel
     }
     function extend($Method_extend, $new_limit, $time_day, $username, $code_product, $name_panel)
     {
-        global $textbotlang;
         $panel = select("marzban_panel", "*", "code_panel", $name_panel, "select");
         $product = select("product", "*", "code_product", $code_product, "select");
         $invoice = select("invoice", "*", "username", $username, "select");
@@ -2106,7 +2058,8 @@ class ManagePanel
         }
         update("invoice", 'uuid', null, "username", $username);
         update("invoice", 'Status', "active", "username", $username);
-        if ($Method_extend == $textbotlang['keyboard']['resetVolumeTime']) {
+        $Method_extend = extendMethodKey($Method_extend);
+        if ($Method_extend == "resetVolumeTime") {
             $reset = $this->ResetUserDataUsage($username, $panel['name_panel']);
             if ($reset['status'] == false) {
                 return array(
@@ -2114,12 +2067,12 @@ class ManagePanel
                     'msg' => 'error reset : ' . $reset['msg']
                 );
             }
-        } elseif ($Method_extend == $textbotlang['keyboard']['addTimeVolumeNextMonth']) {
+        } elseif ($Method_extend == "addTimeVolumeNextMonth") {
             $data_limit_new = $data_limit_new_add;
             $time_new = $time_new_add;
-        } elseif ($Method_extend == $textbotlang['keyboard']['resetTimeAddVolume']) {
+        } elseif ($Method_extend == "resetTimeAddVolume") {
             $data_limit_new = $data_limit_new_add;
-        } elseif ($Method_extend == $textbotlang['keyboard']['resetVolumeAddTime']) {
+        } elseif ($Method_extend == "resetVolumeAddTime") {
             $reset = $this->ResetUserDataUsage($username, $panel['name_panel']);
             if ($reset['status'] == false) {
                 return array(
@@ -2128,7 +2081,7 @@ class ManagePanel
                 );
             }
             $time_new = $time_new_add;
-        } elseif ($Method_extend == $textbotlang['keyboard']['addTimeConvertVolume']) {
+        } elseif ($Method_extend == "addTimeConvertVolume") {
             $reset = $this->ResetUserDataUsage($username, $panel['name_panel']);
             if ($reset['status'] == false) {
                 return array(
@@ -2201,10 +2154,12 @@ class ManagePanel
                 }
                 $count += 1;
             }
-            $datam = array(
-                "Job" => $datauser['jobs'][$count],
-            );
-            deletejob($panel['name_panel'], $datam);
+            if (isset($datauser['jobs'][$count])) {
+                $datam = array(
+                    "Job" => $datauser['jobs'][$count],
+                );
+                deletejob($panel['name_panel'], $datam);
+            }
             $count = 0;
             foreach ($datauser['jobs'] as $jobsvolume) {
                 if ($jobsvolume['Field'] == "total_data") {
@@ -2212,10 +2167,12 @@ class ManagePanel
                 }
                 $count += 1;
             }
-            $datam = array(
-                "Job" => $datauser['jobs'][$count],
-            );
-            deletejob($panel['name_panel'], $datam);
+            if (isset($datauser['jobs'][$count])) {
+                $datam = array(
+                    "Job" => $datauser['jobs'][$count],
+                );
+                deletejob($panel['name_panel'], $datam);
+            }
             $time_new = date("Y-m-d H:i:s", $time_new);
             if ($time_day != 0) {
                 setjob($panel['name_panel'], "date", $time_new, $datauser['id']);
@@ -2223,6 +2180,7 @@ class ManagePanel
             if ($new_limit != 0) {
                 setjob($panel['name_panel'], "total_data", $data_limit_new / pow(1024, 3), $datauser['id']);
             }
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = ?, depleted_at = NULL WHERE id_invoice = ?', [strtotime($time_new), $invoice['id_invoice']]);
             return array(
                 'status' => true
             );
@@ -2233,7 +2191,7 @@ class ManagePanel
                 "usage_limit_GB" => $data_limit_new / pow(1024, 3),
                 "start_date" => null
             );
-            if (in_array($Method_extend, [$textbotlang['keyboard']['resetVolumeTime'], $textbotlang['keyboard']['resetVolumeAddTime'], $textbotlang['keyboard']['addTimeConvertVolume']])) {
+            if (in_array($Method_extend, ["resetVolumeTime", "resetVolumeAddTime", "addTimeConvertVolume"], true)) {
                 $data['current_usage_GB'] = "0";
             }
         } elseif ($panel['type'] == "s_ui") {
@@ -2261,6 +2219,8 @@ class ManagePanel
                     'msg' => $extend['msg']
                 );
             }
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = NULL, depleted_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
+            bulkRefreshInvoiceExpiry($pdo, $invoice['id_invoice'], fn() => $this->DataUser($panel['name_panel'], $username));
             return array(
                 'status' => true,
                 'msg' => 'successful'
@@ -2278,10 +2238,13 @@ class ManagePanel
                 'msg' => $extend['msg']
             );
         }
+        bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = NULL, depleted_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
+        bulkRefreshInvoiceExpiry($pdo, $invoice['id_invoice'], fn() => $this->DataUser($panel['name_panel'], $username));
         return $extend;
     }
     function extra_volume($username_account, $code_panel, $limit_volume_new)
     {
+        global $pdo;
         $panel = select("marzban_panel", "*", "code_panel", $code_panel, "select");
         $invoice = select("invoice", "*", "username", $username_account, "select");
         if ($panel == false) {
@@ -2342,7 +2305,6 @@ class ManagePanel
                 ),
             );
         } elseif ($panel['type'] == "hiddify") {
-            $data_limit = ($user_info['data_limit'] / pow(1024, 3)) + $limit_volume_new;
             $datauser = getdatauser($username_account, $panel['name_panel']);
             $data = array(
                 "current_usage_GB" => $datauser['current_usage_GB'],
@@ -2367,6 +2329,7 @@ class ManagePanel
                 $this->ResetUserDataUsage($username_account, $panel['name_panel']);
             }
             $log = setjob($panel['name_panel'], "total_data", $new_limit / pow(1024, 3), $datauser['id']);
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET depleted_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
             return array(
                 'status' => true,
                 'data' => $log
@@ -2395,6 +2358,7 @@ class ManagePanel
                     'msg' => $volume_add['msg']
                 );
             }
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET depleted_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
             return array(
                 'status' => true,
                 'msg' => 'successful'
@@ -2411,10 +2375,12 @@ class ManagePanel
                 'msg' => $extra_volume['msg']
             );
         }
+        bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET depleted_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
         return $extra_volume;
     }
     function extra_time($username_account, $code_panel, $limit_time_new)
     {
+        global $pdo;
         $panel = select("marzban_panel", "*", "code_panel", $code_panel, "select");
         $invoice = select("invoice", "*", "username", $username_account, "select");
         if ($panel == false) {
@@ -2504,6 +2470,7 @@ class ManagePanel
                 deletejob($panel['name_panel'], $datam);
             }
             $log = setjob($panel['name_panel'], "date", date('Y-m-d H:i:s', $new_limit), $datauser['id']);
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = ? WHERE id_invoice = ?', [$new_limit, $invoice['id_invoice']]);
             return array(
                 'status' => true,
                 'data' => $log
@@ -2533,6 +2500,8 @@ class ManagePanel
                     'msg' => $time_add['msg']
                 );
             }
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
+            bulkRefreshInvoiceExpiry($pdo, $invoice['id_invoice'], fn() => $this->DataUser($panel['name_panel'], $username_account));
             return array(
                 'status' => true,
                 'msg' => 'successful'
@@ -2549,6 +2518,8 @@ class ManagePanel
                 'msg' => $extra_time['msg']
             );
         }
+        bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
+        bulkRefreshInvoiceExpiry($pdo, $invoice['id_invoice'], fn() => $this->DataUser($panel['name_panel'], $username_account));
         return $extra_time;
     }
 }

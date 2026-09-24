@@ -2,7 +2,9 @@
 require_once 'function.php';
 require_once 'config.php';
 require_once 'botapi.php';
+require_once __DIR__ . '/db/bootstrap.php';
 global $pdo;
+$textbotlang = languagechange();
 //-----------------------------------------------------------------
 try {
 
@@ -980,153 +982,7 @@ try {
     file_put_contents('error_log', $e->getMessage());
 }
 //----------------------- [ remove requests ] --------------------- //
-try {
-    $result = $pdo->query("SHOW TABLES LIKE 'cancel_service'");
-    $table_exists = ($result->rowCount() > 0);
-
-    if (!$table_exists) {
-        $result = $pdo->query("CREATE TABLE cancel_service (
-        id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        id_user varchar(500)  NOT NULL,
-        username varchar(1000)  NOT NULL,
-        description TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci  NOT NULL,
-        status varchar(1000)  NOT NULL)
-        ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci");
-        if (!$result) {
-            echo "table cancel_service" . implode(' ', $pdo->errorInfo());
-        }
-    }
-} catch (Exception $e) {
-    file_put_contents('error_log', $e->getMessage());
-}
-try {
-    $result = $pdo->query("SHOW TABLES LIKE 'service_other'");
-    $table_exists = ($result->rowCount() > 0);
-
-    if (!$table_exists) {
-        $result = $pdo->query("CREATE TABLE service_other (
-        id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        id_user varchar(500)  NOT NULL,
-        username varchar(1000)  NOT NULL,
-        value varchar(1000)  NOT NULL,
-        time varchar(200)  NOT NULL,
-        price varchar(200)  NOT NULL,
-        type varchar(1000)  NOT NULL,
-        status varchar(200)  NOT NULL,
-        output TEXT  NOT NULL)
-        ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci");
-        if (!$result) {
-            echo "table service_other" . implode(' ', $pdo->errorInfo());
-        }
-    } else {
-        $Check_filde = $pdo->query("SHOW COLUMNS FROM service_other LIKE 'price'");
-        if (($Check_filde)->rowCount() != 1) {
-            $pdo->query("ALTER TABLE service_other ADD price VARCHAR(200)");
-            echo "The price field was added ✅";
-        }
-        $Check_filde = $pdo->query("SHOW COLUMNS FROM service_other LIKE 'status'");
-        if (($Check_filde)->rowCount() != 1) {
-            $pdo->query("ALTER TABLE service_other ADD status VARCHAR(200)");
-            echo "The status field was added ✅";
-        }
-        $Check_filde = $pdo->query("SHOW COLUMNS FROM service_other LIKE 'output'");
-        if (($Check_filde)->rowCount() != 1) {
-            $pdo->query("ALTER TABLE service_other ADD output TEXT");
-            echo "The output field was added ✅";
-        }
-    }
-} catch (Exception $e) {
-    file_put_contents('error_log', $e->getMessage());
-}
-try {
-    $result = $pdo->query("SHOW TABLES LIKE 'card_number'");
-    $table_exists = ($result->rowCount() > 0);
-
-    if (!$table_exists) {
-        $result = $pdo->query("CREATE TABLE card_number (
-        cardnumber varchar(500) PRIMARY KEY,
-        namecard  varchar(1000)  NOT NULL)
-        CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-        if (!$result) {
-            echo "table x_ui" . implode(' ', $pdo->errorInfo());
-        }
-    }
-    $columnInfo = $pdo->query("SHOW FULL COLUMNS FROM card_number LIKE 'namecard'");
-    if ($columnInfo) {
-        $column = $columnInfo->fetch(PDO::FETCH_ASSOC);
-        $currentCollation = $column['Collation'] ?? '';
-        if (empty($currentCollation) || stripos($currentCollation, 'utf8mb4') === false) {
-            $pdo->query("ALTER TABLE card_number CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-            $pdo->query("ALTER TABLE card_number MODIFY cardnumber varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci PRIMARY KEY");
-            $pdo->query("ALTER TABLE card_number MODIFY namecard varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL");
-        }
-        $columnInfo = null;
-    }
-} catch (Exception $e) {
-    file_put_contents('error_log card_number', $e->getMessage());
-}
-try {
-    $result = $pdo->query("SHOW TABLES LIKE 'Requestagent'");
-    $table_exists = ($result->rowCount() > 0);
-
-    if (!$table_exists) {
-        $result = $pdo->query("CREATE TABLE Requestagent (
-        id varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci PRIMARY KEY,
-        username  varchar(500)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-        time  varchar(500)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-        Description  varchar(500)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-        status  varchar(500)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-        type  varchar(500)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL)
-        ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        if (!$result) {
-            echo "table Requestagent" . implode(' ', $pdo->errorInfo());
-        }
-    } else {
-        ensureTableUtf8mb4('Requestagent');
-    }
-} catch (Exception $e) {
-    file_put_contents('error_log Requestagent', $e->getMessage());
-}
-try {
-    $result = $pdo->query("SHOW TABLES LIKE 'topicid'");
-    $table_exists = ($result->rowCount() > 0);
-    if (!$table_exists) {
-        $result = $pdo->query("CREATE TABLE topicid (
-        report varchar(500) PRIMARY KEY NOT NULL,
-        idreport TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL)
-        ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE utf8mb4_unicode_ci");
-        if (!$result) {
-            echo "table Requestagent" . implode(' ', $pdo->errorInfo());
-        }
-        $pdo->query("INSERT INTO topicid (idreport,report) VALUES ('0','buyreport')");
-        $pdo->query("INSERT INTO topicid (idreport,report) VALUES ('0','otherservice')");
-        $pdo->query("INSERT INTO topicid (idreport,report) VALUES ('0','paymentreport')");
-        $pdo->query("INSERT INTO topicid (idreport,report) VALUES ('0','otherreport')");
-        $pdo->query("INSERT INTO topicid (idreport,report) VALUES ('0','reporttest')");
-        $pdo->query("INSERT INTO topicid (idreport,report) VALUES ('0','errorreport')");
-        $pdo->query("INSERT INTO topicid (idreport,report) VALUES ('0','porsantreport')");
-        $pdo->query("INSERT INTO topicid (idreport,report) VALUES ('0','reportnight')");
-        $pdo->query("INSERT INTO topicid (idreport,report) VALUES ('0','reportcron')");
-        $pdo->query("INSERT INTO topicid (idreport,report) VALUES ('0','backupfile')");
-    } else {
-        $pdo->query("INSERT IGNORE INTO topicid (idreport,report) VALUES ('0','buyreport')");
-        $pdo->query("INSERT IGNORE INTO topicid (idreport,report) VALUES ('0','otherservice')");
-        $pdo->query("INSERT IGNORE INTO topicid (idreport,report) VALUES ('0','paymentreport')");
-        $pdo->query("INSERT IGNORE INTO topicid (idreport,report) VALUES ('0','otherreport')");
-        $pdo->query("INSERT IGNORE INTO topicid (idreport,report) VALUES ('0','reporttest')");
-        $pdo->query("INSERT IGNORE INTO topicid (idreport,report) VALUES ('0','errorreport')");
-        $pdo->query("INSERT IGNORE INTO topicid (idreport,report) VALUES ('0','porsantreport')");
-        $pdo->query("INSERT IGNORE INTO topicid (idreport,report) VALUES ('0','reportnight')");
-        $pdo->query("INSERT IGNORE INTO topicid (idreport,report) VALUES ('0','reportcron')");
-        $pdo->query("INSERT IGNORE INTO topicid (idreport,report) VALUES ('0','backupfile')");
-
-
-
-
-    }
-} catch (Exception $e) {
-    file_put_contents('error_log topicid', $e->getMessage());
-}
+// cancel_service is created and updated by db/bootstrap.php.
 try {
     $result = $pdo->query("SHOW TABLES LIKE 'manualsell'");
     $table_exists = ($result->rowCount() > 0);
@@ -1379,6 +1235,7 @@ foreach ($performanceIndexes as $indexDef) {
         error_log("[INDEX:$idxTable.$idxName] " . $e->getMessage());
     }
 }
-telegram('setwebhook', [
-    'url' => "https://$domainhosts/index.php"
+$webhookSecret = ensureWebhookSecret();
+telegram('setWebhook', [
+    'url' => "https://$domainhosts/index.php?secret={$webhookSecret['secret']}"
 ]);

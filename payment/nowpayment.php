@@ -16,13 +16,14 @@ if (isset($data['payment_status']) && $data['payment_status'] == "finished") {
     $pay = StatusPayment($data['payment_id']);
     if ($pay['payment_status'] != "finished")
         return;
-    $Payment_report = select("Payment_report", "*", "dec_not_confirmed", $pay['invoice_id'], "select");
-    if ($Payment_report) {
+    $Payment_report = select("Payment_report", "*", "id_order", (string) ($pay['order_id'] ?? ''), "select");
+    if ($Payment_report && $Payment_report['Payment_Method'] === "nowpayment" && (string) $Payment_report['dec_not_confirmed'] === (string) ($pay['invoice_id'] ?? '')) {
         if (!claimPaymentPaid($Payment_report['id_order']))
             return;
         try {
-            DirectPayment($Payment_report['id_order'], "../images.jpg");
+            if (DirectPayment($Payment_report['id_order'], "../images.jpg") === false) return;
         } catch (Throwable $directPaymentError) {
+            markPaymentFulfillment($Payment_report['id_order'], 'failed');
             error_log("DirectPayment failed for order {$Payment_report['id_order']}: " . $directPaymentError->getMessage());
             return;
         }
@@ -30,8 +31,7 @@ if (isset($data['payment_status']) && $data['payment_status'] == "finished") {
         $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
         if ($pricecashback != "0") {
             $result = ($Payment_report['price'] * $pricecashback) / 100;
-            $Balance_confrim = intval($Balance_id['Balance']) + $result;
-            update("user", "Balance", $Balance_confrim, "id", $Balance_id['id']);
+            addBalance($Balance_id['id'], $result);
             $pricecashback = number_format($pricecashback);
             $text_report = sprintf($textbotlang['paymentGateway']['giftReport'], $result);
             sendmessage($Balance_id['id'], $text_report, null, 'HTML');

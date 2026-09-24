@@ -5,6 +5,7 @@ require_auth();
 
 $search = trim($_GET['q'] ?? '');
 $status = $_GET['status'] ?? '';
+$fulfillment = is_string($_GET['fulfillment'] ?? null) ? $_GET['fulfillment'] : '';
 $page = max(1, (int) ($_GET['page'] ?? 1));
 $perPage = 30;
 $offset = ($page - 1) * $perPage;
@@ -18,6 +19,10 @@ if ($search !== '') {
 if ($status !== '') {
   $where[] = "payment_Status = ?";
   $params[] = $status;
+}
+if (in_array($fulfillment, ['processing', 'failed', 'fulfilled', 'refunded'], true)) {
+  $where[] = "fulfillment_status = ?";
+  $params[] = $fulfillment;
 }
 $whereSQL = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
@@ -36,7 +41,7 @@ $totalPages = max(1, (int) ceil($total / $perPage));
 $totalSuccess = 0;
 $todayCount = 0;
 try {
-  $totalSuccess = (int) db_query($pdo, "SELECT COALESCE(SUM(price),0) FROM Payment_report WHERE payment_Status ='paid'")->fetchColumn();
+  $totalSuccess = (int) db_query($pdo, "SELECT COALESCE(SUM(price),0) FROM Payment_report WHERE payment_Status ='paid' AND (fulfillment_status IS NULL OR fulfillment_status = 'fulfilled')")->fetchColumn();
   $todayCount = db_count($pdo, "SELECT COUNT(*) FROM Payment_report WHERE time > ?", [strtotime('today')]);
 } catch (Exception $e) {
 }
@@ -48,6 +53,12 @@ $statusMap = [
   'reject' => ['tag-no', $textbotlang['panel']['paymentStatusRejected']],
   'waiting' => ['tag-warn', $textbotlang['panel']['paymentStatusWaiting']],
 ];
+$fulfillmentMap = [
+  'processing' => ['tag-warn', $textbotlang['panel']['paymentFulfillmentProcessing']],
+  'failed' => ['tag-no', $textbotlang['panel']['paymentFulfillmentFailed']],
+  'fulfilled' => ['tag-ok', $textbotlang['panel']['paymentFulfillmentFulfilled']],
+  'refunded' => ['tag-plain', $textbotlang['panel']['paymentFulfillmentRefunded']],
+];
 $methodMap = [
   'cart to cart' => $textbotlang['panel']['paymentMethodCardToCard'],
   'low balance by admin' => $textbotlang['panel']['paymentMethodAdminDeduct'],
@@ -57,6 +68,7 @@ $methodMap = [
   'Currency Rial 3' => $textbotlang['panel']['paymentMethodRialGateway3'],
   'aqayepardakht' => $textbotlang['panel']['paymentMethodAqayePardakht'],
   'zarinpal' => $textbotlang['panel']['paymentMethodZarinpal'],
+  'variza' => $textbotlang['panel']['paymentMethodVariza'],
   'plisio' => 'Plisio',
   'arze digital offline' => $textbotlang['panel']['paymentMethodCryptoOffline'],
   'Star Telegram' => $textbotlang['panel']['paymentMethodTelegramStar'],
@@ -97,6 +109,12 @@ include __DIR__ . '/inc/layout_head.php';
           <option value="<?= $k ?>" <?= $status === $k ? 'selected' : '' ?>><?= $lbl ?></option>
         <?php endforeach; ?>
       </select>
+      <select name="fulfillment" class="select" style="width:auto" onchange="this.form.submit()">
+        <option value=""><?= $textbotlang['panel']['paymentFulfillmentStatus'] ?></option>
+        <?php foreach ($fulfillmentMap as $key => [$_, $label]): ?>
+          <option value="<?= $key ?>" <?= $fulfillment === $key ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+        <?php endforeach; ?>
+      </select>
       <div class="search-box" style="min-width:230px">
         <?= icon('search', 14) ?>
         <input type="text" name="q" placeholder="<?= htmlspecialchars($textbotlang['panel']['paymentSearchTransactionPlaceholder']) ?>"
@@ -104,7 +122,7 @@ include __DIR__ . '/inc/layout_head.php';
         <button type="button" class="search-clear">✕</button>
         <button type="submit" class="search-btn"><?= $textbotlang['panel']['paymentColTrackingCode'] ?></button>
       </div>
-      <?php if ($search || $status): ?>
+      <?php if ($search || $status || $fulfillment): ?>
         <a href="payment.php" class="btn-link" style="font-size:.78rem"><?= $textbotlang['panel']['paymentColDate'] ?></a>
       <?php endif; ?>
     </form>
@@ -121,12 +139,13 @@ include __DIR__ . '/inc/layout_head.php';
           <th><?= $textbotlang['panel']['paymentDetailUser'] ?></th>
           <th><?= $textbotlang['panel']['paymentDetailAmount'] ?></th>
           <th><?= $textbotlang['panel']['paymentDetailMethod'] ?></th>
+          <th><?= $textbotlang['panel']['paymentFulfillmentStatus'] ?></th>
         </tr>
       </thead>
       <tbody>
         <?php if (empty($payments)): ?>
           <tr>
-            <td>
+            <td colspan="8">
               <div class="empty">
                 <div class="empty-mark">—</div>
                 <p><?= $textbotlang['panel']['paymentDetailStatus'] ?></p>
@@ -140,6 +159,8 @@ include __DIR__ . '/inc/layout_head.php';
             [$cls, $lbl] = $statusMap[$st] ?? ['tag-plain', $st ?: '—'];
             $methodRaw = $p['Payment_Method'] ?? '';
             $method = $methodMap[$methodRaw] ?? ($methodRaw ?: '—');
+            $delivery = $p['fulfillment_status'] ?? '';
+            [$deliveryClass, $deliveryLabel] = $fulfillmentMap[$delivery] ?? ['tag-plain', '—'];
             ?>
             <tr>
               <td style="color:var(--text-dim)"><?= $i++ ?></td>
@@ -154,6 +175,7 @@ include __DIR__ . '/inc/layout_head.php';
                 <?= safe_date($p['time'] ?? null, 'Y/m/d H:i') ?>
               </td>
               <td><span class="tag <?= $cls ?>"><?= $lbl ?></span></td>
+              <td><span class="tag <?= $deliveryClass ?>"><?= htmlspecialchars($deliveryLabel) ?></span></td>
             </tr>
           <?php endforeach; endif; ?>
       </tbody>
@@ -163,7 +185,7 @@ include __DIR__ . '/inc/layout_head.php';
   <div class="tbl-foot">
     <span><?= number_format($total) ?> <?= $textbotlang['panel']['paymentDetailDate'] ?> <?= $page ?> <?= $textbotlang['panel']['paymentCloseBtn'] ?> <?= $totalPages ?></span>
     <div class="pager">
-      <?php $qs = fn($p) => '?q=' . urlencode($search) . '&status=' . urlencode($status) . '&page=' . $p; ?>
+      <?php $qs = fn($p) => '?q=' . urlencode($search) . '&status=' . urlencode($status) . '&fulfillment=' . urlencode($fulfillment) . '&page=' . $p; ?>
       <a class="<?= $page <= 1 ? 'disabled' : '' ?>" href="<?= $qs(max(1, $page - 1)) ?>">‹</a>
       <?php for ($p2 = max(1, $page - 2); $p2 <= min($totalPages, $page + 2); $p2++): ?>
         <a class="<?= $p2 === $page ? 'active' : '' ?>" href="<?= $qs($p2) ?>"><?= $p2 ?></a>

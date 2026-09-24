@@ -1,4 +1,5 @@
 <?php
+chdir(__DIR__);
 ini_set('error_log', 'error_log');
 date_default_timezone_set('Asia/Tehran');
 
@@ -6,6 +7,8 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../botapi.php';
 require_once __DIR__ . '/../panels.php';
 require_once __DIR__ . '/../function.php';
+require_once __DIR__ . '/../bulk_audience.php';
+$textbotlang = languagechange();
 class ServiceMonitor
 {
     private $Panel;
@@ -44,6 +47,26 @@ class ServiceMonitor
             $data = $this->processInvoice($invoice);
             if (!is_array($data))
                 continue;
+            bulkEnsureExpirySchema($this->pdo);
+            $expiry = $data['userData']['expire'] ?? null;
+            if ($expiry !== null && (is_numeric($expiry) || is_string($expiry))) {
+                $expiry = is_numeric($expiry) ? (int) $expiry : strtotime($expiry);
+                if ($expiry !== false && $expiry >= 0) {
+                    $this->pdo->prepare('UPDATE invoice SET expires_at = ? WHERE id_invoice = ?')
+                        ->execute([$expiry, $invoice['id_invoice']]);
+                }
+            }
+            $volumeLimit = $data['userData']['data_limit'] ?? 0;
+            $volumeUsed = $data['userData']['used_traffic'] ?? 0;
+            $volumeEnded = ($data['userData']['status'] ?? '') === 'limited'
+                || (is_numeric($volumeLimit) && is_numeric($volumeUsed) && (float) $volumeLimit > 0 && (float) $volumeUsed >= (float) $volumeLimit);
+            if ($volumeEnded) {
+                $this->pdo->prepare('UPDATE invoice SET depleted_at = COALESCE(depleted_at, ?) WHERE id_invoice = ?')
+                    ->execute([time(), $invoice['id_invoice']]);
+            } elseif (($data['userData']['status'] ?? '') === 'active') {
+                $this->pdo->prepare('UPDATE invoice SET depleted_at = NULL WHERE id_invoice = ?')
+                    ->execute([$invoice['id_invoice']]);
+            }
             $result = false;
             if (!$check_send['volume']) {
                 if ($this->status_cron['volume'])
@@ -68,9 +91,9 @@ class ServiceMonitor
     private function getActiveInvoices()
     {
         $time_hours = time() - 3600;
-        $QUERY = "SELECT * FROM invoice WHERE (Status = 'active' OR Status = 'end_of_time' OR Status = 'end_of_volume' OR Status = 'sendedwarn' OR Status = 'send_on_hold') AND name_product != '{$this->textBotLang['common']['labels']['testServiceName']}' AND (time_cron <= '$time_hours' OR time_cron IS NULL) ORDER BY time_cron  LIMIT 30";
+        $QUERY = "SELECT * FROM invoice WHERE (Status = 'active' OR Status = 'end_of_time' OR Status = 'end_of_volume' OR Status = 'sendedwarn' OR Status = 'send_on_hold') AND name_product != :testName AND (time_cron <= :timeHours OR time_cron IS NULL) ORDER BY time_cron  LIMIT 30";
         $stmt = $this->pdo->prepare($QUERY);
-        $stmt->execute();
+        $stmt->execute([':testName' => $this->textBotLang['common']['labels']['testServiceName'], ':timeHours' => $time_hours]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -131,7 +154,7 @@ class ServiceMonitor
         $daysRemaining = intval($timeService / 86400);
         $removalThreshold = intval("-" . $this->setting['removedayc']);
         $result = $daysRemaining <= $removalThreshold;
-        $statusText = $statusMap = [
+        $statusText = [
             'active' => $this->textBotLang['users']['status']['active'],
             'limited' => $this->textBotLang['users']['status']['limited'],
             'disabled' => $this->textBotLang['users']['status']['disabled'],
@@ -141,8 +164,12 @@ class ServiceMonitor
         ][$userData['status']];
         $remainingVolume = formatBytes($userData['data_limit'] - $userData['used_traffic']);
         if ($result) {
+            $removeResult = $this->Panel->RemoveUser($invoice['Service_location'], $username);
+            if (!is_array($removeResult) || ($removeResult['status'] ?? null) !== 'successful') {
+                error_log('Service removal failed for ' . $username . ': ' . json_encode($removeResult));
+                return false;
+            }
             update("invoice", "status", "removeTime", "username", $username);
-            $this->Panel->RemoveUser($invoice['Service_location'], $username);
             $message = sprintf($this->textBotLang['users']['notify']['serviceDeleted'], $invoice['username']);
             $reportMessage = sprintf($this->textBotLang['users']['notify']['deleteInfo'], $invoice['username'], $statusText, $daysRemaining, $remainingVolume);
             $this->send_notifactions($invoice, $user, $message, false, $invoice['bottype']);
@@ -184,8 +211,12 @@ class ServiceMonitor
         ][$userData['status']];
         $remainingVolume = formatBytes($userData['data_limit'] - $userData['used_traffic']);
         if ($result) {
+            $removeResult = $this->Panel->RemoveUser($invoice['Service_location'], $username);
+            if (!is_array($removeResult) || ($removeResult['status'] ?? null) !== 'successful') {
+                error_log('Service removal failed for ' . $username . ': ' . json_encode($removeResult));
+                return false;
+            }
             update("invoice", "status", "removevolume", "username", $username);
-            $this->Panel->RemoveUser($invoice['Service_location'], $username);
             $message = sprintf($this->textBotLang['users']['notify']['serviceDeleted2'], $username);
             $reportMessage = sprintf($this->textBotLang['users']['notify']['volumeDeleteInfo'], $username, $statusText, $daysRemaining, $remainingVolume, $userData['online_at']);
             $this->send_notifactions($invoice, $user, $message, false, $invoice['bottype']);
@@ -237,6 +268,9 @@ class ServiceMonitor
 
     private function send_notifactions($invoice, $status_cron_user, $message, $keyboard_active, $bot_token)
     {
+        if (is_array($status_cron_user)) {
+            $status_cron_user = $status_cron_user['status_cron'] ?? 1;
+        }
         if (intval($status_cron_user) == 0)
             return;
         $keyboard = $this->createExtendServiceKeyboard($invoice['id_invoice']);

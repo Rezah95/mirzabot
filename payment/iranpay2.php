@@ -8,13 +8,6 @@ require_once __DIR__ . '/../function.php';
 require_once __DIR__ . '/../panels.php';
 require_once __DIR__ . '/../keyboard.php';
 require __DIR__ . '/../vendor/autoload.php';
-use Endroid\QrCode\Builder\Builder;
-use Endroid\QrCode\Encoding\Encoding;
-use Endroid\QrCode\ErrorCorrectionLevel;
-use Endroid\QrCode\Label\Font\OpenSans;
-use Endroid\QrCode\Label\LabelAlignment;
-use Endroid\QrCode\RoundBlockSizeMode;
-use Endroid\QrCode\Writer\PngWriter;
 
 $ManagePanel = new ManagePanel();
 
@@ -113,7 +106,11 @@ if (!$Payment_report) {
     cubepay_emit('notfound', languagechange(dirname(__DIR__)), $data_order_id, null);
     return;
 }
-$token_cubepay = select("PaySetting", "*", "NamePay", "apiternado", "select")['ValuePay'];
+$token_cubepay = trim((string) select("PaySetting", "*", "NamePay", "apiternado", "select")['ValuePay']);
+if ($token_cubepay === '' || $token_cubepay === '0' || $Payment_report['Payment_Method'] !== "Currency Rial 2") {
+    cubepay_emit('notfound', languagechange(dirname(__DIR__)), $data_order_id, null);
+    return;
+}
 
 $payer_row = select("user", "*", "id", $Payment_report['id_user'], "select");
 $page_lang = is_array($payer_row) && !empty($payer_row['lang']) ? $payer_row['lang'] : 'fa';
@@ -186,8 +183,9 @@ if (!claimPaymentPaid($Payment_report['id_order']))
     return;
 $textbotlang = languagechange();
 try {
-    DirectPayment($data_order_id, "../images.jpg");
+    if (DirectPayment($data_order_id, "../images.jpg") === false) return;
 } catch (Throwable $directPaymentError) {
+    markPaymentFulfillment($data_order_id, 'failed');
     error_log("DirectPayment failed for order {$data_order_id}: " . $directPaymentError->getMessage());
     return;
 }
@@ -195,8 +193,7 @@ $pricecashback = select("PaySetting", "ValuePay", "NamePay", "chashbackiranpay2"
 $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
 if ($pricecashback != "0") {
     $result_cashback = ($Payment_report['price'] * $pricecashback) / 100;
-    $Balance_confrim = intval($Balance_id['Balance']) + $result_cashback;
-    update("user", "Balance", $Balance_confrim, "id", $Balance_id['id']);
+    addBalance($Balance_id['id'], $result_cashback);
     $pricecashback = number_format($pricecashback);
     $text_report = sprintf($textbotlang['paymentGateway']['giftReport'], $result_cashback);
     sendmessage($Balance_id['id'], $text_report, null, 'HTML');

@@ -7,5 +7,30 @@ composer.phar
 
 # Runtime / generated files
 error_log
+cronbot/.run.lock
+/storage/**
+!/storage/cache/
+!/storage/.htaccess
+!/storage/cache/.htaccess
 /api/hash.txt
 *.xlsx
+graphify-out
+docs
+/lang/override/
+/deploy.sh
+# Generated local audit reports
+/CODE_AUDIT_FA.md
+/FIXES_REPORT_FA.md
+docs/
+
+# Bulk operation runtime state
+/cronbot/users.json
+/cronbot/info
+/cronbot/.message.lock
+/cronbot/.credit.lock
+/cronbot/.bulk-worker.lock
+/cronbot/credit-*.json
+/cronbot/credit-*.info
+/cronbot/credit-*.lock
+/cronbot/*.tmp
+/cronbot/bulk-failures.jsonl

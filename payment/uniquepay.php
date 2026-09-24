@@ -24,6 +24,23 @@ if (!$Payment_report) {
     echo 'Order not found';
     exit;
 }
+if ($Payment_report['Payment_Method'] !== 'UniquePay') {
+    http_response_code(404);
+    echo 'Order not found';
+    exit;
+}
+if ($Payment_report['payment_Status'] === 'paid') {
+    if (in_array($Payment_report['fulfillment_status'] ?? null, ['fulfilled', 'refunded'], true)) {
+        http_response_code(200);
+        echo json_encode(['ok' => true, 'paid' => true, 'fulfillment' => $Payment_report['fulfillment_status']]);
+        exit;
+    }
+    if (in_array($Payment_report['fulfillment_status'] ?? null, ['processing', 'failed'], true)) {
+        http_response_code(503);
+        echo json_encode(['ok' => false, 'error' => 'Payment requires reconciliation']);
+        exit;
+    }
+}
 
 $verify = checkPayUniquePay($order_id);
 if (empty($verify['success'])) {
@@ -32,12 +49,40 @@ if (empty($verify['success'])) {
     exit;
 }
 
-if (!empty($verify['paid']) && $Payment_report['payment_Status'] !== 'paid') {
+$createdInvoice = json_decode((string) ($Payment_report['dec_not_confirmed'] ?? ''), true);
+$expectedRefId = $createdInvoice['refId'] ?? null;
+$verifiedInvoice = $verify['invoice'] ?? [];
+if (!is_array($createdInvoice) || !is_string($expectedRefId) || $expectedRefId === ''
+    || (string) ($createdInvoice['hashId'] ?? '') !== (string) $order_id
+    || (string) ($verifiedInvoice['id'] ?? '') !== $expectedRefId
+    || !isset($verifiedInvoice['amount']) || !ctype_digit((string) $verifiedInvoice['amount'])
+    || (int) $verifiedInvoice['amount'] !== (int) $Payment_report['price']) {
+    error_log('UniquePay invoice mismatch for order ' . $order_id);
+    http_response_code(409);
+    echo json_encode(['ok' => false, 'error' => 'Invoice does not match order']);
+    exit;
+}
+
+if (!empty($verify['paid']) && claimPaymentPaid($order_id)) {
     if (function_exists('languagechange')) {
         $textbotlang = languagechange();
     }
-    update("Payment_report", "dec_not_confirmed", json_encode($verify['invoice'] ?? $verify['data'], JSON_UNESCAPED_UNICODE), "id_order", $order_id);
-    DirectPayment($order_id);
+    $createdInvoice['verification'] = $verifiedInvoice;
+    update("Payment_report", "dec_not_confirmed", json_encode($createdInvoice, JSON_UNESCAPED_UNICODE), "id_order", $order_id);
+    try {
+        $delivered = DirectPayment($order_id, '../images.jpg');
+    } catch (Throwable $deliveryError) {
+        markPaymentFulfillment($order_id, 'failed');
+        error_log('UniquePay delivery failed for ' . $order_id . ': ' . $deliveryError->getMessage());
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'delivery failed']);
+        exit;
+    }
+    if ($delivered === false) {
+        http_response_code(200);
+        echo json_encode(['ok' => true, 'paid' => true, 'fulfillment' => 'refunded']);
+        exit;
+    }
 
     if (function_exists('telegram')) {
         $setting = select("setting", "*");

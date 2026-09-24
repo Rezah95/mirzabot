@@ -308,7 +308,7 @@ function mini_user_info(array $data, string $method): void
         $stmt->bindValue(':id_user', $user_info['id'], PDO::PARAM_INT);
         $stmt->execute();
         $countorder = (int) $stmt->fetchColumn();
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM Payment_report WHERE id_user = :from_id AND payment_Status = 'paid'");
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM Payment_report WHERE id_user = :from_id AND payment_Status = 'paid' AND (fulfillment_status IS NULL OR fulfillment_status = 'fulfilled')");
         $stmt->execute([
             ':from_id' => $user_info['id']
         ]);
@@ -368,7 +368,7 @@ function mini_countries(array $data, string $method): void
         if ($setting['statusnoteforf'] == "0" && $user_info['agent'] == "f")
             $is_note = false;
         while ($result = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            if ($result['MethodUsername'] == $textbotlang['users']['customusername'] || $result['MethodUsername'] == $textbotlang['keyboard']['customUsernameRandom']) {
+            if (in_array(usernameMethodKey($result['MethodUsername']), ['customUsername', 'customUsernameRandom'], true)) {
                 $is_username = true;
             } else {
                 $is_username = false;
@@ -772,6 +772,14 @@ function mini_purchase(array $data, string $method): void
         ]);
         return;
     }
+    if (!empty($data['custom_username']) && !preg_match('~(?!_)^[a-z][a-z\d_]{2,32}(?<!_)$~i', (string) $data['custom_username'])) {
+        http_response_code(400);
+        echo json_encode(array(
+            'status' => false,
+            'msg' => strip_tags($textbotlang['users']['invalidusername'])
+        ));
+        return;
+    }
     $panel = select("marzban_panel", "*", "code_panel", $data['country_id'] ?? '', "select");
     if (empty($panel)) {
         http_response_code(500);
@@ -1028,11 +1036,11 @@ function mini_purchase(array $data, string $method): void
     $textcreatuser = str_replace('{config}', "<code>{$output_config_link}</code>", $textcreatuser);
     $textcreatuser = str_replace('{links}', $config, $textcreatuser);
     $textcreatuser = str_replace('{links2}', $output_config_link, $textcreatuser);
-    sendMessageService($panel, $dataoutput['configs'] ?? null, $output_config_link, $user_info['username'], null, $textcreatuser, $randomString, $user_info['id'], $image = __DIR__ . '/../images.jpg');
-    if ($panel['MethodUsername'] == $textbotlang['keyboard']['customTextSequential'] || $panel['MethodUsername'] == $textbotlang['keyboard']['usernameSequential'] || $panel['MethodUsername'] == $textbotlang['keyboard']['numericIdSequential'] || $panel['MethodUsername'] == $textbotlang['keyboard']['agentCustomTextSequential']) {
+    sendMessageService($panel, $dataoutput['configs'] ?? null, $output_config_link, $user_info['username'], null, $textcreatuser, $randomString, $user_info['id'], __DIR__ . '/../images.jpg');
+    if (in_array(usernameMethodKey($panel['MethodUsername']), ['customTextSequential', 'usernameSequential', 'numericIdSequential', 'agentCustomTextSequential'], true)) {
         $value = intval($user_info['number_username']) + 1;
         update("user", "number_username", $value, "id", $user_info['id']);
-        if ($panel['MethodUsername'] == $textbotlang['keyboard']['customTextSequential'] || $panel['MethodUsername'] == $textbotlang['keyboard']['agentCustomTextSequential']) {
+        if (in_array(usernameMethodKey($panel['MethodUsername']), ['customTextSequential', 'agentCustomTextSequential'], true)) {
             $value = intval($setting['numbercount']) + 1;
             update("setting", "numbercount", $value);
         }
@@ -1150,4 +1158,3 @@ match ($action) {
     'purchase' => mini_purchase($data, $method),
     default => sendJsonResponse(false, "Action Invalid", []),
 };
-
