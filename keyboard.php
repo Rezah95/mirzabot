@@ -658,19 +658,34 @@ function discountProductsKeyboard($location)
     $rows[] = [['text' => $textbotlang['keyboard']['backToPreviousMenu'], 'callback_data' => "discountcode_list"]];
     return json_encode(['inline_keyboard' => $rows]);
 }
-function discountCodesMenu()
+function discountCodesMenu(int $page = 0)
 {
     global $pdo, $textbotlang;
-    $discountCodes = $pdo->query("SELECT codeDiscount, price FROM DiscountSell")->fetchAll(PDO::FETCH_ASSOC);
+    $total = (int) $pdo->query('SELECT COUNT(*) FROM DiscountSell')->fetchColumn();
+    $page = min(max(0, $page), max(0, (int) ceil($total / 20) - 1));
+    $stmt = $pdo->prepare('SELECT id, codeDiscount, price FROM DiscountSell ORDER BY id DESC LIMIT 20 OFFSET ?');
+    $stmt->bindValue(1, $page * 20, PDO::PARAM_INT);
+    $stmt->execute();
+    $discountCodes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $rows = [[['text' => $textbotlang['keyboard']['createDiscountCode'], 'callback_data' => "discountcode_create"]]];
     foreach ($discountCodes as $discountCode) {
         $rows[] = [
-            ['text' => "❌", 'callback_data' => "discountcode_delete_{$discountCode['codeDiscount']}"],
-            ['text' => "{$discountCode['codeDiscount']} ({$discountCode['price']}%)", 'callback_data' => "discountcode_show_{$discountCode['codeDiscount']}"],
+            ['text' => "❌", 'callback_data' => "discountcode_deleteid_{$discountCode['id']}"],
+            ['text' => "{$discountCode['codeDiscount']} ({$discountCode['price']}%)", 'callback_data' => "discountcode_showid_{$discountCode['id']}"],
         ];
     }
+    $navigation = [];
+    if ($page > 0) {
+        $navigation[] = ['text' => '◀️', 'callback_data' => 'discountcode_list_' . ($page - 1)];
+    }
+    if (($page + 1) * 20 < $total) {
+        $navigation[] = ['text' => '▶️', 'callback_data' => 'discountcode_list_' . ($page + 1)];
+    }
+    if ($navigation) {
+        $rows[] = $navigation;
+    }
     $rows[] = [['text' => $textbotlang['keyboard']['backToShopMenu'], 'callback_data' => "shopmenu_open"]];
-    $text = sprintf($textbotlang['Admin']['Discount']['discountManage'], count($discountCodes));
+    $text = sprintf($textbotlang['Admin']['Discount']['discountManage'], $total);
     return [$text, json_encode(['inline_keyboard' => $rows])];
 }
 $keyboard_Category_manage = json_encode([

@@ -1,6 +1,7 @@
 <?php
 require_once 'vendor/autoload.php';
 require 'config.php';
+require_once __DIR__ . '/discount_rules.php';
 ini_set('error_log', 'error_log');
 
 use Endroid\QrCode\Builder\Builder;
@@ -1101,6 +1102,9 @@ function DirectPayment($order_id, $image = 'images.jpg')
     $format_price_cart = number_format($Payment_report['price']);
     $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
     $steppay = explode("|", $Payment_report['id_invoice']);
+    $directDiscountParts = explode('_', (string) ($Balance_id['Processing_value_four'] ?? ''));
+    $directDiscountCode = ($directDiscountParts[0] ?? '') === 'dis' ? ($directDiscountParts[1] ?? null) : null;
+    $directDiscountRedeemId = $directDiscountCode ? substr(hash('sha256', 'payment:' . $order_id), 0, 32) : null;
     $stmtReset = $pdo->prepare("UPDATE user SET Processing_value = '0', Processing_value_one = '0', Processing_value_tow = '0', Processing_value_four = '0' WHERE id = ?");
     $stmtReset->execute([$Balance_id['id']]);
     clearSelectCache('user');
@@ -1138,6 +1142,15 @@ function DirectPayment($order_id, $image = 'images.jpg')
             'username' => $Balance_id['username'],
             'type' => 'buy'
         );
+        if ($directDiscountCode !== null) {
+            $claimed = discountConsume($pdo, $directDiscountRedeemId, $directDiscountCode, (string) $Balance_id['id'], $Balance_id['agent'], $marzban_list_get['code_panel'], $info_product['code_product'], 'buy', $textbotlang['common']['labels']['testServiceName'], $get_invoice['id_invoice'], null, true);
+            if (!$claimed) {
+                addBalance($Balance_id['id'], (int) $Payment_report['price']);
+                markPaymentFulfillment($order_id, 'refunded');
+                sendmessage($Balance_id['id'], $textbotlang['users']['Discount']['notAllowed'], $keyboard, 'HTML');
+                return false;
+            }
+        }
         $invoiceStatusBefore = $get_invoice['Status'] ?? null;
         $invoiceClaimed = false;
         if (!empty($get_invoice['id_invoice'])) {
@@ -1152,6 +1165,9 @@ function DirectPayment($order_id, $image = 'images.jpg')
         }
         $dataoutput = $ManagePanel->createUser($marzban_list_get['name_panel'], $info_product['code_product'], $username_ac, $datac);
         if (!is_array($dataoutput) || empty($dataoutput['username'])) {
+            if ($directDiscountRedeemId !== null) {
+                discountRelease($pdo, $directDiscountRedeemId);
+            }
             if ($invoiceClaimed) {
                 update("invoice", "Status", $invoiceStatusBefore, "id_invoice", $get_invoice['id_invoice']);
             }
@@ -1205,16 +1221,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
             update("invoice", "user_info", $dataoutput['subscription_url'], "id_invoice", $get_invoice['id_invoice']);
         }
         sendMessageService($marzban_list_get, $dataoutput['configs'], $output_config_link, $dataoutput['username'], $Shoppinginfo, $textcreatuser, $get_invoice['id_invoice'], $get_invoice['id_user'], $image);
-        $partsdic = explode("_", $Balance_id['Processing_value_four']);
-        if ($partsdic[0] == "dis") {
-            $SellDiscountlimit = select("DiscountSell", "*", "codeDiscount", $partsdic[1], "select");
-            $value = intval($SellDiscountlimit['usedDiscount']) + 1;
-            update("DiscountSell", "usedDiscount", $value, "codeDiscount", $partsdic[1]);
-            $stmt = $pdo->prepare("INSERT INTO Giftcodeconsumed (id_user,code) VALUES (:id_user,:code)");
-            $stmt->bindParam(':id_user', $Balance_id['id']);
-            $stmt->bindParam(':code', $partsdic[1]);
-            $stmt->execute();
-            $text_report = sprintf($textbotlang['Admin']['reportgroup']['discountCodeUsed'], $Balance_id['username'], $Balance_id['id'], $partsdic[1]);
+        if ($directDiscountCode !== null) {
+            $text_report = sprintf($textbotlang['Admin']['reportgroup']['discountCodeUsed'], $Balance_id['username'], $Balance_id['id'], $directDiscountCode);
             if (strlen($setting['Channel_Report']) > 0) {
                 telegram('sendmessage', [
                     'chat_id' => $setting['Channel_Report'],
@@ -1365,8 +1373,20 @@ function DirectPayment($order_id, $image = 'images.jpg')
         }
         $dateacc = date('Y/m/d H:i:s');
         $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $nameloc['username']);
+        if ($directDiscountCode !== null) {
+            $claimed = discountConsume($pdo, $directDiscountRedeemId, $directDiscountCode, (string) $Balance_id['id'], $Balance_id['agent'], $marzban_list_get['code_panel'], $prodcut['code_product'], 'extend', $textbotlang['common']['labels']['testServiceName'], null, null, true);
+            if (!$claimed) {
+                addBalance($Balance_id['id'], (int) $Payment_report['price']);
+                markPaymentFulfillment($order_id, 'refunded');
+                sendmessage($Balance_id['id'], $textbotlang['users']['Discount']['notAllowed'], $keyboard, 'HTML');
+                return false;
+            }
+        }
         $extend = $ManagePanel->extend($marzban_list_get['Methodextend'], $prodcut['Volume_constraint'], $prodcut['Service_time'], $nameloc['username'], $prodcut['code_product'], $marzban_list_get['code_panel']);
         if ($extend['status'] == false) {
+            if ($directDiscountRedeemId !== null) {
+                discountRelease($pdo, $directDiscountRedeemId);
+            }
             addBalance($Balance_id['id'], intval($Payment_report['price']));
             $balance = select("user", "Balance", "id", $Balance_id['id'], "select")['Balance'];
             sendmessage($Balance_id['id'], $textbotlang['users']['sell']['errorConfig'], $keyboard, 'HTML');
@@ -1388,16 +1408,8 @@ function DirectPayment($order_id, $image = 'images.jpg')
 
         update("service_other", "output", json_encode($extend), "id", $data_order['id']);
         update("service_other", "status", "paid", "id", $data_order['id']);
-        $partsdic = explode("_", $Balance_id['Processing_value_four']);
-        if ($partsdic[0] == "dis") {
-            $SellDiscountlimit = select("DiscountSell", "*", "codeDiscount", $partsdic[1], "select");
-            $value = intval($SellDiscountlimit['usedDiscount']) + 1;
-            update("DiscountSell", "usedDiscount", $value, "codeDiscount", $partsdic[1]);
-            $stmt = $pdo->prepare("INSERT INTO Giftcodeconsumed (id_user,code) VALUES (:id_user,:code)");
-            $stmt->bindParam(':id_user', $Balance_id['id']);
-            $stmt->bindParam(':code', $partsdic[1]);
-            $stmt->execute();
-            $text_report = sprintf($textbotlang['Admin']['reportgroup']['discountCodeUsedFn'], $Balance_id['username'], $Balance_id['id'], $partsdic[1]);
+        if ($directDiscountCode !== null) {
+            $text_report = sprintf($textbotlang['Admin']['reportgroup']['discountCodeUsedFn'], $Balance_id['username'], $Balance_id['id'], $directDiscountCode);
             if (strlen($setting['Channel_Report']) > 0) {
                 telegram('sendmessage', [
                     'chat_id' => $setting['Channel_Report'],

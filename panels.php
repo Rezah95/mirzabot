@@ -12,6 +12,7 @@ require_once __DIR__ . '/ibsng.php';
 require_once __DIR__ . '/mikrotik.php';
 require_once __DIR__ . '/mirza_agent.php';
 require_once __DIR__ . '/Rebecca.php';
+require_once __DIR__ . '/bulk_audience.php';
 
 class ManagePanel
 {
@@ -440,6 +441,9 @@ class ManagePanel
         } else {
             $Output['status'] = 'Unsuccessful';
             $Output['msg'] = 'Panel Not Found';
+        }
+        if (($Output['status'] ?? null) === 'successful' && isset($Data_Config['expire']) && is_numeric($Data_Config['expire'])) {
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = ? WHERE username = ? AND Service_location = ?', [(int) $Data_Config['expire'], $usernameC, $name_panel]);
         }
         return $Output;
     }
@@ -2176,6 +2180,7 @@ class ManagePanel
             if ($new_limit != 0) {
                 setjob($panel['name_panel'], "total_data", $data_limit_new / pow(1024, 3), $datauser['id']);
             }
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = ?, depleted_at = NULL WHERE id_invoice = ?', [strtotime($time_new), $invoice['id_invoice']]);
             return array(
                 'status' => true
             );
@@ -2214,6 +2219,8 @@ class ManagePanel
                     'msg' => $extend['msg']
                 );
             }
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = NULL, depleted_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
+            bulkRefreshInvoiceExpiry($pdo, $invoice['id_invoice'], fn() => $this->DataUser($panel['name_panel'], $username));
             return array(
                 'status' => true,
                 'msg' => 'successful'
@@ -2231,10 +2238,13 @@ class ManagePanel
                 'msg' => $extend['msg']
             );
         }
+        bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = NULL, depleted_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
+        bulkRefreshInvoiceExpiry($pdo, $invoice['id_invoice'], fn() => $this->DataUser($panel['name_panel'], $username));
         return $extend;
     }
     function extra_volume($username_account, $code_panel, $limit_volume_new)
     {
+        global $pdo;
         $panel = select("marzban_panel", "*", "code_panel", $code_panel, "select");
         $invoice = select("invoice", "*", "username", $username_account, "select");
         if ($panel == false) {
@@ -2319,6 +2329,7 @@ class ManagePanel
                 $this->ResetUserDataUsage($username_account, $panel['name_panel']);
             }
             $log = setjob($panel['name_panel'], "total_data", $new_limit / pow(1024, 3), $datauser['id']);
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET depleted_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
             return array(
                 'status' => true,
                 'data' => $log
@@ -2347,6 +2358,7 @@ class ManagePanel
                     'msg' => $volume_add['msg']
                 );
             }
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET depleted_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
             return array(
                 'status' => true,
                 'msg' => 'successful'
@@ -2363,10 +2375,12 @@ class ManagePanel
                 'msg' => $extra_volume['msg']
             );
         }
+        bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET depleted_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
         return $extra_volume;
     }
     function extra_time($username_account, $code_panel, $limit_time_new)
     {
+        global $pdo;
         $panel = select("marzban_panel", "*", "code_panel", $code_panel, "select");
         $invoice = select("invoice", "*", "username", $username_account, "select");
         if ($panel == false) {
@@ -2456,6 +2470,7 @@ class ManagePanel
                 deletejob($panel['name_panel'], $datam);
             }
             $log = setjob($panel['name_panel'], "date", date('Y-m-d H:i:s', $new_limit), $datauser['id']);
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = ? WHERE id_invoice = ?', [$new_limit, $invoice['id_invoice']]);
             return array(
                 'status' => true,
                 'data' => $log
@@ -2485,6 +2500,8 @@ class ManagePanel
                     'msg' => $time_add['msg']
                 );
             }
+            bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
+            bulkRefreshInvoiceExpiry($pdo, $invoice['id_invoice'], fn() => $this->DataUser($panel['name_panel'], $username_account));
             return array(
                 'status' => true,
                 'msg' => 'successful'
@@ -2501,6 +2518,8 @@ class ManagePanel
                 'msg' => $extra_time['msg']
             );
         }
+        bulkCacheInvoiceExpiry($pdo, 'UPDATE invoice SET expires_at = NULL WHERE id_invoice = ?', [$invoice['id_invoice']]);
+        bulkRefreshInvoiceExpiry($pdo, $invoice['id_invoice'], fn() => $this->DataUser($panel['name_panel'], $username_account));
         return $extra_time;
     }
 }

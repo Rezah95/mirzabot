@@ -19,6 +19,8 @@ return [
         bottype varchar(200) NULL,
         refral varchar(100) NULL,
         time_cron varchar(100) NULL,
+        expires_at BIGINT UNSIGNED NULL,
+        depleted_at BIGINT UNSIGNED NULL,
         notifctions TEXT NOT NULL,
         Status varchar(200) NULL
         SQL,
@@ -30,6 +32,8 @@ return [
         ['bottype', null, 'VARCHAR(200)'],
         ['refral', null, 'VARCHAR(100)'],
         ['time_cron', null, 'VARCHAR(100)'],
+        ['expires_at', null, 'BIGINT UNSIGNED NULL'],
+        ['depleted_at', null, 'BIGINT UNSIGNED NULL'],
         ['notifctions', $notifications, 'TEXT NOT NULL'],
         ['Status', null, 'VARCHAR(100)'],
     ],

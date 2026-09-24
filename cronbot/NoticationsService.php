@@ -7,6 +7,7 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../botapi.php';
 require_once __DIR__ . '/../panels.php';
 require_once __DIR__ . '/../function.php';
+require_once __DIR__ . '/../bulk_audience.php';
 $textbotlang = languagechange();
 class ServiceMonitor
 {
@@ -46,6 +47,26 @@ class ServiceMonitor
             $data = $this->processInvoice($invoice);
             if (!is_array($data))
                 continue;
+            bulkEnsureExpirySchema($this->pdo);
+            $expiry = $data['userData']['expire'] ?? null;
+            if ($expiry !== null && (is_numeric($expiry) || is_string($expiry))) {
+                $expiry = is_numeric($expiry) ? (int) $expiry : strtotime($expiry);
+                if ($expiry !== false && $expiry >= 0) {
+                    $this->pdo->prepare('UPDATE invoice SET expires_at = ? WHERE id_invoice = ?')
+                        ->execute([$expiry, $invoice['id_invoice']]);
+                }
+            }
+            $volumeLimit = $data['userData']['data_limit'] ?? 0;
+            $volumeUsed = $data['userData']['used_traffic'] ?? 0;
+            $volumeEnded = ($data['userData']['status'] ?? '') === 'limited'
+                || (is_numeric($volumeLimit) && is_numeric($volumeUsed) && (float) $volumeLimit > 0 && (float) $volumeUsed >= (float) $volumeLimit);
+            if ($volumeEnded) {
+                $this->pdo->prepare('UPDATE invoice SET depleted_at = COALESCE(depleted_at, ?) WHERE id_invoice = ?')
+                    ->execute([time(), $invoice['id_invoice']]);
+            } elseif (($data['userData']['status'] ?? '') === 'active') {
+                $this->pdo->prepare('UPDATE invoice SET depleted_at = NULL WHERE id_invoice = ?')
+                    ->execute([$invoice['id_invoice']]);
+            }
             $result = false;
             if (!$check_send['volume']) {
                 if ($this->status_cron['volume'])

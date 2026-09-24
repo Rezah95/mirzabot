@@ -5,6 +5,7 @@ require_once __DIR__ . '/../function.php';
 require_once __DIR__ . '/utils.php';
 require_once __DIR__ . '/../botapi.php';
 require_once __DIR__ . '/../panels.php';
+require_once __DIR__ . '/../discount_rules.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 date_default_timezone_set('Asia/Tehran');
@@ -86,34 +87,16 @@ function disc_discount_add(array $data, string $method): void
 
     validateMethod('POST', $method);
     requireFields($data, ['code']);
-    $price = requireInt($data, 'price', 0);
-    $limitUse = requireInt($data, 'limit_use', 0);
+    $price = requireInt($data, 'price', 1, 100000000);
+    $limitUse = requireInt($data, 'limit_use', 1);
 
-    if (!preg_match('/^[A-Za-z\d]+$/', $data['code'])) {
+    if (!preg_match('/^[A-Za-z\d]{1,40}$/', $data['code'])) {
         sendJsonResponse(false, "invalid code", [], 200);
     }
-    if (select("Discount", "*", "code", $data['code'], "count") != 0) {
-        sendJsonResponse(false, "Discount code exits", [], 200);
-    }
     try {
-        $productData = [
-            'code' => $data['code'],
-            'price' => $price,
-            'limituse' => $limitUse,
-            'limitused' => 0
-        ];
-
-        $columns = implode(',', array_keys($productData));
-        $placeholders = ':' . implode(', :', array_keys($productData));
-        $stmt = $pdo->prepare(
-            "INSERT IGNORE INTO Discount ({$columns}) VALUES ({$placeholders})"
-        );
-
-        foreach ($productData as $key => $value) {
-            $stmt->bindValue(":{$key}", $value);
+        if (!discountCreateGift($pdo, $data['code'], $price, $limitUse)) {
+            sendJsonResponse(false, 'Discount code already exists', [], 409);
         }
-
-        $stmt->execute();
         sendJsonResponse(true, "Successful");
 
     } catch (Exception $e) {
@@ -251,14 +234,15 @@ function disc_discount_sell_add(array $data, string $method): void
 
     validateMethod('POST', $method);
     requireFields($data, ['code']);
-    $percent = requireInt($data, 'percent', 0, 100);
-    $limitUse = requireInt($data, 'limit_use', 0);
-
-    if (!preg_match('/^[A-Za-z\d]+$/', $data['code'])) {
-        sendJsonResponse(false, "invalid code", [], 200);
+    $percent = requireInt($data, 'percent', 1, 100);
+    $limitUse = requireInt($data, 'limit_use', 1);
+    $perUser = isset($data['useuser']) ? requireInt($data, 'useuser', 1) : 1;
+    if ($perUser > $limitUse) {
+        sendJsonResponse(false, 'Per-user limit exceeds total limit', [], 400);
     }
-    if (select("DiscountSell", "*", "codeDiscount", $data['code'], "count") != 0) {
-        sendJsonResponse(false, "Discount code exits", [], 200);
+
+    if (!preg_match('/^[A-Za-z\d]{1,40}$/', $data['code'])) {
+        sendJsonResponse(false, "invalid code", [], 200);
     }
     try {
         $productData = [
@@ -268,24 +252,16 @@ function disc_discount_sell_add(array $data, string $method): void
             'usedDiscount' => 0,
             'agent' => empty($data['agent']) ? "allusers" : $data['agent'],
             'usefirst' => empty($data['usefirst']) ? "0" : $data['usefirst'],
-            'useuser' => empty($data['useuser']) ? null : $data['useuser'],
+            'useuser' => $perUser,
             'code_product' => empty($data['code_product']) ? "all" : $data['code_product'],
             'code_panel' => empty($data['code_panel']) ? "/all" : $data['code_panel'],
-            'time' => empty($data['time']) ? null : $data['time'],
+            'time' => empty($data['time']) ? 0 : requireInt($data, 'time', 0),
             'type' => empty($data['type']) ? "all" : $data['type'],
         ];
 
-        $columns = implode(',', array_keys($productData));
-        $placeholders = ':' . implode(', :', array_keys($productData));
-        $stmt = $pdo->prepare(
-            "INSERT IGNORE INTO DiscountSell ({$columns}) VALUES ({$placeholders})"
-        );
-
-        foreach ($productData as $key => $value) {
-            $stmt->bindValue(":{$key}", $value);
+        if (!discountCreate($pdo, $productData)) {
+            sendJsonResponse(false, 'Discount code already exists', [], 409);
         }
-
-        $stmt->execute();
         sendJsonResponse(true, "Successful");
 
     } catch (Exception $e) {

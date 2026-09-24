@@ -8,6 +8,7 @@ require_once 'config.php';
 require_once 'botapi.php';
 require_once 'jdf.php';
 require_once 'function.php';
+require_once 'discount_rules.php';
 require_once 'payment/tronado_lib.php';
 mirzaEnsureInstallerRemoved();
 require_once 'keyboard.php';
@@ -1650,6 +1651,13 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $stmt->bindParam(':codeDiscount', $text, PDO::PARAM_STR);
     $stmt->execute();
     $SellDiscountlimit = $stmt->fetch(PDO::FETCH_ASSOC);
+    $SellDiscountlimit = $SellDiscountlimit
+        ? discountPreview($pdo, (string) $text, (string) $from_id, $user['agent'], $marzban_list_get['code_panel'], $userdate['code_product'], 'extend', $textbotlang['common']['labels']['testServiceName'])
+        : null;
+    if ($SellDiscountlimit === null) {
+        sendmessage($from_id, $textbotlang['users']['Discount']['invalidCode'], null, 'HTML');
+        return;
+    }
     $stmt = $pdo->prepare("SELECT * FROM Giftcodeconsumed WHERE id_user = :from_id AND code = :code");
     $stmt->bindParam(':from_id', $from_id, PDO::PARAM_STR);
     $stmt->bindParam(':code', $text, PDO::PARAM_STR);
@@ -1759,10 +1767,13 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         return;
     }
     if ($datain == "confirmserdiscount") {
-        $SellDiscountlimit = select("DiscountSell", "*", "codeDiscount", $partsdic[1], "select");
-        if ($SellDiscountlimit != false) {
-            $pricelastextend = $partsdic[2];
+        $discountRow = discountPreview($pdo, (string) ($partsdic[1] ?? ''), (string) $from_id, $user['agent'], $marzban_list_get['code_panel'], $prodcut['code_product'], 'extend', $textbotlang['common']['labels']['testServiceName']);
+        $discountedPrice = $discountRow ? max(0, round((float) $prodcut['price_product'] * (1 - ((int) $discountRow['price'] / 100)))) : null;
+        if ($discountRow === null || !isset($partsdic[2]) || !is_numeric($partsdic[2]) || (float) $partsdic[2] != $discountedPrice) {
+            sendmessage($from_id, $textbotlang['users']['Discount']['notAllowed'], null, 'HTML');
+            return;
         }
+        $pricelastextend = $discountedPrice;
     }
     if (intval($user['pricediscount']) != 0) {
         $result = ($pricelastextend * $user['pricediscount']) / 100;
@@ -1821,17 +1832,24 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         $cashbackextend = ($pricelastextend * $valurcashbackextend) / 100;
         $pricelastextend = max($pricelastextend - $cashbackextend, 0);
     }
-    if (!deductBalance($user, $pricelastextend)) {
+    $discountRedeemId = null;
+    if ($datain == 'confirmserdiscount') {
+        $discountRedeemId = substr(hash('sha256', 'wallet-renew:' . $id_invoice . ':' . $message_id . ':' . $partsdic[1]), 0, 32);
+        try {
+            $balanceDeducted = discountConsume($pdo, $discountRedeemId, $partsdic[1], (string) $from_id, $user['agent'], $marzban_list_get['code_panel'], $prodcut['code_product'], 'extend', $textbotlang['common']['labels']['testServiceName'], null, static fn() => deductBalance($user, $pricelastextend));
+        } catch (Throwable $e) {
+            error_log('Discount renewal failed: ' . $e->getMessage());
+            $balanceDeducted = false;
+        }
+    } else {
+        $balanceDeducted = deductBalance($user, $pricelastextend);
+    }
+    if (!$balanceDeducted) {
         sendmessage($from_id, $textbotlang['users']['Balance']['notEnoughBalance'], null, 'HTML');
         return;
     }
     if ($datain == "confirmserdiscount") {
-        $SellDiscountlimit = select("DiscountSell", "*", "codeDiscount", $partsdic[1], "select");
-        if ($SellDiscountlimit != false) {
-            $value = intval($SellDiscountlimit['usedDiscount']) + 1;
-            update("DiscountSell", "usedDiscount", $value, "codeDiscount", $partsdic[1]);
-            $stmt = $pdo->prepare("INSERT INTO Giftcodeconsumed (id_user,code) VALUES (?,?)");
-            $stmt->execute([$from_id, $partsdic[1]]);
+        if ($discountRedeemId !== null) {
             $text_report = strtr($textbotlang['Admin']['reportgroup']['discountUsedRenew'], ['{username}' => $username, '{from_id}' => $from_id, '{discount_code}' => $partsdic[1]]);
             if (strlen($setting['Channel_Report']) > 0) {
                 telegram('sendmessage', [
@@ -1849,6 +1867,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     }
     $extend = $ManagePanel->extend($marzban_list_get['Methodextend'], $prodcut['Volume_constraint'], $prodcut['Service_time'], $nameloc['username'], $prodcut['code_product'], $marzban_list_get['code_panel']);
     if ($extend['status'] == false) {
+        if ($discountRedeemId !== null) {
+            discountRelease($pdo, $discountRedeemId);
+        }
         addBalance($from_id, $pricelastextend);
         $extend['msg'] = json_encode($extend['msg']);
         $textreports = sprintf($textbotlang['Admin']['reportgroup']['errorRenewService'], $marzban_list_get['name_panel'], $nameloc['username'], $extend['msg']);
@@ -3871,12 +3892,13 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     if (!isset($info_product['price_product']))
         return;
     if ($datain == "confirmandgetserviceDiscount") {
-        $discountcode = select("DiscountSell", "*", "codeDiscount", $partsdic[0], "count");
-        if ($discountcode == 0) {
+        $discountRow = discountPreview($pdo, (string) ($partsdic[0] ?? ''), (string) $from_id, $user['agent'], $marzban_list_get['code_panel'], $info_product['code_product'], 'buy', $textbotlang['common']['labels']['testServiceName']);
+        $discountedPrice = $discountRow ? max(0, round((float) $info_product['price_product'] * (1 - ((int) $discountRow['price'] / 100)))) : null;
+        if ($discountRow === null || !isset($partsdic[1]) || !is_numeric($partsdic[1]) || (float) $partsdic[1] != $discountedPrice) {
             sendmessage($from_id, $textbotlang['users']['Discount']['notAllowed'], null, 'HTML');
             return;
         }
-        $priceproduct = $partsdic[1];
+        $priceproduct = $discountedPrice;
     } else {
         $priceproduct = $info_product['price_product'];
     }
@@ -3944,18 +3966,26 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         }
         return;
     }
-    if (!deductBalance($user, $priceproduct)) {
+    $discountRedeemId = null;
+    if ($datain == "confirmandgetserviceDiscount") {
+        $discountRedeemId = substr(hash('sha256', 'wallet-buy:' . $randomString), 0, 32);
+        try {
+            $balanceDeducted = discountConsume($pdo, $discountRedeemId, $partsdic[0], (string) $from_id, $user['agent'], $marzban_list_get['code_panel'], $info_product['code_product'], 'buy', $textbotlang['common']['labels']['testServiceName'], $randomString, static fn() => deductBalance($user, $priceproduct));
+        } catch (Throwable $e) {
+            error_log('Discount purchase failed: ' . $e->getMessage());
+            $balanceDeducted = false;
+        }
+    } else {
+        $balanceDeducted = deductBalance($user, $priceproduct);
+    }
+    if (!$balanceDeducted) {
+        $pdo->prepare("DELETE FROM invoice WHERE id_invoice = ? AND Status = 'unpaid'")->execute([$randomString]);
         sendmessage($from_id, $textbotlang['users']['Balance']['notEnoughBalance'], null, 'HTML');
         return;
     }
     Editmessagetext($from_id, $message_id, $textbotlang['users']['sell']['creating'], null);
     if ($datain == "confirmandgetserviceDiscount") {
-        $SellDiscountlimit = select("DiscountSell", "*", "codeDiscount", $partsdic[0], "select");
-        if ($SellDiscountlimit != false) {
-            $value = intval($SellDiscountlimit['usedDiscount']) + 1;
-            $stmt = $pdo->prepare("INSERT INTO Giftcodeconsumed (id_user,code) VALUES (?,?)");
-            $stmt->execute([$from_id, $partsdic[0]]);
-            update("DiscountSell", "usedDiscount", $value, "codeDiscount", $partsdic[0]);
+        if ($discountRedeemId !== null) {
             $text_report = strtr($textbotlang['Admin']['reportgroup']['discountUsed'], ['{username}' => $username, '{from_id}' => $from_id, '{discount_code}' => $partsdic[0]]);
             if (strlen($setting['Channel_Report']) > 0) {
                 telegram('sendmessage', [
@@ -3996,7 +4026,11 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             $errorMessage = (string) $errorMessage;
         }
         $dataoutput['msg'] = $errorMessage;
+        if ($discountRedeemId !== null) {
+            discountRelease($pdo, $discountRedeemId);
+        }
         addBalance($from_id, $priceproduct);
+        $pdo->prepare("DELETE FROM invoice WHERE id_invoice = ? AND Status = 'unpaid'")->execute([$randomString]);
         sendmessage($from_id, $textbotlang['users']['sell']['errorConfig'], $keyboard, 'HTML');
         $texterros = sprintf($textbotlang['Admin']['reportgroup']['errorSubscriptionCreate'], $dataoutput['msg'], $from_id, $username, $marzban_list_get['name_panel']);
         if (strlen($setting['Channel_Report']) > 0) {
@@ -4169,6 +4203,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     $stmt->bindParam(':codeDiscount', $text, PDO::PARAM_STR);
     $stmt->execute();
     $SellDiscountlimit = $stmt->fetch(PDO::FETCH_ASSOC);
+    $SellDiscountlimit = $SellDiscountlimit
+        ? discountPreview($pdo, (string) $text, (string) $from_id, $user['agent'], $marzban_list_get['code_panel'], $info_product['code_product'] ?? 'customvolume', 'buy', $textbotlang['common']['labels']['testServiceName'])
+        : null;
     $stmt = $pdo->prepare("SELECT * FROM Giftcodeconsumed WHERE id_user = :from_id AND code = :code");
     $stmt->bindParam(':from_id', $from_id, PDO::PARAM_STR);
     $stmt->bindParam(':code', $text, PDO::PARAM_STR);
@@ -5881,41 +5918,20 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     Editmessagetext($from_id, $message_id, $textbotlang['users']['Discount']['getcode'], $bakinfos);
     step('get_code_user', $from_id);
 } elseif ($user['step'] == "get_code_user") {
-    if (!rowExists("Discount", "code", $text)) {
-        sendmessage($from_id, $textbotlang['users']['Discount']['notcode'], null, 'HTML');
+    try {
+        $giftAmount = discountRedeemGift($pdo, (string) $text, (string) $from_id);
+    } catch (Throwable $e) {
+        error_log('Gift code redemption failed: ' . $e->getMessage());
+        $giftAmount = null;
+    }
+    if ($giftAmount === null) {
+        sendmessage($from_id, $textbotlang['users']['Discount']['invalidCode'], $backuser, 'HTML');
         return;
     }
-    $checklimit = select("Discount", "*", "code", $text, "select");
-    if ($checklimit['limitused'] >= $checklimit['limituse']) {
-        sendmessage($from_id, $textbotlang['users']['Discount']['errorLimitDiscount'], $backuser, 'HTML');
-        return;
-    }
-    $stmt = $pdo->prepare("SELECT * FROM Giftcodeconsumed WHERE id_user = :from_id AND code = :code");
-    $stmt->bindParam(':from_id', $from_id, PDO::PARAM_STR);
-    $stmt->bindParam(':code', $text, PDO::PARAM_STR);
-    $stmt->execute();
-    $Checkcodesql = $stmt->rowCount();
-    if ($Checkcodesql != 0) {
-        sendmessage($from_id, $textbotlang['users']['Discount']['giftcodeonce'], $keyboard, 'HTML');
-        step('home', $from_id);
-        return;
-    }
-    $stmt = $pdo->prepare("SELECT * FROM Discount WHERE code = :code LIMIT 1");
-    $stmt->bindParam(':code', $text);
-    $stmt->execute();
-    $get_codesql = $stmt->fetch(PDO::FETCH_ASSOC);
-    $balance_user = $user['Balance'] + $get_codesql['price'];
-    addBalance($from_id, $get_codesql['price']);
-    $discountlimitadd = intval($checklimit['limitused']) + 1;
-    update("Discount", "limitused", $discountlimitadd, "code", $text);
     step('home', $from_id);
-    $text_balance_code = sprintf($textbotlang['users']['Discount']['giftcodesuccess'], $get_codesql['price']);
+    clearSelectCache('user');
+    $text_balance_code = sprintf($textbotlang['users']['Discount']['giftcodesuccess'], $giftAmount);
     sendmessage($from_id, $text_balance_code, $keyboard, 'HTML');
-    $stmt = $pdo->prepare("INSERT INTO Giftcodeconsumed (id_user, code) VALUES (:id_user, :code)");
-    $stmt->execute([
-        ':id_user' => $from_id,
-        ':code' => $text,
-    ]);
     $text_report = sprintf($textbotlang['users']['Discount']['giftcodeused'], $username, $from_id, $text);
     if (strlen($setting['Channel_Report']) > 0) {
         telegram('sendmessage', [

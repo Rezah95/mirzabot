@@ -6,6 +6,10 @@ $text_panel_admin_login_template = sprintf($textbotlang['Admin']['report']['abou
 
 if (!in_array($from_id, $admin_ids))
     return;
+require_once __DIR__ . '/bulk_audience.php';
+require_once __DIR__ . '/bulk_queue.php';
+require_once __DIR__ . '/bulk_credit.php';
+require_once __DIR__ . '/discount_rules.php';
 $domainhostsEscaped = htmlspecialchars($domainhosts, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
 $miniAppInstructionText = sprintf($textbotlang['Admin']['webpanel']['miniAppHelp'], $domainhostsEscaped);
@@ -925,7 +929,8 @@ if ($datain == "paygwback") {
 elseif ($datain == "systemsms") {
     if (is_file('cronbot/users.json')) {
         $userslist = json_decode(file_get_contents('cronbot/users.json'), true);
-        if (is_array($userslist) and count($userslist) != 0) {
+        $pendingUsers = is_array($userslist) ? ($userslist['users'] ?? $userslist) : [];
+        if (count($pendingUsers) != 0) {
             sendmessage($from_id, $textbotlang['Admin']['messageBulk']['busy'], $keyboardadmin, 'HTML');
             return;
         }
@@ -955,6 +960,8 @@ elseif ($datain == "systemsms") {
     savedata("clear", "typeservice", $type);
     if ($type == "unpinmessage") {
         deletemessage($from_id, $message_id);
+        $previewToken = bin2hex(random_bytes(10));
+        savedata('save', 'preview_token', $previewToken);
         $typesend = [
             "unpinmessage" => $textbotlang['Admin']['messageBulk']['btnCancelPin']
         ][$type];
@@ -962,7 +969,7 @@ elseif ($datain == "systemsms") {
         $startaction = json_encode([
             'inline_keyboard' => [
                 [
-                    ['text' => $textbotlang['keyboard']['confirmAndStart'], 'callback_data' => 'startaction'],
+                    ['text' => $textbotlang['keyboard']['confirmAndStart'], 'callback_data' => 'startaction_' . $previewToken],
                 ],
             ]
         ]);
@@ -981,6 +988,9 @@ elseif ($datain == "systemsms") {
             ],
             [
                 ['text' => $textbotlang['keyboard']['usersNotBought'], 'callback_data' => 'typeusermessage-nonecustomer'],
+            ],
+            [
+                ['text' => $textbotlang['Admin']['messageBulk']['expiredUnrenewed'], 'callback_data' => 'typeusermessage-expired_unrenewed'],
             ],
             [
                 ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'systemsms'],
@@ -1025,6 +1035,11 @@ elseif ($datain == "systemsms") {
         return;
     }
     savedata("save", "agent", $type);
+    if ($userdata['typeusermessage'] == 'expired_unrenewed') {
+        Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['askExpiredRange'], $backadmin);
+        step('bulk_expired_days', $from_id);
+        return;
+    }
     if ($userdata['typeusermessage'] == "customer") {
         $stmt = $pdo->prepare("SELECT * FROM marzban_panel WHERE agent = :agent OR agent = 'all'");
         $stmt->bindParam(':agent', $type);
@@ -1057,6 +1072,23 @@ elseif ($datain == "systemsms") {
     }
     step("gettextSystemMessage", $from_id);
     sendmessage($from_id, $textbotlang['Admin']['messageBulk']['askText'], $backadmin, 'HTML');
+} elseif ($user['step'] == 'bulk_expired_days') {
+    $range = bulkParseDayRange((string) $text);
+    if ($range === null) {
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['invalidExpiredRange'], $backadmin, 'HTML');
+        return;
+    }
+    savedata('save', 'days_from', $range[0]);
+    savedata('save', 'days_to', $range[1]);
+    $pinKeyboard = json_encode(['inline_keyboard' => [
+        [
+            ['text' => $textbotlang['keyboard']['yes'], 'callback_data' => 'typepinmessage-yes'],
+            ['text' => $textbotlang['keyboard']['no'], 'callback_data' => 'typepinmessage-no'],
+        ],
+        [['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeusermessage-expired_unrenewed']],
+    ]]);
+    sendmessage($from_id, $textbotlang['Admin']['messageBulk']['askPin'], $pinKeyboard, 'HTML');
+    step('home', $from_id);
 } elseif (preg_match('/^locationmessage_(\w+)/', $datain, $dataget)) {
     $typeoanel = $dataget[1];
     $userdata = json_decode($user['Processing_value'], true);
@@ -1185,226 +1217,96 @@ elseif ($datain == "systemsms") {
         "all" => $textbotlang['Admin']['messageBulk']['targetAllUsers'],
         "customer" => $textbotlang['Admin']['messageBulk']['targetCustomers'],
         "nonecustomer" => $textbotlang['Admin']['messageBulk']['targetNoPurchase'],
+        "expired_unrenewed" => $textbotlang['Admin']['messageBulk']['expiredUnrenewed'],
     ][$userdata['typeusermessage'] ?? ''] ?? ($userdata['typeusermessage'] ?? '');
     if (($userdata['typeservice'] ?? '') == "xdaynotmessage") {
         $textday = sprintf($textbotlang['Admin']['messageBulk']['inactiveDaysLabel'], $userdata['daynoyuse'] ?? '');
     } else {
         $textday = "";
     }
+    if (($userdata['typeusermessage'] ?? '') === 'expired_unrenewed') {
+        $textday = sprintf($textbotlang['Admin']['messageBulk']['expiredRangeSummary'], $userdata['days_from'], $userdata['days_to']);
+    }
     $textconfirm = sprintf($textbotlang['Admin']['messageBulk']['confirmSummary2'], $typesend, $typeservice, $userdata['agent'] ?? '', $textday);
+    try {
+        $textconfirm .= "\n" . sprintf($textbotlang['Admin']['messageBulk']['recipientCount'], bulkAudienceCount($pdo, bulkBroadcastCriteria($pdo, $userdata), true));
+    } catch (Throwable $e) {
+        error_log('Bulk audience preview failed: ' . $e->getMessage());
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['errorRestart'], $keyboardadmin, 'HTML');
+        return;
+    }
+    if ($userdata['typeservice'] !== 'forwardmessage') {
+        $textconfirm .= "\n" . sprintf($textbotlang['Admin']['messageBulk']['messagePreview'], htmlspecialchars((string) $text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+    }
+    $previewToken = bin2hex(random_bytes(10));
+    savedata('save', 'preview_token', $previewToken);
     $startaction = json_encode([
         'inline_keyboard' => [
             [
-                ['text' => $textbotlang['keyboard']['confirmAndStart'], 'callback_data' => 'startaction'],
+                ['text' => $textbotlang['keyboard']['confirmAndStart'], 'callback_data' => 'startaction_' . $previewToken],
             ],
         ]
     ]);
     sendmessage($from_id, $textconfirm, $startaction, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['messageBulk']['confirmStart'], $keyboardadmin, 'HTML');
     step("home", $from_id);
-} elseif ($datain == "startaction") {
+} elseif (preg_match('/^startaction_([a-f0-9]{20})$/', $datain, $actionMatch)) {
     $userdata = json_decode($user['Processing_value'], true);
-    if (!isset($userdata['typeservice'])) {
+    if (!isset($userdata['typeservice']) || ($userdata['preview_token'] ?? '') !== $actionMatch[1]) {
         sendmessage($from_id, $textbotlang['Admin']['messageBulk']['errorRestart'], $keyboardadmin, 'HTML');
         return;
     }
-    $agent = $userdata['agent'];
     $typeservice = $userdata['typeservice'];
-    $typeusermessage = $userdata['typeusermessage'];
-    $text = $userdata['message'];
-    $cancelmessage = json_encode([
-        'inline_keyboard' => [
-            [
-                ['text' => $textbotlang['keyboard']['cancelOperation'], 'callback_data' => 'cancel_sendmessage'],
-            ],
-        ]
-    ]);
-
-    if ($typeservice == "unpinmessage") {
-        $userlist = json_encode(select("user", "id", null, null, "fetchAll"));
-        $message_id = Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['started'], $cancelmessage);
-        $dataunpin = json_encode(array(
-            "id_admin" => $from_id,
-            'type' => "unpinmessage",
-            "id_message" => $message_id['result']['message_id']
-        ));
-        file_put_contents("cronbot/users.json", $userlist);
-        file_put_contents('cronbot/info', $dataunpin);
-    } elseif ($typeservice == "sendmessage") {
-        if ($agent == "all") {
-            if ($typeusermessage == "all") {
-                $userslist = json_encode(select("user", "id", "User_Status", "Active", "fetchAll"));
-            } elseif ($typeusermessage == "customer") {
-                if (($userdata['selectpanel'] ?? 'all') == "all") {
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                    $stmt->execute();
-                } else {
-                    $panel = select("marzban_panel", "*", "code_panel", $userdata['selectpanel'], "select");
-                    if (empty($panel['name_panel'])) {
-                        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['errorRestart'], $keyboardadmin, 'HTML');
-                        return;
-                    }
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id AND i.Service_location = :mp1) AND u.User_Status = 'Active'");
-                    $stmt->execute([':mp1' => $panel['name_panel']]);
-                }
-                $userslist = json_encode($stmt->fetchAll());
-            } elseif ($typeusermessage == "nonecustomer") {
-                $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            }
-        } else {
-            if ($typeusermessage == "all") {
-                $userslist = json_encode(select("user", "id", "agent", $agent, "fetchAll"));
-            } elseif ($typeusermessage == "customer") {
-                if (($userdata['selectpanel'] ?? 'all') == "all") {
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                    $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                    $stmt->execute();
-                } else {
-                    $panel = select("marzban_panel", "*", "code_panel", $userdata['selectpanel'], "select");
-                    if (empty($panel['name_panel'])) {
-                        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['errorRestart'], $keyboardadmin, 'HTML');
-                        return;
-                    }
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE  u.agent =  :agent AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id AND i.Service_location = :location) AND u.User_Status = 'Active'");
-                    $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                    $stmt->bindParam(':location', $panel['name_panel'], PDO::PARAM_STR);
-                    $stmt->execute();
-                }
-                $userslist = json_encode($stmt->fetchAll());
-            } elseif ($typeusermessage == "nonecustomer") {
-                $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            }
-        }
-        $message_id = Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['started'], $cancelmessage);
-        $data = json_encode(array(
-            "id_admin" => $from_id,
-            'type' => "sendmessage",
-            "id_message" => $message_id['result']['message_id'],
-            "message" => $userdata['message'],
-            "pingmessage" => $userdata['typepinmessage'],
-            "btnmessage" => $userdata['btntypemessage']
-        ));
-        file_put_contents("cronbot/users.json", $userslist);
-        file_put_contents('cronbot/info', $data);
-    } elseif ($typeservice == "forwardmessage") {
-        if ($agent == "all") {
-            if ($typeusermessage == "all") {
-                $userslist = json_encode(select("user", "id", "User_Status", "Active", "fetchAll"));
-            } elseif ($typeusermessage == "customer") {
-                if (($userdata['selectpanel'] ?? 'all') == "all") {
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                    $stmt->execute();
-                } else {
-                    $panel = select("marzban_panel", "*", "code_panel", $userdata['selectpanel'], "select");
-                    if (empty($panel['name_panel'])) {
-                        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['errorRestart'], $keyboardadmin, 'HTML');
-                        return;
-                    }
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id AND i.Service_location = :mp3) AND u.User_Status = 'Active'");
-                    $stmt->execute([':mp3' => $panel['name_panel']]);
-                }
-                $userslist = json_encode($stmt->fetchAll());
-            } elseif ($typeusermessage == "nonecustomer") {
-                $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            }
-        } else {
-            if ($typeusermessage == "all") {
-                $userslist = json_encode(select("user", "id", "agent", $agent, "fetchAll"));
-            } elseif ($typeusermessage == "customer") {
-                if (($userdata['selectpanel'] ?? 'all') == "all") {
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                    $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                    $stmt->execute();
-                } else {
-                    $panel = select("marzban_panel", "*", "code_panel", $userdata['selectpanel'], "select");
-                    if (empty($panel['name_panel'])) {
-                        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['errorRestart'], $keyboardadmin, 'HTML');
-                        return;
-                    }
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id AND i.Service_location = :location) AND u.User_Status = 'Active'");
-                    $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                    $stmt->bindParam(':location', $panel['name_panel'], PDO::PARAM_STR);
-                    $stmt->execute();
-                }
-                $userslist = json_encode($stmt->fetchAll());
-            } elseif ($typeusermessage == "nonecustomer") {
-                $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id) AND u.User_Status = 'Active'");
-                $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            }
-        }
-        $message_id = Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['started'], $cancelmessage);
-        $data = json_encode(array(
-            "id_admin" => $from_id,
-            'type' => "forwardmessage",
-            "id_message" => $message_id['result']['message_id'],
-            "message" => $userdata['message'],
-            "pingmessage" => $userdata['typepinmessage'],
-        ));
-        file_put_contents("cronbot/users.json", $userslist);
-        file_put_contents('cronbot/info', $data);
-    } elseif ($typeservice == "xdaynotmessage") {
-        $timedaystamp = intval($userdata['daynoyuse']) * 86400;
-        $timenouser = time() - $timedaystamp;
-        if ($agent == "all") {
-            $stmt = $pdo->prepare("SELECT id FROM user  WHERE last_message_time < $timenouser");
-            $stmt->execute();
-            $userslist = json_encode($stmt->fetchAll());
-        } else {
-            if ($typeusermessage == "all") {
-                $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.last_message_time < :time");
-                $stmt->bindParam(':time', $timenouser, PDO::PARAM_STR);
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            } elseif ($typeusermessage == "customer") {
-                if ($userdata['selectpanel'] == "all") {
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND u.last_message_time < :time AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id);");
-                } else {
-                    $panel = select("marzban_panel", "*", "code_panel", $userdata['selectpanel'], "select");
-                    $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND u.last_message_time < :time AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id AND i.Service_location = :location);");
-                    $stmt->bindParam(':location', $panel['name_panel'], PDO::PARAM_STR);
-                }
-                $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                $stmt->bindParam(':time', $timenouser, PDO::PARAM_STR);
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            } elseif ($typeusermessage == "nonecustomer") {
-                $stmt = $pdo->prepare("SELECT u.id FROM user u WHERE u.agent =  :agent AND u.last_message_time < :time AND NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id);");
-                $stmt->bindParam(':agent', $agent, PDO::PARAM_STR);
-                $stmt->bindParam(':time', $timenouser, PDO::PARAM_STR);
-                $stmt->execute();
-                $userslist = json_encode($stmt->fetchAll());
-            }
-        }
-        $message_id = Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['started'], $cancelmessage);
-        $data = json_encode(array(
-            "id_admin" => $from_id,
-            'type' => "xdaynotmessage",
-            "id_message" => $message_id['result']['message_id'],
-            "message" => $userdata['message'],
-            "pingmessage" => $userdata['typepinmessage'],
-            "btnmessage" => $userdata['btntypemessage']
-        ));
-        file_put_contents("cronbot/users.json", $userslist);
-        file_put_contents('cronbot/info', $data);
+    if (!in_array($typeservice, ['unpinmessage', 'sendmessage', 'forwardmessage', 'xdaynotmessage'], true)) {
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['errorRestart'], $keyboardadmin, 'HTML');
+        return;
     }
-} elseif ($datain == "cancel_sendmessage") {
-    if (is_file('cronbot/users.json')) {
-        unlink('cronbot/users.json');
+    try {
+        if ($typeservice === 'unpinmessage') {
+            $recipientIds = array_column(select('user', 'id', null, null, 'fetchAll'), 'id');
+        } else {
+            $criteria = bulkBroadcastCriteria($pdo, $userdata);
+            $recipientIds = bulkAudienceIds($pdo, $criteria, true);
+        }
+    } catch (Throwable $e) {
+        error_log('Bulk audience selection failed: ' . $e->getMessage());
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['errorRestart'], $keyboardadmin, 'HTML');
+        return;
     }
-    if (is_file('cronbot/info')) {
-        unlink('cronbot/info');
+    if (!$recipientIds) {
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['emptyAudience'], $keyboardadmin, 'HTML');
+        return;
     }
+    $info = [
+        'job_id' => bin2hex(random_bytes(10)),
+        'id_admin' => $from_id,
+        'id_message' => $message_id,
+        'type' => $typeservice,
+        'message' => $userdata['message'] ?? '',
+        'pingmessage' => $userdata['typepinmessage'] ?? 'no',
+        'btnmessage' => $userdata['btntypemessage'] ?? 'none',
+    ];
+    try {
+        $jobId = bulkQueueStart('message', $recipientIds, $info);
+    } catch (Throwable $e) {
+        error_log('Bulk message queue failed: ' . $e->getMessage());
+        $jobId = null;
+    }
+    if ($jobId === null) {
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['busy'], $keyboardadmin, 'HTML');
+        return;
+    }
+    savedata('save', 'preview_token', '');
+    $cancelKeyboard = json_encode(['inline_keyboard' => [[
+        ['text' => $textbotlang['keyboard']['cancelOperation'], 'callback_data' => 'cancel_sendmessage_' . $jobId]
+    ]]]);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['started'], $cancelKeyboard);
+} elseif ($datain == 'cancel_sendmessage' || preg_match('/^cancel_sendmessage_([a-f0-9]{20})$/', $datain, $cancelMatch)) {
+    $cancelled = $datain == 'cancel_sendmessage'
+        ? bulkQueueCancelLegacy('message')
+        : bulkQueueCancel('message', $cancelMatch[1]);
     deletemessage($from_id, $message_id);
-    sendmessage($from_id, $textbotlang['Admin']['messageBulk']['canceled'], null, 'HTML');
+    sendmessage($from_id, $cancelled ? $textbotlang['Admin']['messageBulk']['canceled'] : $textbotlang['Admin']['messageBulk']['alreadyFinished'], null, 'HTML');
 } elseif (preg_match('/sendmessageuser_(\w+)/', $datain, $dataget)) {
     $iduser = $dataget[1];
     savedata("clear", "iduser", $iduser);
@@ -2268,7 +2170,7 @@ elseif ($datain == "systemsms") {
     sendmessage($from_id, $textbotlang['Admin']['Balance']['addAllBalance'], $backadmin, 'HTML');
     step('add_Balance_all', $from_id);
 } elseif ($user['step'] == "add_Balance_all") {
-    if (!ctype_digit($text)) {
+    if (!ctype_digit((string) $text) || (int) $text < 1 || (int) $text > 100000000 || strlen((string) $text) > 9) {
         sendmessage($from_id, $textbotlang['Admin']['Balance']['invalidPrice'], $backadmin, 'HTML');
         return;
     }
@@ -2281,7 +2183,7 @@ elseif ($datain == "systemsms") {
             ],
             [
                 ['text' => $textbotlang['keyboard']['usersGroupF'], 'callback_data' => 'typebalanceall_f'],
-                ['text' => $textbotlang['keyboard']['usersGroupN'], 'callback_data' => 'typebalanceall_nl'],
+                ['text' => $textbotlang['keyboard']['usersGroupN'], 'callback_data' => 'typebalanceall_n'],
                 ['text' => $textbotlang['keyboard']['usersGroupN2'], 'callback_data' => 'typebalanceall_n2'],
             ],
             [
@@ -2305,6 +2207,9 @@ elseif ($datain == "systemsms") {
                 ['text' => $textbotlang['keyboard']['usersNotBought'], 'callback_data' => 'typecustomer_notcustomer'],
             ],
             [
+                ['text' => $textbotlang['Admin']['messageBulk']['expiredUnrenewed'], 'callback_data' => 'typecustomer_expired_unrenewed'],
+            ],
+            [
                 ['text' => $textbotlang['keyboard']['backToMain'], 'callback_data' => 'backuser'],
             ]
         ]
@@ -2313,57 +2218,97 @@ elseif ($datain == "systemsms") {
 } elseif (preg_match('/typecustomer_(\w+)/', $datain, $dataget)) {
     $typecustomer = $dataget[1];
     savedata("save", "typecustomer", $typecustomer);
+    if ($typecustomer === 'expired_unrenewed') {
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['askExpiredRange'], $backadmin, 'HTML');
+        step('bulk_credit_expired_days', $from_id);
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['askNotify'], $backadmin, 'HTML');
     step("getmeesagestatus", $from_id);
+} elseif ($user['step'] == 'bulk_credit_expired_days') {
+    $range = bulkParseDayRange((string) $text);
+    if ($range === null) {
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['invalidExpiredRange'], $backadmin, 'HTML');
+        return;
+    }
+    savedata('save', 'days_from', $range[0]);
+    savedata('save', 'days_to', $range[1]);
+    sendmessage($from_id, $textbotlang['Admin']['Balance']['askNotify'], $backadmin, 'HTML');
+    step('getmeesagestatus', $from_id);
 } elseif ($user['step'] == "getmeesagestatus") {
-    $userdata = json_decode($user['Processing_value'], true);
-    sendmessage($from_id, $textbotlang['Admin']['Balance']['addBalanceUsers'], $keyboardadmin, 'HTML');
-    if ($userdata['agent'] == "all") {
-        if ($userdata['typecustomer'] == "customer") {
-            $query_where = " WHERE EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id)";
-        } elseif ($userdata['typecustomer'] == "notcustomer") {
-            $query_where = " WHERE NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id)";
-        } else {
-            $query_where = "";
-        }
-        $query_params = [];
-    } else {
-        if ($userdata['typecustomer'] == "customer") {
-            $query_where = " WHERE u.agent = :agent AND EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id)";
-        } elseif ($userdata['typecustomer'] == "notcustomer") {
-            $query_where = " WHERE u.agent = :agent AND NOT EXISTS ( SELECT 1 FROM invoice i WHERE i.id_user = u.id)";
-        } else {
-            $query_where = " WHERE u.agent = :agent";
-        }
-        $query_params = [':agent' => $userdata['agent']];
+    if ($text !== '0' && $text !== '1') {
+        sendmessage($from_id, $textbotlang['Admin']['Balance']['askNotify'], $backadmin, 'HTML');
+        return;
     }
-    $stmt = $pdo->prepare("SELECT u.id FROM user u" . $query_where);
-    $stmt->execute($query_params);
-    $Balance_user = $stmt->fetchAll();
-    $stmt = $pdo->prepare("UPDATE user as u SET Balance = Balance + :price" . $query_where);
-    $stmt->execute($query_params + [':price' => intval($userdata['price'])]);
+    $data = json_decode($user['Processing_value'], true);
+    $kind = $data['typecustomer'] ?? '';
+    $criteria = [
+        'kind' => $kind === 'notcustomer' ? 'nonecustomer' : $kind,
+        'agent' => $data['agent'] ?? '',
+        'days_from' => $data['days_from'] ?? -1,
+        'days_to' => $data['days_to'] ?? -1,
+    ];
+    try {
+        $recipientIds = bulkAudienceIds($pdo, $criteria, false);
+        if (!$recipientIds) {
+            sendmessage($from_id, $textbotlang['Admin']['messageBulk']['emptyAudience'], $backadmin, 'HTML');
+            step('home', $from_id);
+            return;
+        }
+        $batchId = bulkCreditPrepare($pdo, (string) $from_id, (int) $data['price'], $recipientIds, $text === '1');
+    } catch (Throwable $e) {
+        error_log('Bulk credit preparation failed: ' . $e->getMessage());
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['errorRestart'], $backadmin, 'HTML');
+        return;
+    }
+    $summary = sprintf(
+        $textbotlang['Admin']['Balance']['confirmBulkCredit'],
+        number_format((int) $data['price']),
+        number_format(count($recipientIds)),
+        number_format((int) $data['price'] * count($recipientIds)),
+        $text === '1' ? $textbotlang['keyboard']['yes'] : $textbotlang['keyboard']['no']
+    );
+    if ($kind === 'expired_unrenewed') {
+        $summary .= "\n" . sprintf($textbotlang['Admin']['messageBulk']['expiredRangeSummary'], $data['days_from'], $data['days_to']);
+    }
+    $confirm = json_encode(['inline_keyboard' => [
+        [['text' => $textbotlang['keyboard']['confirmAndStart'], 'callback_data' => 'bulkcredit_confirm_' . $batchId]],
+        [['text' => $textbotlang['keyboard']['cancelOperation'], 'callback_data' => 'bulkcredit_cancel_' . $batchId]],
+    ]]);
+    $previewMessage = sendmessage($from_id, $summary, $confirm, 'HTML');
+    if (isset($previewMessage['result']['message_id'])) {
+        bulkCreditSetMessage($pdo, $batchId, (string) $from_id, (string) $previewMessage['result']['message_id']);
+    }
     step('home', $from_id);
-    if ($text == "1") {
-        $cancelmessage = json_encode([
-            'inline_keyboard' => [
-                [
-                    ['text' => $textbotlang['keyboard']['cancelOperation'], 'callback_data' => 'cancel_sendmessage'],
-                ],
-            ]
-        ]);
-        $textgift = sprintf($textbotlang['users']['Balance']['giftFromManagement'], $userdata['price']);
-        $message_id = sendmessage($from_id, $textbotlang['Admin']['Balance']['operationStarted'], $cancelmessage, "html");
-        $data = json_encode(array(
-            "id_admin" => $from_id,
-            'type' => "sendmessage",
-            "id_message" => $message_id['result']['message_id'],
-            "message" => $textgift,
-            "pingmessage" => "no",
-            "btnmessage" => "start"
-        ));
-        file_put_contents("cronbot/users.json", json_encode($Balance_user));
-        file_put_contents('cronbot/info', $data);
+} elseif (preg_match('/^bulkcredit_confirm_([a-f0-9]{24})$/', $datain, $creditMatch)) {
+    try {
+        $batch = bulkCreditApply($pdo, $creditMatch[1], (string) $from_id);
+    } catch (Throwable $e) {
+        error_log('Bulk credit apply failed: ' . $e->getMessage());
+        sendmessage($from_id, $textbotlang['Admin']['Balance']['bulkCreditFailed'], null, 'HTML');
+        return;
     }
+    if (!$batch) {
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['alreadyFinished'], null, 'HTML');
+        return;
+    }
+    $batchId = $creditMatch[1];
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Balance']['addBalanceUsers'], json_encode(['inline_keyboard' => []]));
+    sendmessage($from_id, sprintf($textbotlang['Admin']['Balance']['bulkCreditApplied'], $batch['recipient_count'], number_format((int) $batch['amount'] * (int) $batch['recipient_count'])), null, 'HTML');
+    if ((int) $batch['notify'] === 1) {
+        $notice = sprintf($textbotlang['users']['Balance']['giftFromManagement'], $batch['amount']);
+        try {
+            if (!bulkCreditScheduleNotification($pdo, $batchId, $notice)) {
+                throw new RuntimeException('Notification queue could not be scheduled');
+            }
+        } catch (Throwable $e) {
+            error_log('Bulk credit notification failed: ' . $e->getMessage());
+            sendmessage($from_id, $textbotlang['Admin']['Balance']['bulkNotifyFailed'], null, 'HTML');
+        }
+    }
+} elseif (preg_match('/^bulkcredit_cancel_([a-f0-9]{24})$/', $datain, $creditMatch)) {
+    $cancelled = bulkCreditCancel($pdo, $creditMatch[1], (string) $from_id);
+    Editmessagetext($from_id, $message_id, $cancelled ? $textbotlang['Admin']['messageBulk']['canceled'] : $textbotlang['Admin']['messageBulk']['alreadyFinished'], json_encode(['inline_keyboard' => []]));
 } elseif ($datain == "searchuser") {
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['getIdUserUnblock'], $backadmin, 'HTML');
     step('show_info', $from_id);
@@ -2524,7 +2469,7 @@ elseif ($datain == "systemsms") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Discount']['getCode'], $giftCodeFlowKeyboard);
     step('get_code', $from_id);
 } elseif ($user['step'] == "get_code") {
-    if (!preg_match('/^[A-Za-z\d]+$/', $text)) {
+    if (!preg_match('/^[A-Za-z\d]{1,40}$/', $text)) {
         editFlowMessage($textbotlang['Admin']['Discount']['errorCode'], $giftCodeFlowKeyboard);
         return;
     }
@@ -2532,7 +2477,7 @@ elseif ($datain == "systemsms") {
     editFlowMessage($textbotlang['Admin']['Discount']['priceCode'], $giftCodeFlowKeyboard);
     step('get_price_code', $from_id);
 } elseif ($user['step'] == "get_price_code") {
-    if (!ctype_digit($text)) {
+    if (!ctype_digit((string) $text) || (int) $text < 1 || (int) $text > 100000000) {
         editFlowMessage($textbotlang['Admin']['Balance']['invalidPrice'], $giftCodeFlowKeyboard);
         return;
     }
@@ -2541,8 +2486,21 @@ elseif ($datain == "systemsms") {
     step('getlimitcodedis', $from_id);
 } elseif ($user['step'] == "getlimitcodedis") {
     $userdata = json_decode($user['Processing_value'], true);
-    $stmt = $pdo->prepare("INSERT INTO Discount (code, price, limituse, limitused) VALUES (:code, :price, :limituse, '0')");
-    $stmt->execute([':code' => $userdata['code'], ':price' => $userdata['price'], ':limituse' => $text]);
+    if (!ctype_digit((string) $text) || (int) $text < 1) {
+        editFlowMessage($textbotlang['Admin']['Discount']['invalidParameters'], $giftCodeFlowKeyboard);
+        return;
+    }
+    try {
+        $created = discountCreateGift($pdo, $userdata['code'], (int) $userdata['price'], (int) $text);
+    } catch (Throwable $e) {
+        error_log('Gift code creation failed: ' . $e->getMessage());
+        editFlowMessage($textbotlang['Admin']['Discount']['invalidParameters'], $giftCodeFlowKeyboard);
+        return;
+    }
+    if (!$created) {
+        editFlowMessage($textbotlang['Admin']['Discount']['duplicateCode'], $giftCodeFlowKeyboard);
+        return;
+    }
     step("home", $from_id);
     [$giftText, $giftKeyboard] = giftCodesMenu();
     editFlowMessage($textbotlang['Admin']['Discount']['saveCode'] . "\n\n" . $giftText, $giftKeyboard);
@@ -4087,7 +4045,7 @@ elseif ($datain == "systemsms") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Discountsell']['getCode'], $discountCodeFlowKeyboard);
     step('get_codesell', $from_id);
 } elseif ($user['step'] == "get_codesell") {
-    if (!preg_match('/^[A-Za-z\d]+$/', $text)) {
+    if (!preg_match('/^[A-Za-z\d]{1,40}$/', $text)) {
         editFlowMessage($textbotlang['Admin']['Discount']['errorCode'], $discountCodeFlowKeyboard);
         return;
     }
@@ -4095,7 +4053,7 @@ elseif ($datain == "systemsms") {
     editFlowMessage($textbotlang['Admin']['Discount']['priceCodeSell'], $discountCodeFlowKeyboard);
     step('get_price_codesell', $from_id);
 } elseif ($user['step'] == "get_price_codesell") {
-    if (!ctype_digit($text)) {
+    if (!ctype_digit((string) $text) || (int) $text < 1 || (int) $text > 100) {
         editFlowMessage($textbotlang['Admin']['Balance']['invalidPrice'], $discountCodeFlowKeyboard);
         return;
     }
@@ -4103,6 +4061,10 @@ elseif ($datain == "systemsms") {
     editFlowMessage($textbotlang['Admin']['Discountsell']['getLimit'], $discountCodeFlowKeyboard);
     step('getlimitcode', $from_id);
 } elseif ($user['step'] == "getlimitcode") {
+    if (!ctype_digit((string) $text) || (int) $text < 1 || (int) $text > 1000000000) {
+        editFlowMessage($textbotlang['Admin']['Discount']['invalidParameters'], $discountCodeFlowKeyboard);
+        return;
+    }
     savedata("save", "limitDiscount", $text);
     $userGroupsKeyboard = json_encode([
         'inline_keyboard' => [
@@ -4124,7 +4086,7 @@ elseif ($datain == "systemsms") {
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Discount']['askActiveHours'], $discountCodeFlowKeyboard);
     step('gettimediscount', $from_id);
 } elseif ($user['step'] == "gettimediscount") {
-    if (!ctype_digit($text)) {
+    if (!ctype_digit((string) $text) || (int) $text > 87600) {
         editFlowMessage($textbotlang['common']['invalidInput'], $discountCodeFlowKeyboard);
         return;
     }
@@ -4168,7 +4130,7 @@ elseif ($datain == "systemsms") {
     step('getuseuser', $from_id);
 } elseif ($user['step'] == "getuseuser") {
     $userdata = json_decode($user['Processing_value'], true);
-    if (intval($text) > intval($userdata['limitDiscount'])) {
+    if (!ctype_digit((string) $text) || (int) $text < 1 || (int) $text > (int) $userdata['limitDiscount']) {
         editFlowMessage($textbotlang['Admin']['Discount']['userLimitTooHigh'], $discountCodeFlowKeyboard);
         return;
     }
@@ -4192,22 +4154,28 @@ elseif ($datain == "systemsms") {
     if (!$product)
         return;
     $userdata = json_decode($user['Processing_value'], true);
-    $stmt = $pdo->prepare("INSERT INTO DiscountSell (codeDiscount, usedDiscount, price, limitDiscount, agent, usefirst, useuser, code_panel, code_product, time,type) VALUES (:codeDiscount, :usedDiscount, :price, :limitDiscount, :agent, :usefirst, :useuser, :code_panel, :code_product, :time,:type)");
-    $values = "0";
-    $values1 = "1";
-    $code_product = "0";
-    $stmt->bindParam(':codeDiscount', $userdata['code'], PDO::PARAM_STR);
-    $stmt->bindParam(':usedDiscount', $values, PDO::PARAM_STR);
-    $stmt->bindParam(':price', $userdata['price'], PDO::PARAM_STR);
-    $stmt->bindParam(':limitDiscount', $userdata['limitDiscount'], PDO::PARAM_STR);
-    $stmt->bindParam(':agent', $userdata['agent'], PDO::PARAM_STR);
-    $stmt->bindParam(':usefirst', $userdata['usefirst'], PDO::PARAM_STR);
-    $stmt->bindParam(':useuser', $userdata['useuser'], PDO::PARAM_STR);
-    $stmt->bindParam(':code_panel', $userdata['code_panel'], PDO::PARAM_STR);
-    $stmt->bindParam(':code_product', $product['code_product'], PDO::PARAM_STR);
-    $stmt->bindParam(':time', $userdata['time'], PDO::PARAM_STR);
-    $stmt->bindParam(':type', $userdata['typediscount'], PDO::PARAM_STR);
-    $stmt->execute();
+    try {
+        $created = discountCreate($pdo, [
+            'codeDiscount' => $userdata['code'],
+            'price' => $userdata['price'],
+            'limitDiscount' => $userdata['limitDiscount'],
+            'agent' => $userdata['agent'],
+            'usefirst' => $userdata['usefirst'],
+            'useuser' => $userdata['useuser'],
+            'code_panel' => $userdata['code_panel'],
+            'code_product' => $product['code_product'],
+            'time' => $userdata['time'],
+            'type' => $userdata['typediscount'],
+        ]);
+    } catch (Throwable $e) {
+        error_log('Discount creation failed: ' . $e->getMessage());
+        editFlowMessage($textbotlang['Admin']['Discount']['invalidParameters'], $discountCodeFlowKeyboard);
+        return;
+    }
+    if (!$created) {
+        editFlowMessage($textbotlang['Admin']['Discount']['duplicateCode'], $discountCodeFlowKeyboard);
+        return;
+    }
     $textdiscount = sprintf($textbotlang['Admin']['Discount']['created'], $userdata['code'], $userdata['price'], $userdata['name_panel'], $product['name_product'], $userdata['agent'], $userdata['limitDiscount']);
     step('home', $from_id);
     [, $discountKeyboard] = discountCodesMenu();
@@ -4215,18 +4183,22 @@ elseif ($datain == "systemsms") {
 } elseif ($text == $textbotlang['keyboard']['manageDiscountCode'] && $adminrulecheck['rule'] == "administrator") {
     [$discountText, $discountKeyboard] = discountCodesMenu();
     sendmessage($from_id, $discountText, $discountKeyboard, 'HTML');
-} elseif (($datain == "discountcode_list" || preg_match('/^discountcode_delete_(\w+)$/', $datain, $dataget)) && $adminrulecheck['rule'] == "administrator") {
+} elseif (($datain == 'discountcode_list' || preg_match('/^discountcode_list_\d+$/', $datain) || preg_match('/^discountcode_deleteid_\d+$/', $datain) || preg_match('/^discountcode_delete_\w+$/', $datain)) && $adminrulecheck['rule'] == "administrator") {
     step('home', $from_id);
-    if ($datain != "discountcode_list") {
-        $stmt = $pdo->prepare("DELETE FROM Giftcodeconsumed WHERE code = :code");
-        $stmt->execute([':code' => $dataget[1]]);
-        $stmt = $pdo->prepare("DELETE FROM DiscountSell WHERE codeDiscount = :code");
-        $stmt->execute([':code' => $dataget[1]]);
+    if (preg_match('/^discountcode_deleteid_(\d+)$/', $datain, $deleteMatch)) {
+        $stmt = $pdo->prepare('DELETE FROM DiscountSell WHERE id = ?');
+        $stmt->execute([(int) $deleteMatch[1]]);
+    } elseif (preg_match('/^discountcode_delete_(\w+)$/', $datain, $deleteMatch)) {
+        $stmt = $pdo->prepare('DELETE FROM DiscountSell WHERE codeDiscount = ?');
+        $stmt->execute([$deleteMatch[1]]);
     }
-    [$discountText, $discountKeyboard] = discountCodesMenu();
+    $page = preg_match('/^discountcode_list_(\d+)$/', $datain, $pageMatch) ? (int) $pageMatch[1] : 0;
+    [$discountText, $discountKeyboard] = discountCodesMenu($page);
     Editmessagetext($from_id, $message_id, $discountText, $discountKeyboard);
-} elseif (preg_match('/^discountcode_show_(\w+)$/', $datain, $dataget) && $adminrulecheck['rule'] == "administrator") {
-    $discountCode = select("DiscountSell", "*", "codeDiscount", $dataget[1], "select");
+} elseif ((preg_match('/^discountcode_show_(\w+)$/', $datain, $dataget) || preg_match('/^discountcode_showid_(\d+)$/', $datain, $dataget)) && $adminrulecheck['rule'] == "administrator") {
+    $discountCode = str_starts_with($datain, 'discountcode_showid_')
+        ? select('DiscountSell', '*', 'id', (int) $dataget[1], 'select')
+        : select('DiscountSell', '*', 'codeDiscount', $dataget[1], 'select');
     if (!$discountCode) {
         [$discountText, $discountKeyboard] = discountCodesMenu();
         Editmessagetext($from_id, $message_id, $discountText, $discountKeyboard);

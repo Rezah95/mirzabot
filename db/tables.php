@@ -2,6 +2,8 @@
 
 return [
     'user',
+    'bulk_credit_batch',
+    'bulk_credit_recipient',
     'help',
     'setting',
     'admin',
