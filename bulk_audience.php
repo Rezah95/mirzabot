@@ -162,6 +162,13 @@ function bulkAudienceCount(PDO $pdo, array $criteria, bool $activeOnly = true): 
     return (int) $stmt->fetchColumn();
 }
 
+function bulkBroadcastUsesInactivityFilter(array $data): bool
+{
+    // Service expiry uses its own day range, regardless of the last bot interaction.
+    return ($data['typeservice'] ?? '') === 'xdaynotmessage'
+        && ($data['typeusermessage'] ?? '') !== 'expired_unrenewed';
+}
+
 function bulkBroadcastCriteria(PDO $pdo, array $data): array
 {
     $criteria = [
@@ -180,7 +187,7 @@ function bulkBroadcastCriteria(PDO $pdo, array $data): array
         $criteria['days_from'] = $data['days_from'] ?? -1;
         $criteria['days_to'] = $data['days_to'] ?? -1;
     }
-    if (($data['typeservice'] ?? '') === 'xdaynotmessage') {
+    if (bulkBroadcastUsesInactivityFilter($data)) {
         $days = filter_var($data['daynoyuse'] ?? null, FILTER_VALIDATE_INT);
         if ($days === false || $days < 0 || $days > 3650) {
             throw new InvalidArgumentException('Invalid inactive day count');

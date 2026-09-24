@@ -117,7 +117,7 @@ foreach (['xdaynotmessage', 'sendmessage', 'forwardmessage'] as $service) {
                     expectBroadcastPrompt('askButton');
                     broadcastRequest('btntypemessage-none');
                 }
-                if ($service === 'xdaynotmessage') {
+                if ($service === 'xdaynotmessage' && $kind !== 'expired_unrenewed') {
                     expectBroadcastPrompt('askInactiveDays');
                     broadcastRequest('', '7');
                 }
@@ -126,7 +126,11 @@ foreach (['xdaynotmessage', 'sendmessage', 'forwardmessage'] as $service) {
                 $criteria = bulkBroadcastCriteria($GLOBALS['pdo'], broadcastData());
                 expectBroadcast($criteria['kind'] === $kind && $criteria['agent'] === $agent,
                     'Selected audience changed');
-                if ($service === 'xdaynotmessage') {
+                if ($kind === 'expired_unrenewed') {
+                    expectBroadcast(!isset($criteria['inactive_before']), 'Expiry audience has an inactivity filter');
+                    expectBroadcast($criteria['days_from'] === 7 && $criteria['days_to'] === 30,
+                        'Expiry day range lost');
+                } elseif ($service === 'xdaynotmessage') {
                     expectBroadcast(abs($criteria['inactive_before'] - (time() - 7 * 86400)) <= 1,
                         'Inactive day filter lost');
                 }
@@ -147,7 +151,23 @@ foreach (['typeservice-xdaynotmessage', 'typeusermessage-nonecustomer'] as $back
         expectBroadcastPrompt('askPin');
         broadcastRequest('typepinmessage-no');
         expectBroadcastPrompt('askButton');
+        broadcastRequest('btntypemessage-none');
+        expectBroadcastPrompt('askInactiveDays');
     });
+}
+foreach ([null, '7', 'invalid'] as $oldInactiveDays) {
+    broadcastCase('Expiry ignores old inactivity days: ' . ($oldInactiveDays ?? 'missing'),
+        static function () use ($oldInactiveDays): void {
+            $criteria = bulkBroadcastCriteria($GLOBALS['pdo'], [
+                'typeservice' => 'xdaynotmessage', 'typeusermessage' => 'expired_unrenewed', 'agent' => 'f',
+                'days_from' => 7, 'days_to' => 15, 'daynoyuse' => $oldInactiveDays,
+            ]);
+            [$sql, $params] = bulkAudienceQuery($criteria, true, 10000000);
+            expectBroadcast(!str_contains($sql, 'last_message_time') && !isset($params[':inactive_before']),
+                'Expiry recipients were restricted by inactivity');
+            expectBroadcast($params[':expired_after'] === 10000000 - 16 * 86400
+                && $params[':expired_before'] === 10000000 - 7 * 86400, 'Expiry bounds changed');
+        });
 }
 broadcastCase('Expiry range back button and invalid range', static function (): void {
     broadcastRequest('typeservice-xdaynotmessage');

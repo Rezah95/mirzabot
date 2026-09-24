@@ -1168,7 +1168,7 @@ elseif ($datain == "systemsms") {
         sendmessage($from_id, $textbotlang['Admin']['messageBulk']['errorRestart'], $keyboardadmin, 'HTML');
         return;
     }
-    if ($userdata['typeservice'] == "xdaynotmessage") {
+    if (bulkBroadcastUsesInactivityFilter($userdata)) {
         step("gettextday", $from_id);
         sendmessage($from_id, $textbotlang['Admin']['messageBulk']['askInactiveDays'], $backadmin, 'HTML');
         return;
@@ -1202,7 +1202,8 @@ elseif ($datain == "systemsms") {
         if ($text) {
             savedata("save", "message", $text);
         } else {
-            sendmessage($from_id, $textbotlang['Admin']['messageBulk']['textOnlyInactive'], $backadmin, 'HTML');
+            $textOnlyKey = bulkBroadcastUsesInactivityFilter($userdata) ? 'textOnlyInactive' : 'textOnlyBroadcast';
+            sendmessage($from_id, $textbotlang['Admin']['messageBulk'][$textOnlyKey], $backadmin, 'HTML');
             return;
         }
     } elseif ($userdata['typeservice'] == "sendmessage") {
@@ -1214,7 +1215,9 @@ elseif ($datain == "systemsms") {
         }
     }
     $typesend = [
-        "xdaynotmessage" => $textbotlang['Admin']['messageBulk']['targetInactiveUsers'],
+        "xdaynotmessage" => bulkBroadcastUsesInactivityFilter($userdata)
+            ? $textbotlang['Admin']['messageBulk']['targetInactiveUsers']
+            : $textbotlang['keyboard']['broadcastSend'],
         "sendmessage" => $textbotlang['keyboard']['broadcastSend'],
         "forwardmessage" => $textbotlang['keyboard']['broadcastForward'],
         "unpinmessage" => $textbotlang['Admin']['messageBulk']['btnCancelPin']
@@ -1225,7 +1228,7 @@ elseif ($datain == "systemsms") {
         "nonecustomer" => $textbotlang['Admin']['messageBulk']['targetNoPurchase'],
         "expired_unrenewed" => $textbotlang['Admin']['messageBulk']['expiredUnrenewed'],
     ][$userdata['typeusermessage'] ?? ''] ?? ($userdata['typeusermessage'] ?? '');
-    if (($userdata['typeservice'] ?? '') == "xdaynotmessage") {
+    if (bulkBroadcastUsesInactivityFilter($userdata)) {
         $textday = sprintf($textbotlang['Admin']['messageBulk']['inactiveDaysLabel'], $userdata['daynoyuse'] ?? '');
     } else {
         $textday = "";
