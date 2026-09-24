@@ -2327,6 +2327,63 @@ backup_before_update() {
     return 0
 }
 
+select_php_mysql_cli() {
+    local preferred candidate binary
+    preferred=$(state_get PHP_VER)
+    for candidate in "php${preferred}" php php8.5 php8.4 php8.3 php8.2; do
+        binary=$(command -v "$candidate" 2>/dev/null) || continue
+        "$binary" -r 'exit(PHP_VERSION_ID >= 80200 && extension_loaded("mysqli") && extension_loaded("pdo_mysql") ? 0 : 1);' \
+            >/dev/null 2>&1 || continue
+        printf '%s\n' "$binary"
+        return 0
+    done
+    return 1
+}
+
+ensure_php_mysql_cli() {
+    local version
+    if PHP_DB_BIN=$(select_php_mysql_cli); then
+        return 0
+    fi
+
+    version=$(state_get PHP_VER)
+    if ! [[ "$version" =~ ^[0-9]+\.[0-9]+$ ]] || ! command -v "php${version}" >/dev/null 2>&1; then
+        version=$(php -r 'echo PHP_MAJOR_VERSION, ".", PHP_MINOR_VERSION;' 2>/dev/null) || return 1
+    fi
+    if ! [[ "$version" =~ ^[0-9]+\.[0-9]+$ ]] || ! command -v apt-get >/dev/null 2>&1; then
+        echo "No PHP CLI with mysqli and pdo_mysql is available." >&2
+        return 1
+    fi
+    echo "Installing MySQL extensions for PHP ${version} CLI..."
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "php${version}-mysql" || return 1
+    if command -v phpenmod >/dev/null 2>&1; then
+        phpenmod -v "$version" -s cli mysqli pdo_mysql || return 1
+    fi
+    PHP_DB_BIN=$(select_php_mysql_cli) || {
+        echo "PHP CLI still lacks mysqli or pdo_mysql after package installation." >&2
+        return 1
+    }
+}
+
+function migrate_database() {
+    local bot_dir="/var/www/html/mirzaprobotconfig"
+    if [ ! -f "$bot_dir/config.php" ] || [ ! -f "$bot_dir/table.php" ]; then
+        echo "Database migration stopped: the bot installation is incomplete." >&2
+        return 1
+    fi
+    backup_before_update "$bot_dir" || return 1
+    ensure_php_mysql_cli || {
+        echo "Database migration stopped. Backup: $UPDATE_BACKUP_DIR" >&2
+        return 1
+    }
+    echo "Running database migration with $PHP_DB_BIN..."
+    (cd "$bot_dir" && "$PHP_DB_BIN" table.php) || {
+        echo "Database migration failed. Backup: $UPDATE_BACKUP_DIR" >&2
+        return 1
+    }
+    echo "Database migration completed. Backup: $UPDATE_BACKUP_DIR"
+}
+
 function update_bot() {
     clear
     banner
@@ -2379,6 +2436,10 @@ function update_bot() {
              rm -rf "$TEMP_DIR"; sleep 2; show_menu; return 1; }
     backup_before_update "$BOT_DIR" || {
         echo -e "\e[91mUpdate aborted before changing the current installation.\033[0m"
+        rm -rf "$TEMP_DIR"; return 1;
+    }
+    ensure_php_mysql_cli || {
+        echo -e "\e[91mUpdate aborted before changing the current installation. Backup: $UPDATE_BACKUP_DIR\033[0m"
         rm -rf "$TEMP_DIR"; return 1;
     }
     CONFIG_PATH="$BOT_DIR/config.php"
@@ -2521,7 +2582,7 @@ EOF
         fi
     fi
     if [ -f "$CONFIG_PATH" ]; then
-        run_step "Updating database tables" "cd '$BOT_DIR' && php table.php" \
+        run_step "Updating database tables" "cd '$BOT_DIR' && '$PHP_DB_BIN' table.php" \
             || { show_step_error
                  echo -e "\e[91mDatabase migration failed. Backup: $UPDATE_BACKUP_DIR\033[0m"
                  return 1; }
@@ -2870,6 +2931,7 @@ print_usage() {
   Commands:
     install            Install Mirza
     update             Update Mirza
+    migrate-db         Back up the current site and run database migrations
     remove             Remove Mirza
     migrate            Migrate Free -> Pro
     renew              Renew the bot domain SSL certificate
@@ -2900,7 +2962,7 @@ process_arguments() {
     local cmd="menu"
     # First non-flag token is the command
     case "$1" in
-        install|update|remove|migrate|renew|backup|import|menu) cmd="$1"; shift ;;
+        install|update|migrate-db|remove|migrate|renew|backup|import|menu) cmd="$1"; shift ;;
         -h|--help) print_usage; exit 0 ;;
         "") cmd="menu" ;;
         --*) cmd="menu" ;;            # only flags given -> menu, but still parse flags
@@ -2925,6 +2987,7 @@ process_arguments() {
     case "$cmd" in
         install) install_bot ;;
         update)  update_bot ;;
+        migrate-db) migrate_database ;;
         remove)  remove_bot ;;
         migrate) migrate_to_pro ;;
         renew)   renew_ssl ;;
