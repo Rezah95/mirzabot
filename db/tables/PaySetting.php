@@ -5,6 +5,7 @@ $max = 1000000;
 $textbotlang = $schema->context('textbotlang');
 
 $values = [
+    'gateway_display_order' => '[]',
     'Cartstatus' => 'oncard',
     'CartDirect' => '@cart',
     'cardnumber' => '603700000000',

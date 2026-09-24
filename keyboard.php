@@ -404,7 +404,7 @@ if (intval($paymentsstartelegram) == 1) {
 $step_payment['inline_keyboard'][] = [
     ['text' => $textbotlang['keyboard']['closeList'], 'callback_data' => "colselist"]
 ];
-$step_payment = json_encode(gatewayApplyLabels($step_payment));
+$step_payment = json_encode(gatewayApplyOrder(gatewayApplyLabels($step_payment), "https://t.me/$usernamecart"));
 $keyboardhelpadmin = json_encode([
     'keyboard' => [
         [['text' => $textbotlang['keyboard']['addEducation']], ['text' => $textbotlang['keyboard']['deleteEducation']]],
@@ -1794,6 +1794,7 @@ function paymentGatewaysKeyboard()
         $rows[] = [['text' => "$mark {$gateway['label']}", 'callback_data' => "paygw-$key"]];
     }
     $rows[] = [['text' => 'نام درگاه‌ها برای کاربر', 'callback_data' => 'gatewayname_list']];
+    $rows[] = [['text' => 'ترتیب نمایش درگاه‌ها', 'callback_data' => 'gatewayorder_list']];
     $rows[] = [['text' => $textbotlang['keyboard']['gatewaysGeneralSettings'], 'callback_data' => "none"]];
     $rows[] = [
         ['text' => $textbotlang['keyboard']['maxChargeBalance'], 'callback_data' => "maxbalanceaccount"],

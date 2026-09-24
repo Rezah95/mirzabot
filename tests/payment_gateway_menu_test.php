@@ -108,12 +108,56 @@ foreach (['', '   ', "نام\nدوم", "name\x00", str_repeat('الف', 30)] as 
 }
 expectMenu(gatewayValidLabel('💳 پرداخت آسان'), 'Persian/emoji label rejected');
 
+// Sort only the eligible payment buttons, preserving their labels, URLs and callbacks.
+$gatewaySettings += ['nowpaymentstatus' => 'onnowpayment', 'statusnowpayment' => '1', 'digistatus' => 'ondigi',
+    'statusSwapWallet' => 'onSwapinoBot', 'statustarnado' => 'onternado', 'statusiranpay4' => 'oniranpay4', 'apiiranpay4' => 'test-key',
+    'statusaqayepardakht' => 'onaqayepardakht', 'variza_status' => 'onvariza', 'variza_api_token' => 'test-key',
+    'variza_webhook_secret' => 'test-secret', 'statusstar' => '1'];
+$gatewaySettings['gateway_display_order'] = '[]';
+eval($customerMenu);
+$originalRows = json_decode($step_payment, true)['inline_keyboard'];
+$actualCallbacks = array_map(static fn($row) => $row[0]['callback_data'] ?? 'card-url', $originalRows);
+expectMenu($actualCallbacks === ['card-url', 'tetraminatorpay', 'tonpays', 'plisio', 'nowpayment', 'digitaltron',
+    'iranpay1', 'iranpay2', 'iranpay4', 'aqayepardakht', 'variza', 'paymentnotverify', 'startelegrams', 'colselist'], 'Default order changed');
+$gatewaySettings['gateway_display_order'] = json_encode(array_reverse(gatewayDefaultOrder()));
+eval($customerMenu);
+$reversedRows = json_decode($step_payment, true)['inline_keyboard'];
+$expectedRows = array_reverse(array_slice($originalRows, 0, -1));
+$expectedRows[] = end($originalRows);
+expectMenu($reversedRows === $expectedRows, 'Reordering changed payment payloads or the close button');
+$gatewaySettings['tonpays_status'] = 'offtonpays';
+$users['cardpayment'] = 0;
+eval($customerMenu);
+$hiddenRows = json_decode($step_payment, true)['inline_keyboard'];
+$expectedRows = array_values(array_filter($expectedRows, static fn($row) => ($row[0]['callback_data'] ?? '') !== 'tonpays' && !isset($row[0]['url'])));
+expectMenu($hiddenRows === $expectedRows, 'Sorting revealed a disabled or disallowed gateway');
+$users['cardpayment'] = 1;
+$gatewaySettings['Cartstatuspv'] = 'offcardpv';
+eval($customerMenu);
+$callbackRows = json_decode($step_payment, true)['inline_keyboard'];
+expectMenu($callbackRows[count($callbackRows) - 2][0]['callback_data'] === 'cart_to_offline', 'Card callback was not moved');
+foreach (['broken JSON', '{}', 'null', '123'] as $invalidOrder) {
+    $gatewaySettings['gateway_display_order'] = $invalidOrder;
+    expectMenu(gatewayDisplayOrder() === gatewayDefaultOrder(), 'Corrupt order did not use the default');
+}
+$gatewaySettings['gateway_display_order'] = '["tonpays","unknown","tonpays",null,[],"card"]';
+$normal = gatewayDisplayOrder();
+expectMenu(array_slice($normal, 0, 2) === ['tonpays', 'card'] && count($normal) === count(gatewayDefaultOrder())
+    && count(array_unique($normal)) === count($normal), 'Partial/duplicate order lost a gateway');
+$anchored = ['inline_keyboard' => [[['text' => 'help', 'url' => 'https://example.test/help']],
+    [['text' => 'card', 'callback_data' => 'cart_to_offline']], [['text' => 'ton', 'callback_data' => 'tonpays']],
+    [['text' => 'close', 'callback_data' => 'colselist']]]];
+$sorted = gatewayApplyOrder($anchored);
+expectMenu($sorted['inline_keyboard'][0] === $anchored['inline_keyboard'][0] && $sorted['inline_keyboard'][3] === $anchored['inline_keyboard'][3]
+    && $sorted['inline_keyboard'][1] === $anchored['inline_keyboard'][2], 'Non-gateway rows moved');
+
 $registry = menuSourceBetween($source, '$paymentGateways =', '$Exception_auto_cart_keyboard');
 preg_match_all('/\x27keyboard\x27 => \$(\w+)/', $registry, $variables);
 foreach ($variables[1] as $variable) {
     ${$variable} = '{"inline_keyboard":[]}';
 }
 eval($registry);
+expectMenu(str_contains(paymentGatewaysKeyboard(), 'gatewayorder_list'), 'Order settings entry missing');
 $admin = file_get_contents(dirname(__DIR__) . '/admin.php');
 $branch = menuSourceBetween($admin, '} elseif ($text == $textbotlang[\'keyboard\'][\'financial\']', "\n} elseif (");
 $text = $textbotlang['keyboard']['financial'];

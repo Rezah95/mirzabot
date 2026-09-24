@@ -20,9 +20,70 @@ function gatewayNameEditKeyboard(string $key): string
     ]], JSON_UNESCAPED_UNICODE);
 }
 
+function gatewayOrderKeyboard(): string
+{
+    global $paymentGateways, $textbotlang;
+    $order = gatewayDisplayOrder();
+    $rows = [];
+    foreach ($order as $index => $key) {
+        $provider = $paymentGateways[$key]['label'] ?? $textbotlang['textbot']['paymentNotVerify'];
+        $row = [['text' => ($index + 1) . '. ' . $provider . ' ← ' . gatewayUserLabel($key), 'callback_data' => 'gatewayorder_pick_' . $key]];
+        if ($index > 0) { $row[] = ['text' => '⬆️', 'callback_data' => 'gatewayorder_up_' . $key]; }
+        if ($index < count($order) - 1) { $row[] = ['text' => '⬇️', 'callback_data' => 'gatewayorder_down_' . $key]; }
+        $rows[] = $row;
+    }
+    $rows[] = [['text' => 'بازگردانی ترتیب اولیه', 'callback_data' => 'gatewayorder_reset']];
+    $rows[] = [['text' => 'بازگشت به درگاه‌ها', 'callback_data' => 'paygwlist']];
+    return json_encode(['inline_keyboard' => $rows], JSON_UNESCAPED_UNICODE);
+}
+
+function gatewayOrderPositionKeyboard(string $key): string
+{
+    $buttons = [];
+    foreach (gatewayDisplayOrder() as $index => $id) {
+        $buttons[] = ['text' => (string) ($index + 1), 'callback_data' => 'gatewayorder_place_' . $key . '_' . ($index + 1)];
+    }
+    $rows = array_chunk($buttons, 4);
+    $rows[] = [['text' => 'بازگشت به ترتیب درگاه‌ها', 'callback_data' => 'gatewayorder_list']];
+    return json_encode(['inline_keyboard' => $rows], JSON_UNESCAPED_UNICODE);
+}
+
+function gatewayOrderAdminHandle(string $data): bool
+{
+    global $pdo, $from_id, $message_id;
+    $order = null;
+    if ($data === 'gatewayorder_reset') {
+        gatewaySaveSetting($pdo, 'gateway_display_order', '[]');
+    } elseif (preg_match('/^gatewayorder_(pick|up|down)_(\w+)$/', $data, $match) && isset(gatewayLabelCallbacks()[$match[2]])) {
+        $key = $match[2];
+        step('home', $from_id);
+        if ($match[1] === 'pick') {
+            $label = htmlspecialchars(gatewayUserLabel($key), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            Editmessagetext($from_id, $message_id, "جایگاه جدید <b>$label</b> را در ترتیب کلی انتخاب کنید.\n۱ بالاترین جایگاه است؛ درگاه‌های مخفی برای هر کاربر از فهرست او کنار گذاشته می‌شوند.", gatewayOrderPositionKeyboard($key));
+            return true;
+        }
+        $current = gatewayDisplayOrder();
+        $position = array_search($key, $current, true) + 1 + ($match[1] === 'up' ? -1 : 1);
+        $order = gatewayPlaceInOrder($current, $key, max(1, min(count($current), $position)));
+    } elseif (preg_match('/^gatewayorder_place_(\w+)_(\d{1,2})$/', $data, $match) && isset(gatewayLabelCallbacks()[$match[1]])) {
+        $current = gatewayDisplayOrder();
+        $position = (int) $match[2];
+        if ($position >= 1 && $position <= count($current)) { $order = gatewayPlaceInOrder($current, $match[1], $position); }
+    } elseif ($data !== 'gatewayorder_list') {
+        return false;
+    }
+    if ($order !== null) { gatewaySaveSetting($pdo, 'gateway_display_order', json_encode($order, JSON_THROW_ON_ERROR)); }
+    step('home', $from_id);
+    Editmessagetext($from_id, $message_id,
+        'با فلش‌ها جابه‌جا کنید یا روی نام درگاه بزنید و شمارهٔ جایگاه را انتخاب کنید. تغییرات فوراً ذخیره می‌شوند.'
+        . "\nاین ترتیب شامل همهٔ درگاه‌هاست؛ هر کاربر فقط درگاه‌های مجاز و فعال خودش را می‌بیند.", gatewayOrderKeyboard());
+    return true;
+}
+
 function paymentGatewayAdminHandle(string $data, string $text, array $user): bool
 {
     global $pdo, $from_id, $message_id, $textbotlang;
+    if (gatewayOrderAdminHandle($data)) { return true; }
     if ($data === 'gatewayname_list') {
         step('home', $from_id);
         Editmessagetext($from_id, $message_id, 'درگاه موردنظر را برای تغییر نام نمایشی سمت کاربر انتخاب کنید.', gatewayNamesKeyboard());

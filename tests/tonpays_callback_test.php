@@ -120,7 +120,35 @@ try {
     paymentGatewayAdminHandle('tonpays_set_max', '', $adminUser);
     paymentGatewayAdminHandle('', '49999', $adminUser);
     checkTonpays(getPaySettingValue('tonpays_max') === '1000000' && $adminUser['step'] === 'tonpays_input_max', 'Invalid bounds saved');
-    echo "TonPays MySQL callback, duplicate delivery, migration preservation and admin settings tests passed\n";
+    paymentGatewayAdminHandle('gatewayorder_list', '', $adminUser);
+    checkTonpays($adminUser['step'] === 'home', 'Order menu kept stale API/label input');
+    paymentGatewayAdminHandle('gatewayorder_pick_tonpays', '', $adminUser);
+    $positionButtons = array_merge(...json_decode(gatewayOrderPositionKeyboard('tonpays'), true)['inline_keyboard']);
+    checkTonpays($positionButtons[0]['callback_data'] === 'gatewayorder_place_tonpays_1', 'Position chooser not linked');
+    paymentGatewayAdminHandle('gatewayorder_place_tonpays_1', '', $adminUser);
+    checkTonpays(gatewayDisplayOrder()[0] === 'tonpays', 'Direct placement not persisted');
+    paymentGatewayAdminHandle('gatewayorder_down_tonpays', '', $adminUser);
+    checkTonpays(gatewayDisplayOrder()[1] === 'tonpays', 'Move down not persisted');
+    paymentGatewayAdminHandle('gatewayorder_up_tonpays', '', $adminUser);
+    paymentGatewayAdminHandle('gatewayorder_up_tonpays', '', $adminUser);
+    checkTonpays(gatewayDisplayOrder()[0] === 'tonpays', 'Moving the first gateway up broke the order');
+    $savedOrder = getPaySettingValue('gateway_display_order');
+    $schema->apply('PaySetting', $definition);
+    checkTonpays(getPaySettingValue('gateway_display_order') === $savedOrder, 'Migration erased the order');
+    paymentGatewayAdminHandle('gatewayorder_place_tonpays_99', '', $adminUser);
+    checkTonpays(!paymentGatewayAdminHandle('gatewayorder_up_unknown', '', $adminUser)
+        && getPaySettingValue('gateway_display_order') === $savedOrder, 'Invalid move changed the order');
+    $last = count(gatewayDefaultOrder());
+    paymentGatewayAdminHandle('gatewayorder_place_tonpays_' . $last, '', $adminUser);
+    paymentGatewayAdminHandle('gatewayorder_down_tonpays', '', $adminUser);
+    checkTonpays(gatewayDisplayOrder()[$last - 1] === 'tonpays', 'Last position failed');
+    foreach (json_decode(gatewayOrderKeyboard(), true)['inline_keyboard'] as $row) {
+        foreach ($row as $button) { checkTonpays(strlen($button['callback_data']) <= 64, 'Callback exceeds Telegram limit'); }
+    }
+    paymentGatewayAdminHandle('gatewayorder_reset', '', $adminUser);
+    checkTonpays(gatewayDisplayOrder() === gatewayDefaultOrder() && gatewayUserLabel('tetraminator') === 'کارت به کارت'
+        && getPaySettingValue('tonpays_api_key') === 'replacement-test-key', 'Reset affected gateway names or credentials');
+    echo "TonPays MySQL callback, duplicate delivery, migration preservation, admin settings and gateway order tests passed\n";
 } finally {
     $pdo->exec("DROP DATABASE $db");
     restore_error_handler();

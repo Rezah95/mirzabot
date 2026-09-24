@@ -54,10 +54,66 @@ function gatewayApplyLabels(array $markup): array
     return $markup;
 }
 
+/** Match the original customer menu; newly introduced gateways are appended. */
+function gatewayDefaultOrder(): array
+{
+    $keys = array_keys(gatewayLabelCallbacks());
+    $legacy = ['card', 'tronado', 'tetraminator', 'zarinpal', 'tonpays', 'uniquepay', 'plisio', 'nowpayment',
+        'digi', 'iranpay1', 'iranpay2', 'iranpay4', 'iranpay3', 'aqayepardakht', 'variza', 'paymentnotverify', 'star'];
+    return array_values(array_unique(array_merge(array_intersect($legacy, $keys), $keys)));
+}
+
+function gatewayDisplayOrder(): array
+{
+    $stored = json_decode((string) getPaySettingValue('gateway_display_order', '[]'), true);
+    $order = [];
+    $known = gatewayLabelCallbacks();
+    if (is_array($stored) && array_is_list($stored)) {
+        foreach ($stored as $key) {
+            if (is_string($key) && isset($known[$key]) && !in_array($key, $order, true)) { $order[] = $key; }
+        }
+    }
+    return array_values(array_unique(array_merge($order, gatewayDefaultOrder())));
+}
+
+function gatewayPlaceInOrder(array $order, string $key, int $position): array
+{
+    $index = array_search($key, $order, true);
+    if ($index === false || $position < 1 || $position > count($order)) {
+        throw new InvalidArgumentException('Invalid gateway position');
+    }
+    array_splice($order, $index, 1);
+    array_splice($order, $position - 1, 0, [$key]);
+    return $order;
+}
+
+/** Reorder existing gateway rows only, after the per-user visibility checks. */
+function gatewayApplyOrder(array $markup, string $cardUrl = ''): array
+{
+    $ranks = array_flip(gatewayDisplayOrder());
+    $callbacks = array_flip(gatewayLabelCallbacks());
+    $slots = $gateways = [];
+    foreach ($markup['inline_keyboard'] ?? [] as $index => $row) {
+        if (count($row) !== 1) { continue; }
+        $button = $row[0];
+        $key = $callbacks[$button['callback_data'] ?? ''] ?? null;
+        if ($key === null && !isset($button['callback_data']) && $cardUrl !== '' && ($button['url'] ?? null) === $cardUrl) {
+            $key = 'card';
+        }
+        if ($key !== null) {
+            $slots[] = $index;
+            $gateways[] = ['rank' => $ranks[$key], 'row' => $row];
+        }
+    }
+    usort($gateways, static fn($a, $b) => $a['rank'] <=> $b['rank']);
+    foreach ($slots as $index => $slot) { $markup['inline_keyboard'][$slot] = $gateways[$index]['row']; }
+    return $markup;
+}
+
 /** Prepared upsert also supports databases created before these options existed. Never log credentials. */
 function gatewaySaveSetting(PDO $pdo, string $key, string $value): void
 {
-    $allowed = array_merge(['tonpays_api_key', 'tonpays_min', 'tonpays_max', 'tonpays_status'],
+    $allowed = array_merge(['tonpays_api_key', 'tonpays_min', 'tonpays_max', 'tonpays_status', 'gateway_display_order'],
         array_map(static fn($id) => 'gateway_label_' . $id, array_keys(gatewayLabelCallbacks())));
     if (!in_array($key, $allowed, true)) { throw new InvalidArgumentException('Unknown gateway setting'); }
     $pdo->prepare('INSERT INTO PaySetting (NamePay, ValuePay) VALUES (?, ?) ON DUPLICATE KEY UPDATE ValuePay = VALUES(ValuePay)')
