@@ -219,6 +219,16 @@ $tronadoManage = json_encode(['inline_keyboard' => [
     [['text' => '🎁 درصد کش‌بک', 'callback_data' => 'tronado_set_cashback']],
     [['text' => $textbotlang['keyboard']['backToGateways'], 'callback_data' => 'paygwlist']],
 ]], JSON_UNESCAPED_UNICODE);
+$tetraminatorManage = json_encode(['inline_keyboard' => [
+    [['text' => '🔑 کلید API', 'callback_data' => 'tmset_key']],
+    [['text' => '🌐 آدرس API', 'callback_data' => 'tmset_base']],
+    [['text' => $textbotlang['keyboard']['backToGateways'], 'callback_data' => 'paygwlist']],
+]], JSON_UNESCAPED_UNICODE);
+$uniquepayManage = json_encode(['inline_keyboard' => [
+    [['text' => '🔑 توکن یونیک‌پی', 'callback_data' => 'upset_token']],
+    [['text' => '🌐 آدرس API', 'callback_data' => 'upset_base']],
+    [['text' => $textbotlang['keyboard']['backToGateways'], 'callback_data' => 'paygwlist']],
+]], JSON_UNESCAPED_UNICODE);
 $keyboardzarinpal = json_encode([
     'inline_keyboard' => [
         [['text' => $textbotlang['keyboard']['zarinPalMerchant'], 'callback_data' => "paygwopt-zarinPalMerchant"]],
@@ -1750,6 +1760,9 @@ $nowpayment_setting_keyboard = json_encode([
 ]);
 $paymentGateways = [
     'tronado' => ['label' => 'ترونادو', 'setting' => 'tronado_status', 'on' => 'ontronado', 'off' => 'offtronado', 'keyboard' => $tronadoManage],
+    'tetraminator' => ['label' => 'تترامیناتور', 'setting' => 'tetraminatorstatus', 'on' => 'ontetraminator', 'off' => 'offtetraminator', 'keyboard' => $tetraminatorManage],
+    'zarinpal' => ['label' => $textbotlang['keyboard']['zarinPalGateway'], 'setting' => 'zarinpalstatus', 'on' => 'onzarinpal', 'off' => 'offzarinpal', 'keyboard' => $keyboardzarinpal],
+    'uniquepay' => ['label' => 'یونیک‌پی', 'setting' => 'uniquepaystatus', 'on' => 'onuniquepay', 'off' => 'offuniquepay', 'keyboard' => $uniquepayManage],
     'card' => ['label' => $textbotlang['keyboard']['cartToCartGateway'], 'setting' => 'Cartstatus', 'on' => 'oncard', 'off' => 'offcard', 'keyboard' => $CartManage],
     'plisio' => ['label' => 'Plisio', 'setting' => 'nowpaymentstatus', 'on' => 'onnowpayment', 'off' => 'offnowpayment', 'keyboard' => $NowPaymentsManage],
     'nowpayment' => ['label' => 'NOWPayments', 'setting' => 'statusnowpayment', 'on' => '1', 'off' => '0', 'keyboard' => $nowpayment_setting_keyboard],
@@ -1758,7 +1771,6 @@ $paymentGateways = [
     'iranpay4' => ['label' => $textbotlang['keyboard']['iranPay4Label'], 'setting' => 'statusiranpay4', 'on' => 'oniranpay4', 'off' => 'offiranpay4', 'keyboard' => $abangatewaykeyboard],
     'iranpay3' => ['label' => $textbotlang['keyboard']['iranPay3Label'], 'setting' => 'statusiranpay3', 'on' => 'oniranpay3', 'off' => 'offiranpay3', 'keyboard' => $iranpaykeyboard],
     'aqayepardakht' => ['label' => $textbotlang['keyboard']['aqayePardakhtGateway'], 'setting' => 'statusaqayepardakht', 'on' => 'onaqayepardakht', 'off' => 'offaqayepardakht', 'keyboard' => $aqayepardakht],
-    'zarinpal' => ['label' => $textbotlang['keyboard']['zarinPalGateway'], 'setting' => 'zarinpalstatus', 'on' => 'onzarinpal', 'off' => 'offzarinpal', 'keyboard' => $keyboardzarinpal],
     'variza' => ['label' => $textbotlang['keyboard']['varizaGateway'], 'setting' => 'variza_status', 'on' => 'onvariza', 'off' => 'offvariza', 'keyboard' => $keyboardvariza],
     'digi' => ['label' => $textbotlang['keyboard']['cryptoOfflinePayment'], 'setting' => 'digistatus', 'on' => 'ondigi', 'off' => 'offdigi', 'keyboard' => $tronnowpayments],
     'star' => ['label' => 'Star Telegram', 'setting' => 'statusstar', 'on' => '1', 'off' => '0', 'keyboard' => $Startelegram],

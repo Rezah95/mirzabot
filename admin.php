@@ -6217,7 +6217,6 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
             ],
         ]
     ]);
-    sendmessage($from_id, $textbotlang['Admin']['gateway']['intro'], $Bot_Status, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['gateway']['intro'], paymentGatewaysKeyboard(), 'HTML');
 } elseif ($text == $textbotlang['keyboard']['renewalCashback'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['price']['askRenewCashback'], $backadmin, 'HTML');
@@ -6485,7 +6484,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
             ],
         ]
     ]);
-    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['gateway']['intro'], $Bot_Status);
+    Editmessagetext($from_id, $message_id, $textbotlang['Admin']['gateway']['intro'], paymentGatewaysKeyboard());
 } elseif ($text == $textbotlang['keyboard']['cashbackCartToCart']) {
     sendmessage($from_id, $textbotlang['Admin']['price']['askPaymentCashback'], $backadmin, 'HTML');
     step("getcashcart", $from_id);
