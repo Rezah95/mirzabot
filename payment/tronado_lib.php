@@ -21,8 +21,18 @@ function tronadoConfigured(): bool
 /** Keep the provider's error useful in logs without recording credentials or payment links. */
 function tronadoResponseError(array $response): string
 {
-    $value = !empty($response['ErrorMessage']) ? $response['ErrorMessage'] : ($response['Error'] ?? '');
-    if (!is_string($value) && !is_numeric($value)) {
+    $value = null;
+    foreach (['ErrorMessage', 'errorMessage', 'Error', 'error', 'Message', 'message', 'Detail', 'detail', 'title'] as $field) {
+        $candidate = $response[$field] ?? null;
+        if (is_array($candidate)) {
+            $candidate = $candidate['Message'] ?? $candidate['message'] ?? $candidate['Description'] ?? $candidate['description'] ?? null;
+        }
+        if ((is_string($candidate) || is_numeric($candidate)) && trim((string) $candidate) !== '') {
+            $value = $candidate;
+            break;
+        }
+    }
+    if ($value === null) {
         return '';
     }
     $message = (string) $value;
@@ -38,6 +48,36 @@ function tronadoResponseError(array $response): string
     $message = preg_replace('~https?://[^\s<>"\x27]+~i', '[url]', $message);
     $message = preg_replace('/[\x00-\x20\x7f]+/', ' ', strip_tags($message));
     return mb_substr(trim($message), 0, 400, 'UTF-8');
+}
+
+/** Report only JSON field names when the API returns no usable error message. */
+function tronadoResponseFields(array $response): string
+{
+    $fields = [];
+    foreach ($response as $name => $value) {
+        if (!is_string($name) || !preg_match('/^[A-Za-z][A-Za-z0-9_]{0,39}$/', $name)) {
+            continue;
+        }
+        if (is_array($value)) {
+            $nested = [];
+            foreach (array_keys($value) as $child) {
+                if (is_string($child) && preg_match('/^[A-Za-z][A-Za-z0-9_]{0,39}$/', $child)) {
+                    $nested[] = $child;
+                }
+                if (count($nested) === 6) {
+                    break;
+                }
+            }
+            if ($nested !== []) {
+                $name .= '(' . implode(',', $nested) . ')';
+            }
+        }
+        $fields[] = $name;
+        if (count($fields) === 12) {
+            break;
+        }
+    }
+    return $fields !== [] ? implode(',', $fields) : 'none';
 }
 
 /** Send a JSON POST to the official Tronado API. The caller supplies the key only for order creation. */
@@ -112,7 +152,10 @@ function tronadoCreateOrder(string $orderId, int $amountToman, string $domain, ?
     );
     $token = is_string($orderResponse['Token'] ?? null) ? trim($orderResponse['Token']) : '';
     if ($token === '') {
-        throw new RuntimeException('Tronado order response is missing Token');
+        $reason = tronadoResponseError($orderResponse);
+        throw new RuntimeException($reason !== ''
+            ? 'Tronado order rejected: ' . $reason
+            : 'Tronado order response is missing Token (fields: ' . tronadoResponseFields($orderResponse) . ')');
     }
     if (!preg_match('/^[A-Za-z0-9_-]{8,200}$/', $token)) {
         throw new RuntimeException('Tronado order response contains an invalid Token format');

@@ -108,8 +108,11 @@ try {
     $reject(['Token' => $token, 'ErrorMessage' => 'Business is inactive'], 'Business is inactive');
     $reject(['ErrorMessage' => 'Invalid API key'], 'HTTP 401): Invalid API key', 401);
     $reject(['ErrorMessage' => '', 'Error' => 'Callback domain is not registered'], 'Callback domain is not registered');
-    $reject(['Token' => null], 'missing Token');
-    $reject(['Token' => ['unexpected']], 'missing Token');
+    $reject(['Token' => null], 'missing Token (fields: Token)');
+    $reject(['Token' => ['unexpected']], 'missing Token (fields: Token)');
+    $reject(['success' => false, 'message' => 'Daily limit exceeded'], 'order rejected: Daily limit exceeded');
+    $reject(['error' => ['message' => 'Business disabled']], 'order rejected: Business disabled');
+    $reject(['data' => ['token' => $token], 'status' => false], 'missing Token (fields: data(token),status)');
     $reject(['Token' => '<invalid>'], 'invalid Token format');
     $reject('<html>Unavailable</html>', 'HTTP 503', 503);
     $reject('invalid JSON', 'Invalid Tronado JSON response');
@@ -123,6 +126,7 @@ try {
         expectTronado(!str_contains($message, $sensitive), 'Unsafe error detail');
     }
     expectTronado(mb_strlen(tronadoResponseError(['ErrorMessage' => str_repeat('خطا ', 200)])) <= 400, 'Unbounded error detail');
+    expectTronado(tronadoResponseFields(['api-key' => 'secret', 'Nested' => ['token' => $token], 'Status' => false]) === 'Nested(token),Status', 'Response shape leaked values');
     echo "Tronado gateway tests passed\n";
 } finally {
     if (is_resource($server)) {
