@@ -396,7 +396,7 @@ if ($datain == "paygwback") {
                 'paymentnotverify' => $textbotlang['textbot']['paymentNotVerify'],
                 'Star Telegram' => $textbotlang['textbot']['starTelegram']
 
-            ][$tracepay['Payment_Method']];
+            ][$tracepay['Payment_Method']] ?? htmlspecialchars((string) $tracepay['Payment_Method'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             $paycount .= sprintf($textbotlang['Admin']['report']['gatewayRow'], $status_var, $tracepay['countpay'], $tracepay['sumpay']);
         }
     }

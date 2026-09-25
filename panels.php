@@ -2018,6 +2018,7 @@ class ManagePanel
     }
     function extend($Method_extend, $new_limit, $time_day, $username, $code_product, $name_panel)
     {
+        global $pdo;
         $panel = select("marzban_panel", "*", "code_panel", $name_panel, "select");
         $product = select("product", "*", "code_product", $code_product, "select");
         $invoice = select("invoice", "*", "username", $username, "select");
