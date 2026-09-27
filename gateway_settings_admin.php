@@ -116,9 +116,12 @@ function paymentGatewayAdminHandle(string $data, string $text, array $user): boo
         Editmessagetext($from_id, $message_id, $prompt, json_encode(['inline_keyboard' => [[['text' => 'بازگشت', 'callback_data' => 'paygw-tonpays']]]]));
         return true;
     }
-    if ($data !== '' || in_array($text, array_merge(['panel', '/panel', '/start'], array_values($textbotlang['keyboard']), array_values($textbotlang['Admin']['btnKeyboard']), [
-        $textbotlang['Admin']['panelAdmin'], $textbotlang['Admin']['backAdminBtn'], $textbotlang['Admin']['backMenuBtn'],
-    ]), true)) { return false; }
+    // Only explicit navigation cancels name entry. Labels such as «کارت به کارت»
+    // also occur on admin buttons and must remain valid names for any gateway.
+    if ($data !== '' || in_array($text, [
+        'panel', '/panel', '/start', $textbotlang['Admin']['panelAdmin'],
+        $textbotlang['Admin']['backAdminBtn'], $textbotlang['Admin']['backMenuBtn'],
+    ], true)) { return false; }
     if (preg_match('/^gatewayname_input_(\w+)$/', $user['step'] ?? '', $match) && isset(gatewayLabelCallbacks()[$match[1]])) {
         $label = trim($text);
         if (!gatewayValidLabel($label)) {
@@ -130,6 +133,8 @@ function paymentGatewayAdminHandle(string $data, string $text, array $user): boo
         sendmessage($from_id, 'نام نمایشی درگاه ذخیره شد.', gatewayNamesKeyboard(), 'HTML');
         return true;
     }
+    if (in_array($text, array_values($textbotlang['keyboard']), true)
+        || in_array($text, array_values($textbotlang['Admin']['btnKeyboard']), true)) { return false; }
     if (preg_match('/^tonpays_input_(api_key|min|max)$/', $user['step'] ?? '', $match)) {
         $field = $match[1];
         $value = trim($text);
