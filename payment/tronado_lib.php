@@ -224,7 +224,7 @@ function tronadoPaidCallbackMatchesOrder(array $callback, array $paymentReport):
         $wallet = $metadata['wallet'] ?? null;
         return is_numeric($expectedTron) && (float) $expectedTron > 0
             && is_string($wallet) && $wallet !== ''
-            && hash_equals($wallet, (string) ($callback['Wallet'] ?? ''));
+            && is_string($callback['Wallet'] ?? null) && hash_equals($wallet, $callback['Wallet']);
     }
     // Orders created by the earlier official Tronado implementation stored
     // only the provider response. Bind those in-flight invoices to its token
@@ -234,16 +234,17 @@ function tronadoPaidCallbackMatchesOrder(array $callback, array $paymentReport):
     $legacyWallet = tronadoSetting('walletaddress');
     return strlen($legacyToken) >= 8 && hash_equals($legacyToken, $callbackToken)
         && preg_match('/^T[1-9A-HJ-NP-Za-km-z]{33}$/', $legacyWallet) === 1
-        && hash_equals($legacyWallet, (string) ($callback['Wallet'] ?? ''));
+        && is_string($callback['Wallet'] ?? null) && hash_equals($legacyWallet, $callback['Wallet']);
 }
 
 /** @return 'new'|'duplicate'|'error' */
-function tronadoRegisterCallback(string $paymentId, int $orderStatusId, string $rawBody): string
+function tronadoRegisterCallback(string $paymentId, int $orderStatusId, string $rawBody, ?PDO $connection = null): string
 {
     global $pdo;
+    $connection ??= $pdo;
 
     try {
-        $statement = $pdo->prepare(
+        $statement = $connection->prepare(
             'INSERT INTO Tronado_callback (payment_id, payment_id_hash, order_status_id, raw_payload) VALUES (?, ?, ?, ?)'
         );
         $statement->execute([$paymentId, hash('sha256', $paymentId), $orderStatusId, $rawBody]);
@@ -255,4 +256,122 @@ function tronadoRegisterCallback(string $paymentId, int $orderStatusId, string $
         error_log('Tronado callback storage failed: ' . $error->getMessage());
         return 'error';
     }
+}
+
+
+/** Authenticate and persist payment acceptance before doing any network work. */
+function tronadoReceiveCallback(PDO $pdo, string $rawBody, string $signature, string $signingKey): array
+{
+    if ($rawBody === '' || strlen($rawBody) > 1024 * 1024) {
+        return [400, ['ok' => false, 'error' => 'Invalid callback payload']];
+    }
+    if ($signingKey === '' || $signingKey === '0') {
+        return [503, ['ok' => false, 'error' => 'IPN signing key is not configured']];
+    }
+    if (!tronadoVerifyCallbackSignature($rawBody, $signature, $signingKey)) {
+        return [401, ['ok' => false, 'error' => 'Invalid signature']];
+    }
+    $callback = json_decode($rawBody, true);
+    if (!is_array($callback)) {
+        return [400, ['ok' => false, 'error' => 'Invalid JSON']];
+    }
+    $paymentId = is_string($callback['PaymentId'] ?? null) ? trim($callback['PaymentId']) : '';
+    $orderStatus = filter_var($callback['OrderStatusID'] ?? null, FILTER_VALIDATE_INT);
+    if ($paymentId === '' || strlen($paymentId) > 500 || $orderStatus === false || $orderStatus === null) {
+        return [400, ['ok' => false, 'error' => 'PaymentId and OrderStatusID are required']];
+    }
+    $accepted = !in_array($orderStatus, [40, 200], true)
+        && (filter_var($callback['IsPaid'] ?? false, FILTER_VALIDATE_BOOLEAN) || $orderStatus === 30);
+    try {
+        $pdo->beginTransaction();
+        $query = $pdo->prepare('SELECT * FROM Payment_report WHERE id_order = ? LIMIT 2 FOR UPDATE');
+        $query->execute([$paymentId]);
+        $orders = $query->fetchAll(PDO::FETCH_ASSOC);
+        if (count($orders) !== 1 || $orders[0]['Payment_Method'] !== 'Tronado') {
+            $pdo->rollBack();
+            return [404, ['ok' => false, 'error' => 'Unknown or ambiguous payment']];
+        }
+        $order = $orders[0];
+        if ($accepted && !tronadoPaidCallbackMatchesOrder($callback, $order)) {
+            $pdo->rollBack();
+            return [409, ['ok' => false, 'error' => 'Amount or wallet does not match order']];
+        }
+        $registration = tronadoRegisterCallback($paymentId, $orderStatus, $rawBody, $pdo);
+        if ($registration === 'error') {
+            throw new RuntimeException('Unable to persist callback');
+        }
+        $fulfillment = $order['fulfillment_status'] ?? '';
+        if (!$accepted) {
+            // Never deliver a queued order after a cancellation. Existing delivery needs review.
+            $cancelled = $orderStatus === 200 && $order['payment_Status'] === 'paid';
+            if ($cancelled && $fulfillment === 'queued') {
+                $pdo->prepare("UPDATE Payment_report SET fulfillment_status = 'failed', fulfillment_updated_at = NOW() WHERE id = ?")
+                    ->execute([$order['id']]);
+            }
+            $pdo->commit();
+            return [200, ['ok' => true, 'payment_id' => $paymentId,
+                'cancelled' => $cancelled && $registration === 'new']];
+        }
+        $cancelledEvent = $pdo->prepare('SELECT 1 FROM Tronado_callback WHERE payment_id_hash = ? AND order_status_id = 200');
+        $cancelledEvent->execute([hash('sha256', $paymentId)]);
+        if ($cancelledEvent->fetchColumn() !== false) {
+            $pdo->commit();
+            return [409, ['ok' => false, 'payment_id' => $paymentId, 'error' => 'Cancelled payment requires reconciliation']];
+        }
+        if ($order['payment_Status'] === 'reject' || $fulfillment === 'failed'
+            || ($order['payment_Status'] === 'paid' && !in_array($fulfillment, ['queued', 'processing', 'fulfilled', 'refunded'], true))) {
+            $pdo->commit();
+            return [409, ['ok' => false, 'payment_id' => $paymentId, 'error' => 'Payment requires reconciliation']];
+        }
+        if ($order['payment_Status'] !== 'paid' && $fulfillment === '') {
+            // The event and its recoverable queue entry commit together, including on redelivery.
+            $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid', fulfillment_status = 'queued', fulfillment_updated_at = NOW() WHERE id = ?")
+                ->execute([$order['id']]);
+            $fulfillment = 'queued';
+        }
+        if (!in_array($fulfillment, ['queued', 'processing', 'fulfilled', 'refunded'], true)) {
+            $pdo->rollBack();
+            return [409, ['ok' => false, 'error' => 'Unexpected fulfillment state']];
+        }
+        $pdo->commit();
+        return [200, ['ok' => true, 'payment_id' => $paymentId, 'paid' => true, 'fulfillment' => $fulfillment]];
+    } catch (Throwable $error) {
+        if ($pdo->inTransaction()) { $pdo->rollBack(); }
+        error_log('Tronado callback persistence failed: ' . $error->getMessage());
+        return [503, ['ok' => false, 'error' => 'Unable to persist callback']];
+    }
+}
+
+/** Only a queued order can be claimed. Interrupted/failed deliveries are never blindly replayed. */
+function tronadoFulfillQueued(PDO $pdo, string $paymentId, callable $deliver, ?callable $afterDelivery = null): bool
+{
+    $claim = $pdo->prepare("UPDATE Payment_report SET fulfillment_status = 'processing', fulfillment_updated_at = NOW()
+        WHERE id_order = ? AND Payment_Method = 'Tronado' AND payment_Status = 'paid' AND fulfillment_status = 'queued'");
+    $claim->execute([$paymentId]);
+    if ($claim->rowCount() !== 1) { return false; }
+    clearSelectCache('Payment_report');
+    try {
+        $query = $pdo->prepare('SELECT * FROM Payment_report WHERE id_order = ?');
+        $query->execute([$paymentId]);
+        $order = $query->fetch(PDO::FETCH_ASSOC);
+        $delivered = $deliver($order);
+        $status = $delivered === false ? 'refunded' : 'fulfilled';
+        $pdo->prepare('UPDATE Payment_report SET fulfillment_status = ?, fulfillment_updated_at = NOW() WHERE id_order = ?')
+            ->execute([$status, $paymentId]);
+        clearSelectCache('Payment_report');
+    } catch (Throwable $error) {
+        // DirectPayment may already have completed before a later notification throws.
+        $pdo->prepare("UPDATE Payment_report SET fulfillment_status = 'failed', fulfillment_updated_at = NOW()
+            WHERE id_order = ? AND fulfillment_status = 'processing'")->execute([$paymentId]);
+        clearSelectCache('Payment_report');
+        error_log('Tronado fulfillment failed for ' . $paymentId . ': ' . $error->getMessage());
+        return false;
+    }
+    if ($delivered !== false && $afterDelivery !== null) {
+        try { $afterDelivery($order); }
+        catch (Throwable $error) {
+            error_log('Tronado post-payment notification failed for ' . $paymentId . ': ' . $error->getMessage());
+        }
+    }
+    return true;
 }

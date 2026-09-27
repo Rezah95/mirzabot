@@ -199,7 +199,7 @@ if ($pricecashback != "0") {
     sendmessage($Balance_id['id'], $text_report, null, 'HTML');
 }
 $paymentreports = select("topicid", "idreport", "report", "paymentreport", "select")['idreport'];
-$text_reportpayment = sprintf($textbotlang['paymentGateway']['reportTronado'], $Balance_id['username'], $Balance_id['id'], $price);
+$text_reportpayment = sprintf($textbotlang['paymentGateway']['reportCubePay'], $Balance_id['username'], $Balance_id['id'], $price);
 $database = json_encode($response);
 $statement = $pdo->prepare("UPDATE Payment_report SET dec_not_confirmed = :dec_not_confirmed WHERE id_order = :id_order");
 $statement->bindValue(':dec_not_confirmed', $database);

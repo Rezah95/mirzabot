@@ -4785,11 +4785,16 @@ Payment method : First Rial currency',
 - 🆔 User ID : %s
 - 💸 Amount %s
 - 💳 Method : AbanGateway',
-                'reportTronado' => '💵 New payment
+                'reportCubePay' => '💵 New payment
 - 👤 User username : @%s
 - 🆔User numeric ID : %s
 - 💸 Transaction amount %s
 - 💳 Payment method : CubePay',
+                'reportTronado' => '💵 New payment
+- 👤 User username : @%s
+- 🆔User numeric ID : %s
+- 💸 Transaction amount %s
+- 💳 Payment method : Tronado',
                 'reportNowpayment' => '💵 New payment
 - 👤 User username : @%s
 - 🆔User numeric ID : %s

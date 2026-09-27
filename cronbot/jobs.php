@@ -3,6 +3,7 @@
 function mirza_cron_jobs(): array
 {
     return [
+        ['job' => 'tronado', 'schedule' => '* * * * *', 'title' => 'تحویل پرداخت‌های تأییدشدهٔ ترونادو'],
         ['job' => 'croncard', 'schedule' => '*/1 * * * *', 'title' => 'تأیید خودکار رسید کارت به کارت'],
         ['job' => 'NoticationsService', 'schedule' => '*/1 * * * *', 'title' => 'ارسال اعلان‌های ربات'],
         ['job' => 'renewal_reminders', 'schedule' => '*/5 * * * *', 'title' => 'یادآوری تمدید سرویس‌های تمام‌شده'],

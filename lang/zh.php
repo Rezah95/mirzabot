@@ -4782,11 +4782,16 @@ f,n.n2',
 - 🆔 用户 ID : %s
 - 💸 金额 %s
 - 💳 支付方式 : AbanGateway',
-                'reportTronado' => '💵 新付款
+                'reportCubePay' => '💵 新付款
 - 👤 用户用户名：@%s
 - 🆔用户数字 ID：%s
 - 💸 交易金额 %s
 - 💳 支付方式：CubePay',
+                'reportTronado' => '💵 新付款
+- 👤 用户用户名：@%s
+- 🆔用户数字 ID：%s
+- 💸 交易金额 %s
+- 💳 支付方式：Tronado',
                 'reportNowpayment' => '💵 新付款
 - 👤 用户用户名：@%s
 - 🆔用户数字 ID：%s
