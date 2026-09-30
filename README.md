@@ -315,3 +315,15 @@ Thanks to everyone who has contributed to making Mirza Bot better:
 📖 [Documentation](https://mirzabot.com/docs/) · 💬 [Channel](https://t.me/mirzapanel) · 👥 [Group](https://t.me/mirzapanelgroup) · ⭐ [Star on GitHub](https://github.com/mahdiMGF2/mirzabot)
 
 </div>
+
+## Release process and Tronado recovery
+
+The root `version` file is authoritative. Development changes are committed on `dev`; approved releases are promoted to `master` and receive an annotated version tag. This release follows the maintainer's standing instruction to publish fixes to both branches.
+
+Version **0.5.9** migrates the legacy four-component **0.5.8.17** to three-component SemVer without rewriting old tags. The installer accepts `v0.5.9` and sorts it after the legacy versions. Future releases use `vX.Y.Z` tags; before 1.0, compatible fixes increment patch and features or breaking changes increment minor. This release repairs callback delivery and adds admin diagnostics.
+
+Tronado now attempts fulfillment immediately after acknowledging a signed callback on FPM, LiteSpeed and other PHP handlers. The cron dispatcher remains a recovery path. Reverse-proxy buffering can affect when the provider receives a flushed response. See the administrator's Tronado settings → **وضعیت کال‌بک و سفارش‌ها** for stored callbacks and recent invoice states. Receive, acceptance, delivery and report errors are recorded in `payment/error_log`.
+
+**Upgrade reconciliation:** only new invoices created with this release are automatically delivered. Older unpaid invoices receiving payment and old queued invoices are held as `review` because they may already have been compensated manually. Reconcile manual credits before settling any historical invoice; do not bulk replay old payments. Already completed payments are never replayed. Provider order numbers and local payment IDs are different identifiers.
+
+Targeted checks: `php tests/tronado_gateway_test.php`, `php tests/gateway_names_admin_test.php`, `php tests/renewal_flow_test.php`. The HTTP/MySQL integration test `tests/tronado_callback_test.php` requires a dedicated temporary MySQL instance and `TRONADO_TEST_SOCKET` pointing to its socket; it never loads production configuration.

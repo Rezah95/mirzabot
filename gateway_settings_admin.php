@@ -83,6 +83,20 @@ function gatewayOrderAdminHandle(string $data): bool
 function paymentGatewayAdminHandle(string $data, string $text, array $user): bool
 {
     global $pdo, $from_id, $message_id, $textbotlang;
+    if ($data === 'tronado_diagnostics') {
+        step('home', $from_id);
+        $markup = json_encode(['inline_keyboard' => [
+            [['text' => 'تازه‌سازی', 'callback_data' => 'tronado_diagnostics']],
+            [['text' => 'تنظیمات ترونادو', 'callback_data' => 'paygw-tronado']],
+        ]]);
+        try { $diagnostics = tronadoDiagnostics($pdo); }
+        catch (Throwable $error) {
+            error_log('Tronado diagnostics failed: ' . $error->getMessage());
+            $diagnostics = 'خواندن وضعیت ترونادو انجام نشد؛ لاگ خطا و به‌روزرسانی دیتابیس را بررسی کنید.';
+        }
+        Editmessagetext($from_id, $message_id, htmlspecialchars($diagnostics, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $markup);
+        return true;
+    }
     if ($data === 'tonpays_errors') {
         step('home', $from_id);
         $markup = json_encode(['inline_keyboard' => [

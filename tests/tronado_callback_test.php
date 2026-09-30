@@ -64,7 +64,7 @@ try {
     $callback = ['PaymentId' => '0123456789', 'OrderStatusID' => 30, 'IsPaid' => true,
         'Wallet' => 'T' . str_repeat('1', 33), 'TronAmount' => 7.1,
         'UserPaidTomanAmount' => 500000, 'TomanAmountWithoutWage' => 450000];
-    $metadata = ['wage_from_business_percentage' => 100, 'tron_amount' => 7.142858, 'wallet' => $callback['Wallet']];
+    $metadata = ['automatic_delivery' => 2, 'wage_from_business_percentage' => 100, 'tron_amount' => 7.142858, 'wallet' => $callback['Wallet']];
     $reset = static function () use ($pdo, $callback, $metadata): void {
         $pdo->exec('DELETE FROM Tronado_callback');
         $pdo->exec('DELETE FROM Payment_report');
@@ -170,6 +170,26 @@ try {
     expectCallback($receive()[0] === 409 && !$work() && $balance() === 1000,
         'Delayed paid event delivered an already cancelled order');
 
+    // Historical invoices may have been manually credited: never replay them after upgrade.
+    foreach (['Unpaid', 'paid'] as $previousStatus) {
+        $reset();
+        $oldMetadata = $metadata;
+        unset($oldMetadata['automatic_delivery']);
+        $pdo->prepare("UPDATE Payment_report SET dec_not_confirmed = ?, payment_Status = ?, fulfillment_status = ?")
+            ->execute([json_encode($oldMetadata), $previousStatus, $previousStatus === 'paid' ? 'queued' : null]);
+        $pdo->exec('UPDATE user SET Balance = 501000'); // The administrator already compensated this order.
+        expectCallback($receive()[1]['fulfillment'] === 'review' && !$work() && $balance() === 501000,
+            'A historical payment was credited a second time');
+        expectCallback($receive()[0] === 200 && $state() === 'review', 'Historical duplicate not acknowledged');
+    }
+    $reset();
+    $pdo->prepare("UPDATE Payment_report SET dec_not_confirmed = ?, payment_Status = 'paid', fulfillment_status = 'queued'")
+        ->execute([json_encode($oldMetadata)]);
+    expectCallback(!$work() && $state() === 'review' && $balance() === 1000, 'Old cron queue was replayed');
+    $diagnostics = tronadoDiagnostics($pdo);
+    expectCallback(str_contains($diagnostics, $callback['PaymentId']) && str_contains($diagnostics, 'review')
+        && !str_contains($diagnostics, $callback['Wallet']), 'Diagnostics omitted state or leaked payload');
+
     // Run the actual HTTP endpoint on non-FPM hosting; only bootstrap dependencies are fixtures.
     $reset();
     mkdir($webRoot . '/payment', 0700, true);
@@ -177,8 +197,37 @@ try {
     copy(dirname(__DIR__) . '/payment/tronado_lib.php', $webRoot . '/payment/tronado_lib.php');
     file_put_contents($webRoot . '/config.php', '<?php $pdo = new PDO(' . var_export('mysql:unix_socket=' . $socket . ';dbname=' . $db, true)
         . ', "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);');
+    copy(dirname(__DIR__) . '/payment/tronado_delivery.php', $webRoot . '/payment/tronado_delivery.php');
+    file_put_contents($webRoot . '/panels.php', '<?php class ManagePanel {}');
+    file_put_contents($webRoot . '/jdf.php', '<?php');
+    file_put_contents($webRoot . '/keyboard.php', '<?php $keyboard = null;');
     file_put_contents($webRoot . '/botapi.php', '<?php');
-    file_put_contents($webRoot . '/function.php', '<?php function getPaySettingValue($key, $default = "") { return "test-ipn-key"; }');
+    $bootstrap = <<<'PHP'
+<?php
+function clearSelectCache($table) {}
+function getPaySettingValue($key, $default = '') { return $key === 'tronado_ipn_signing_key' ? 'test-ipn-key' : $default; }
+function languagechange() { return require LANGUAGE_FILE; }
+function select($table, $fields = '*', $field = null, $value = null, $mode = 'select') {
+    global $pdo;
+    if ($table === 'topicid') { return ['idreport' => 1]; }
+    if ($table === 'admin') { return []; }
+    if ($table === 'setting') { return ['Channel_Report' => 'test-channel']; }
+    $q = $pdo->prepare("SELECT * FROM `$table` WHERE `$field` = ?");
+    $q->execute([$value]);
+    return $q->fetch(PDO::FETCH_ASSOC);
+}
+function update($table, $field, $value, $whereField, $whereValue) {
+    global $pdo;
+    $pdo->prepare("UPDATE `$table` SET `$field` = ? WHERE `$whereField` = ?")->execute([$value, $whereValue]);
+}
+function sendmessage(...$args) { usleep(2500000); }
+function telegram($method, $args) {
+    file_put_contents(__DIR__ . '/reports.jsonl', json_encode($args) . "\n", FILE_APPEND);
+    return ['ok' => true];
+}
+PHP;
+    $bootstrap = str_replace('LANGUAGE_FILE', var_export(dirname(__DIR__) . '/lang/fa.php', true), $bootstrap);
+    file_put_contents($webRoot . '/function.php', $bootstrap . "\n" . substr($source, $start, $end - $start));
     $listener = stream_socket_server('tcp://127.0.0.1:0');
     $address = stream_socket_get_name($listener, false);
     fclose($listener);
@@ -204,9 +253,32 @@ try {
     };
     expectCallback($http('GET', '')[0] === 405 && $http('POST', 'invalid')[0] === 401, 'HTTP method/authentication checks failed');
     $result = $http('POST', hash_hmac('sha512', json_encode($callback), 'test-ipn-key'));
-    expectCallback($result[0] === 200 && $result[1]['fulfillment'] === 'queued' && $result[2] < 2
-        && $balance() === 1000, 'HTTP acceptance waited for fulfillment');
-    expectCallback($work() && $balance() === 501000, 'Cron could not recover accepted HTTP callback');
+    expectCallback($result[0] === 200 && $result[1]['fulfillment'] === 'queued' && $result[2] < 2, 'HTTP acceptance waited for fulfillment');
+    // The HTTP client has its 200 response while the worker is still sending a slow notification.
+    for ($attempt = 0; $attempt < 60 && !is_file($webRoot . '/reports.jsonl'); $attempt++) { usleep(100000); }
+    expectCallback($balance() === 501000 && $state() === 'fulfilled' && is_file($webRoot . '/reports.jsonl'),
+        'Non-FPM callback failed to deliver and report without cron');
+    $reports = file($webRoot . '/reports.jsonl');
+    expectCallback(count($reports) === 1 && str_contains($reports[0], 'Tronado'), 'Tronado report missing');
+    expectCallback($http('POST', hash_hmac('sha512', json_encode($callback), 'test-ipn-key'))[0] === 200
+        && $balance() === 501000 && count(file($webRoot . '/reports.jsonl')) === 1, 'Duplicate HTTP callback replayed payment/report');
+    $httpLog = file_get_contents($webRoot . '/payment/error_log');
+    expectCallback(str_contains($httpLog, 'Tronado callback received') && str_contains($httpLog, 'Tronado callback result')
+        && str_contains($httpLog, 'Tronado delivery result'), 'Callback or delivery diagnostics missing');
+    // Actual recovery job must bootstrap in global scope and restore dispatcher process state.
+    $reset();
+    $receive();
+    unlink($webRoot . '/reports.jsonl');
+    mkdir($webRoot . '/cronbot');
+    copy(dirname(__DIR__) . '/cronbot/tronado.php', $webRoot . '/cronbot/tronado.php');
+    $cronCode = 'chdir("/tmp"); $beforeLog = ini_get("error_log"); require '
+        . var_export($webRoot . '/cronbot/tronado.php', true)
+        . '; if (getcwd() !== "/tmp" || ini_get("error_log") !== $beforeLog) { exit(1); }';
+    $cron = proc_open([PHP_BINARY, '-r', $cronCode], [0 => ['file', '/dev/null', 'r'],
+        1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']], $pipes);
+    expectCallback(is_resource($cron) && proc_close($cron) === 0 && $balance() === 501000
+        && $state() === 'fulfilled' && is_file($webRoot . '/reports.jsonl'), 'Cron recovery/context failed');
+
     // Exercise the real delivery adapter with bootstrap fixtures, including its PDO scope.
     copy(dirname(__DIR__) . '/payment/tronado_delivery.php', $webRoot . '/payment/tronado_delivery.php');
     unlink($webRoot . '/payment/tronado_lib.php');

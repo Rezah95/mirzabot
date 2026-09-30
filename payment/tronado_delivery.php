@@ -10,6 +10,7 @@ function tronadoDeliverPayment(PDO $pdo, string $paymentId): bool
         $from_id = $order['id_user'];
         $message_id = 0;
         require_once dirname(__DIR__) . '/panels.php';
+        ini_set('error_log', __DIR__ . '/error_log');
         require_once dirname(__DIR__) . '/jdf.php';
         // Load the shared fulfillment keyboard in the authenticated payer context.
         require_once dirname(__DIR__) . '/keyboard.php';
@@ -28,7 +29,7 @@ function tronadoDeliverPayment(PDO $pdo, string $paymentId): bool
         $setting = select('setting', '*');
         if (!empty($setting['Channel_Report'])) {
             $topic = select('topicid', 'idreport', 'report', 'paymentreport', 'select')['idreport'] ?? null;
-            telegram('sendmessage', [
+            $report = telegram('sendmessage', [
                 'chat_id' => $setting['Channel_Report'],
                 'message_thread_id' => $topic,
                 'text' => sprintf($textbotlang['paymentGateway']['reportTronado'],
@@ -36,6 +37,9 @@ function tronadoDeliverPayment(PDO $pdo, string $paymentId): bool
                     $order['id_user'], number_format((float) $order['price'])),
                 'parse_mode' => 'HTML',
             ]);
+            if (empty($report['ok'])) {
+                error_log('Tronado report failed for ' . $order['id_order'] . '; Telegram code=' . (int) ($report['error_code'] ?? 0));
+            }
         }
     });
 }

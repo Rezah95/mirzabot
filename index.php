@@ -4899,6 +4899,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
             'tron_price_toman' => $created['tron_price_toman'],
             'wallet' => tronadoSetting('tronado_wallet_address'),
             'wage_from_business_percentage' => 100,
+            'automatic_delivery' => 2,
             'estimated_toman_amount' => $created['estimated_toman_amount'],
         ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         update('Payment_report', 'dec_not_confirmed', $orderMetadata, 'id_order', $orderId);

@@ -259,6 +259,13 @@ function tronadoRegisterCallback(string $paymentId, int $orderStatusId, string $
 }
 
 
+/** Old invoices may already have been credited manually during the callback outage. */
+function tronadoAutomaticDeliveryAllowed(array $order): bool
+{
+    $metadata = json_decode((string) ($order['dec_not_confirmed'] ?? ''), true);
+    return is_array($metadata) && ($metadata['automatic_delivery'] ?? null) === 2;
+}
+
 /** Authenticate and persist payment acceptance before doing any network work. */
 function tronadoReceiveCallback(PDO $pdo, string $rawBody, string $signature, string $signingKey): array
 {
@@ -318,6 +325,13 @@ function tronadoReceiveCallback(PDO $pdo, string $rawBody, string $signature, st
             $pdo->commit();
             return [409, ['ok' => false, 'payment_id' => $paymentId, 'error' => 'Cancelled payment requires reconciliation']];
         }
+        if ($order['payment_Status'] !== 'reject' && in_array($fulfillment, ['', 'queued', 'review'], true)
+            && !tronadoAutomaticDeliveryAllowed($order)) {
+            $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid', fulfillment_status = 'review', fulfillment_updated_at = NOW() WHERE id = ?")
+                ->execute([$order['id']]);
+            $pdo->commit();
+            return [200, ['ok' => true, 'payment_id' => $paymentId, 'paid' => true, 'fulfillment' => 'review']];
+        }
         if ($order['payment_Status'] === 'reject' || $fulfillment === 'failed'
             || ($order['payment_Status'] === 'paid' && !in_array($fulfillment, ['queued', 'processing', 'fulfilled', 'refunded'], true))) {
             $pdo->commit();
@@ -345,11 +359,25 @@ function tronadoReceiveCallback(PDO $pdo, string $rawBody, string $signature, st
 /** Only a queued order can be claimed. Interrupted/failed deliveries are never blindly replayed. */
 function tronadoFulfillQueued(PDO $pdo, string $paymentId, callable $deliver, ?callable $afterDelivery = null): bool
 {
+    // Check stored metadata before claiming, including queues left by older releases.
+    $query = $pdo->prepare('SELECT * FROM Payment_report WHERE id_order = ?');
+    $query->execute([$paymentId]);
+    $candidate = $query->fetch(PDO::FETCH_ASSOC);
+    if (!$candidate || $candidate['Payment_Method'] !== 'Tronado') { return false; }
+    if (!tronadoAutomaticDeliveryAllowed($candidate)) {
+        $pdo->prepare("UPDATE Payment_report SET fulfillment_status = 'review', fulfillment_updated_at = NOW()
+            WHERE id_order = ? AND Payment_Method = 'Tronado' AND payment_Status = 'paid' AND fulfillment_status = 'queued'")
+            ->execute([$paymentId]);
+        clearSelectCache('Payment_report');
+        error_log('Tronado historical payment requires manual reconciliation: ' . $paymentId);
+        return false;
+    }
     $claim = $pdo->prepare("UPDATE Payment_report SET fulfillment_status = 'processing', fulfillment_updated_at = NOW()
         WHERE id_order = ? AND Payment_Method = 'Tronado' AND payment_Status = 'paid' AND fulfillment_status = 'queued'");
     $claim->execute([$paymentId]);
     if ($claim->rowCount() !== 1) { return false; }
     clearSelectCache('Payment_report');
+    error_log('Tronado delivery started: ' . $paymentId);
     try {
         $query = $pdo->prepare('SELECT * FROM Payment_report WHERE id_order = ?');
         $query->execute([$paymentId]);
@@ -367,6 +395,7 @@ function tronadoFulfillQueued(PDO $pdo, string $paymentId, callable $deliver, ?c
         error_log('Tronado fulfillment failed for ' . $paymentId . ': ' . $error->getMessage());
         return false;
     }
+    error_log('Tronado delivery result: ' . $paymentId . ' ' . $status);
     if ($delivered !== false && $afterDelivery !== null) {
         try { $afterDelivery($order); }
         catch (Throwable $error) {
@@ -374,4 +403,24 @@ function tronadoFulfillQueued(PDO $pdo, string $paymentId, callable $deliver, ?c
         }
     }
     return true;
+}
+
+/** Read-only admin diagnostics: never expose raw signed payloads or credentials. */
+function tronadoDiagnostics(PDO $pdo): string
+{
+    $lines = ['وضعیت ترونادو', 'PHP: ' . PHP_VERSION . ' / ' . PHP_SAPI];
+    $last = $pdo->query('SELECT MAX(created_at) FROM Tronado_callback')->fetchColumn();
+    $lines[] = 'آخرین کال‌بک معتبر ذخیره‌شده: ' . ($last ?: 'ثبت نشده');
+    $rows = $pdo->query("SELECT p.id_order, p.payment_Status, p.fulfillment_status,
+        (SELECT COUNT(*) FROM Tronado_callback c WHERE c.payment_id_hash = SHA2(p.id_order, 256)) AS callbacks
+        FROM Payment_report p WHERE p.Payment_Method = 'Tronado' ORDER BY p.id DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $row) {
+        $lines[] = $row['id_order'] . ' | ' . $row['payment_Status'] . ' | '
+            . ($row['fulfillment_status'] ?: 'بدون تحویل') . ' | کال‌بک: ' . $row['callbacks'];
+    }
+    if (!$rows) { $lines[] = 'سفارشی ثبت نشده است.'; }
+    $lines[] = 'queued: در صف | processing: در حال پردازش | fulfilled: انجام شد | refunded: بازگشت به کیف پول | failed: خطا | review: بررسی دستی';
+    $lines[] = 'فاکتورهای قبل از این اصلاح خودکار اجرا نمی‌شوند؛ ابتدا شارژ دستی قبلی را تطبیق دهید.';
+    $lines[] = 'لاگ دریافت و تحویل: payment/error_log';
+    return implode("\n", $lines);
 }

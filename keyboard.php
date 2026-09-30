@@ -217,6 +217,7 @@ $tronadoManage = json_encode(['inline_keyboard' => [
     [['text' => '🔐 کلید امضای IPN', 'callback_data' => 'tronado_set_ipn_signing_key']],
     [['text' => '💰 حداقل مبلغ', 'callback_data' => 'tronado_set_min'], ['text' => '💰 حداکثر مبلغ', 'callback_data' => 'tronado_set_max']],
     [['text' => '🎁 درصد کش‌بک', 'callback_data' => 'tronado_set_cashback']],
+    [['text' => '🧾 وضعیت کال‌بک و سفارش‌ها', 'callback_data' => 'tronado_diagnostics']],
     [['text' => $textbotlang['keyboard']['backToGateways'], 'callback_data' => 'paygwlist']],
 ]], JSON_UNESCAPED_UNICODE);
 $tetraminatorManage = json_encode(['inline_keyboard' => [
