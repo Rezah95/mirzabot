@@ -39,20 +39,38 @@ function mirza_cron_stagger_seconds(string $seed = ''): int
     return (int) (sprintf('%u', crc32($seed)) % 20);
 }
 
-function mirza_cron_php_binary(): string
+function mirza_cron_runtime_error(): ?string
 {
-    $php = PHP_BINDIR . '/php';
-    if (is_executable($php)) {
-        return $php;
-    }
-    if (defined('PHP_BINARY') && PHP_BINARY !== '' && is_executable(PHP_BINARY)) {
-        return PHP_BINARY;
-    }
-    if (is_executable('/usr/bin/php')) {
-        return '/usr/bin/php';
-    }
+    $missing = [];
+    if (PHP_VERSION_ID < 80200) { $missing[] = 'PHP >= 8.2'; }
+    if (!function_exists('mysqli_connect')) { $missing[] = 'mysqli'; }
+    if (!extension_loaded('pdo_mysql')) { $missing[] = 'pdo_mysql'; }
+    return $missing === [] ? null : 'PHP ' . PHP_VERSION . ' (' . PHP_SAPI . ', ' . PHP_BINARY
+        . ') missing: ' . implode(', ', $missing) . '. Enable MySQL extensions for this PHP CLI version.';
+}
 
-    return 'php';
+/** Probe CLI extensions instead of assuming the web PHP and /usr/bin/php match. */
+function mirza_cron_php_binary(?array $candidates = null): string
+{
+    if ($candidates === null) {
+        $versioned = array_filter(array_merge(glob(PHP_BINDIR . '/php[0-9]*') ?: [], glob('/usr/bin/php[0-9]*') ?: []),
+            static fn($path) => preg_match('/^php[0-9]+\.[0-9]+$/', basename($path)) === 1);
+        natsort($versioned);
+        $candidates = array_merge(PHP_SAPI === 'cli' ? [PHP_BINARY] : [],
+            [PHP_BINDIR . '/php' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION, PHP_BINDIR . '/php', '/usr/bin/php'],
+            array_reverse($versioned));
+    }
+    foreach (array_unique($candidates) as $php) {
+        if (!is_executable($php)) { continue; }
+        if (PHP_SAPI === 'cli' && realpath($php) === realpath(PHP_BINARY) && mirza_cron_runtime_error() === null) {
+            return realpath($php);
+        }
+        if (!function_exists('shell_exec')) { continue; }
+        $probe = 'if (PHP_SAPI === "cli" && PHP_VERSION_ID >= 80200 && function_exists("mysqli_connect") && extension_loaded("pdo_mysql")) { echo "MIRZA_CRON_PHP_OK"; }';
+        $output = @shell_exec(escapeshellarg($php) . ' -r ' . escapeshellarg($probe) . ' 2>/dev/null');
+        if (trim((string) $output) === 'MIRZA_CRON_PHP_OK') { return realpath($php); }
+    }
+    throw new RuntimeException('No PHP CLI >= 8.2 with mysqli and pdo_mysql is available');
 }
 
 function mirza_cron_dispatcher_command(string $seed = ''): string
@@ -61,7 +79,7 @@ function mirza_cron_dispatcher_command(string $seed = ''): string
     $php = mirza_cron_php_binary();
     $path = mirza_cron_dispatcher_path();
 
-    return '* * * * * sleep ' . $sleep . '; ' . $php . ' ' . $path . ' >/dev/null 2>&1';
+    return '* * * * * sleep ' . $sleep . '; ' . escapeshellarg($php) . ' ' . escapeshellarg($path) . ' >/dev/null 2>&1';
 }
 
 function mirza_cron_dispatcher_curl_command(string $baseUrl): string

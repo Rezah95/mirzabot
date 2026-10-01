@@ -591,7 +591,8 @@ function cronStatusMenu()
     $cronStatus = json_decode((string) @file_get_contents(__DIR__ . '/storage/cron_status.json'), true) ?: [];
     $setting = select("setting", "*");
     $timeAgo = fn($time) => time() - $time < 60 ? $labels['justNow'] : sprintf($labels['minutesAgo'], intdiv(time() - $time, 60));
-    $dispatcherRunning = isset($cronStatus['dispatcher']) && time() - $cronStatus['dispatcher'] <= 180;
+    $dispatcherRunning = isset($cronStatus['dispatcher']) && time() - $cronStatus['dispatcher'] <= 180
+        && in_array($cronStatus['state'] ?? 'completed', ['running', 'completed'], true);
     $lines = [];
     foreach (mirza_cron_jobs() as $job) {
         [$minute, $hour] = explode(' ', $job['schedule']);
@@ -604,16 +605,28 @@ function cronStatusMenu()
             $icon = "❌";
             $when = $labels['never'];
         } else {
-            $icon = $lastRun['error'] ? "⚠️" : (time() - $lastRun['time'] <= $intervalMinutes * 120 + 120 ? "✅" : "❌");
+            $fresh = time() - $lastRun['time'] <= $intervalMinutes * 120 + 120;
+            $icon = !empty($lastRun['error']) ? "⚠️" : ($fresh ? "✅" : "❌");
+            if (($lastRun['state'] ?? '') === 'running') { $icon = $fresh ? '⏳' : '⚠️'; }
             $when = $timeAgo($lastRun['time']);
         }
         $lines[] = "$icon {$job['title']} — $when";
+        if (!empty($lastRun['error'])) {
+            $lines[] = '↳ ' . htmlspecialchars(mb_substr((string) $lastRun['error'], 0, 90), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        }
     }
     $text = $labels['title'] . "\n\n" . ($dispatcherRunning ? $labels['running'] : $labels['stopped']) . "\n";
     $text .= sprintf($labels['lastRun'], isset($cronStatus['dispatcher']) ? $timeAgo($cronStatus['dispatcher']) : $labels['never']) . "\n\n";
     $text .= implode("\n", $lines);
+    if (!empty($cronStatus['error'])) {
+        $text .= "\n\n⚠️ " . htmlspecialchars(mb_substr((string) $cronStatus['error'], 0, 250), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
     if (!$dispatcherRunning) {
-        $text .= "\n\n" . sprintf($labels['command'], htmlspecialchars(mirza_cron_dispatcher_command((string) $domainhosts)));
+        try {
+            $text .= "\n\n" . sprintf($labels['command'], htmlspecialchars(mirza_cron_dispatcher_command((string) $domainhosts)));
+        } catch (RuntimeException $error) {
+            $text .= "\n\n⚠️ " . htmlspecialchars($error->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        }
     }
     $keyboard = json_encode([
         'inline_keyboard' => [

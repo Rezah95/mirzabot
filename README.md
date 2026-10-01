@@ -327,3 +327,19 @@ Tronado now attempts fulfillment immediately after acknowledging a signed callba
 **Upgrade reconciliation:** only new invoices created with this release are automatically delivered. Older unpaid invoices receiving payment and old queued invoices are held as `review` because they may already have been compensated manually. Reconcile manual credits before settling any historical invoice; do not bulk replay old payments. Already completed payments are never replayed. Provider order numbers and local payment IDs are different identifiers.
 
 Targeted checks: `php tests/tronado_gateway_test.php`, `php tests/gateway_names_admin_test.php`, `php tests/renewal_flow_test.php`. The HTTP/MySQL integration test `tests/tronado_callback_test.php` requires a dedicated temporary MySQL instance and `TRONADO_TEST_SOCKET` pointing to its socket; it never loads production configuration.
+
+### Cron runtime diagnosis (0.5.10)
+
+An active system cron daemon does not prove that the PHP jobs succeeded. Check `storage/cron_status.json` and `cronbot/error_log`. The dispatcher records startup, the active job, completion and interruption; missing `mysqli` or `pdo_mysql` blocks jobs with a specific runtime error before partial database bootstrap can cause cascading `prepare() on null` failures.
+
+The installer and the administrator's cron repair now select a PHP CLI >= 8.2 that actually provides `mysqli_connect` and `pdo_mysql`. The generated crontab uses the verified versioned executable. VPS updates register the dispatcher as `www-data` using the compatible PHP selected for database migration. Registration replaces this bot's old commands atomically, preserves unrelated entries and reports failure instead of claiming success. A busy bulk-message worker returns to the dispatcher so later jobs can run.
+
+For an existing VPS, inspect the exact binary in `sudo crontab -u www-data -l`, then check its modules as the same user, for example:
+
+```bash
+sudo -u www-data /usr/bin/php -r 'echo PHP_VERSION, PHP_EOL; var_dump(function_exists("mysqli_connect"), extension_loaded("pdo_mysql"));'
+```
+
+Install/enable the MySQL package matching that PHP version if either check is false. Once available, the existing minute schedule resumes automatically. After upgrading to 0.5.10, the admin **تنظیم مجدد کرون** button can replace a stale PHP path; it does not run payment or service jobs immediately. CLI registration is also available through `sudo -u www-data /path/to/verified/php /path/to/bot/cronbot/register.php`.
+
+Cron regression checks: `php tests/cron_dispatcher_test.php` and `php tests/cron_registration_test.php`. These use isolated fixtures and never change system crontabs or production data.

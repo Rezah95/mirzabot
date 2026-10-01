@@ -6101,11 +6101,14 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     [$cronText, $cronKeyboard] = cronStatusMenu();
     sendmessage($from_id, $cronText, $cronKeyboard, 'HTML');
 } elseif (in_array($datain, ["cronstatus_refresh", "cronstatus_fix"]) && $adminrulecheck['rule'] == "administrator") {
+    $cronFixMessage = '';
     if ($datain == "cronstatus_fix") {
-        activecron();
+        $cronFixMessage = activecron() ? $textbotlang['Admin']['cronHealth']['fixed']
+            : '⚠️ ثبت کرون انجام نشد؛ دسترسی crontab و لاگ خطا را بررسی کنید.';
+        $cronFixMessage .= "\n\n";
     }
     [$cronText, $cronKeyboard] = cronStatusMenu();
-    Editmessagetext($from_id, $message_id, ($datain == "cronstatus_fix" ? $textbotlang['Admin']['cronHealth']['fixed'] . "\n\n" : "") . $cronText, $cronKeyboard);
+    Editmessagetext($from_id, $message_id, $cronFixMessage . $cronText, $cronKeyboard);
 } elseif ($text == $textbotlang['keyboard']['financial'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['gateway']['intro'], paymentGatewaysKeyboard(), 'HTML');
 } elseif ($text == $textbotlang['keyboard']['renewalCashback'] && $adminrulecheck['rule'] == "administrator") {

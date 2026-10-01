@@ -2586,6 +2586,12 @@ EOF
             || { show_step_error
                  echo -e "\e[91mDatabase migration failed. Backup: $UPDATE_BACKUP_DIR\033[0m"
                  return 1; }
+        if [ -f "$BOT_DIR/cronbot/register.php" ]; then
+            run_step "Registering cron dispatcher with compatible PHP" "sudo -u www-data '$PHP_DB_BIN' '$BOT_DIR/cronbot/register.php'" \
+                || { show_step_error
+                     echo -e "\e[91mCron registration failed. Check www-data permissions and PHP CLI extensions.\033[0m"
+                     return 1; }
+        fi
         run_step "Setting vpnbot webhooks" "set_vpnbot_webhooks '$CONFIG_PATH'" \
             || echo -e "\e[93mWarning: vpnbot webhook update failed.\033[0m"
     fi

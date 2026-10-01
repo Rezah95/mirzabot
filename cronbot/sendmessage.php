@@ -9,7 +9,8 @@ require_once __DIR__ . '/../bulk_credit.php';
 $textbotlang = languagechange();
 $workerLock = fopen(__DIR__ . '/.bulk-worker.lock', 'c+');
 if ($workerLock === false || !flock($workerLock, LOCK_EX | LOCK_NB)) {
-    exit;
+    if (is_resource($workerLock)) { fclose($workerLock); }
+    return;
 }
 
 function bulkSendToRecipient(array $info, string $userId): array

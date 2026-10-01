@@ -1881,7 +1881,7 @@ function ensureAgentWebhookSecret($bot)
     return ['secret' => $secret, 'created' => true];
 }
 
-function addCronIfNotExists($cronCommand)
+function addCronIfNotExists($cronCommand, array $replacePatterns = [])
 {
     $commands = is_array($cronCommand) ? $cronCommand : [$cronCommand];
     $commands = array_values(array_filter(array_map('trim', $commands), static function ($command) {
@@ -1905,16 +1905,37 @@ function addCronIfNotExists($cronCommand)
         return false;
     }
 
-    $existingCronJobs = runShellCommand(sprintf('%s -l 2>/dev/null', escapeshellarg($crontabBinary)));
-    $existingCronJobs = trim((string) $existingCronJobs);
+    $read = (string) runShellCommand('LC_ALL=C ' . escapeshellarg($crontabBinary)
+        . ' -l 2>&1; printf "\nMIRZA_CRON_READ_STATUS:%s\n" "$?"');
+    if (!preg_match('/\nMIRZA_CRON_READ_STATUS:(\d+)\s*$/', $read, $readStatus)) {
+        error_log('Unable to read crontab status; existing schedule was not changed');
+        return false;
+    }
+    $existingCronJobs = trim(substr($read, 0, -strlen($readStatus[0])));
+    if ((int) $readStatus[1] !== 0) {
+        if ((int) $readStatus[1] !== 1 || !str_starts_with($existingCronJobs, 'no crontab for ')) {
+            error_log('Unable to read crontab; existing schedule was not changed');
+            return false;
+        }
+        $existingCronJobs = '';
+    }
     $cronLines = $existingCronJobs === '' ? [] : preg_split('/\r?\n/', $existingCronJobs);
     $cronLines = array_values(array_filter(array_map('trim', $cronLines), static function ($line) {
         return $line !== ''
-            && strpos($line, '#') !== 0
             && stripos($line, 'no crontab') === false;
     }));
 
-    $newLineAdded = false;
+    $originalLines = $cronLines;
+    if ($replacePatterns !== []) {
+        $cronLines = array_values(array_filter($cronLines, static function ($line) use ($replacePatterns, $commands) {
+            if (in_array($line, $commands, true)) { return true; }
+            foreach ($replacePatterns as $pattern) {
+                if ($pattern !== '' && str_contains($line, $pattern)) { return false; }
+            }
+            return true;
+        }));
+    }
+    $newLineAdded = $cronLines !== $originalLines;
     foreach ($commands as $command) {
         if (!in_array($command, $cronLines, true)) {
             $cronLines[] = $command;
@@ -1974,20 +1995,20 @@ function removeCron($pattern)
     return true;
 }
 
-function activecron()
+function activecron(): bool
 {
     global $domainhosts;
-
-    if (!is_string($domainhosts) || $domainhosts === '') {
-        return;
-    }
-
+    if (!is_string($domainhosts) || $domainhosts === '') { return false; }
     require_once __DIR__ . '/cronbot/jobs.php';
-
-    removeCron("https://$domainhosts/cronbot/");
-    removeCron(__DIR__ . '/cronbot/');
-
-    addCronIfNotExists(mirza_cron_dispatcher_command($domainhosts));
+    // Replace this bot's legacy commands in one crontab install. Never delete first.
+    try {
+        return addCronIfNotExists(mirza_cron_dispatcher_command($domainhosts), [
+            "https://$domainhosts/cronbot/", __DIR__ . '/cronbot/',
+        ]);
+    } catch (RuntimeException $error) {
+        error_log('Cron registration failed: ' . $error->getMessage());
+        return false;
+    }
 }
 function createInvoice($amount)
 {
