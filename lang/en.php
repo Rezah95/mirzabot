@@ -2180,6 +2180,11 @@ Numeric ID: %s
 User\'s username: %s
 📝 Message text: %s',
                         'busy' => '❌ The message-sending system is currently performing an operation. After it finishes and notifies you, you can send a new message.',
+                        'noPurchaseEmptyWallet' => '👤 No purchases, zero balance',
+                        'singlePurchaseOld' => '🛍 One older purchase',
+                        'askPurchaseDays' => 'How many days must have passed since the only successful purchase? Send 1–3650; e.g. 30 means more than 30 days. Successful renewals count too; trials and failed orders do not.',
+                        'invalidPurchaseDays' => 'Invalid day count. Send a whole number from 1 to 3650.',
+                        'purchaseDaysSummary' => 'Exactly one successful purchase or renewal, more than %s days ago',
                         'expiredUnrenewed' => '⏳ Expired accounts not renewed',
                         'askExpiredRange' => 'Send the number of days since time or volume expiry as a range, for example 7-30.',
                         'invalidExpiredRange' => 'Invalid range. Example: 7-30 (0 to 3650 days).',

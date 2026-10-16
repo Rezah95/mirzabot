@@ -25,6 +25,9 @@ $source = file_get_contents(dirname(__DIR__) . '/admin.php');
 $broadcastSource = 'if' . substr(broadcastSourceBetween($source,
     'elseif ($datain == "systemsms")',
     "} elseif (preg_match('/sendmessageuser_"), strlen('elseif')) . '}';
+$creditSource = 'if' . substr(broadcastSourceBetween($source,
+    "elseif (preg_match('/typebalanceall_",
+    "} elseif (preg_match('/^bulkcredit_confirm_"), strlen('elseif')) . '}';
 $functions = file_get_contents(dirname(__DIR__) . '/function.php');
 eval(broadcastSourceBetween($functions, 'function savedata(', 'function addFieldToTable('));
 
@@ -47,12 +50,27 @@ function Editmessagetext($chatId, $messageId, $text, $keyboard): void
     sendmessage($chatId, $text, $keyboard, 'HTML');
 }
 function deletemessage(...$args): void {}
-function bulkQueueStart(...$args): void { throw new RuntimeException('Unexpected broadcast start'); }
+function bulkQueueStart(...$args): string {
+    $GLOBALS['queued'] = $args;
+    return str_repeat('a', 20);
+}
+function bulkCreditPrepare(...$args): string {
+    $GLOBALS['creditPrepared'] = $args;
+    return str_repeat('b', 24);
+}
 
 $pdo = new class extends PDO {
     public function __construct() {}
     public function prepare(string $query, array $options = []): PDOStatement|false
     {
+        if (str_starts_with($query, 'SELECT COUNT(*) FROM (SELECT u.id') || str_starts_with($query, 'SELECT u.id FROM user')) {
+            $GLOBALS['audienceSql'] = $query;
+            return new class extends PDOStatement {
+                public function execute(?array $params = null): bool { $GLOBALS['audienceParams'] = $params; return true; }
+                public function fetchColumn(int $column = 0): mixed { return 2; }
+                public function fetchAll(int $mode = PDO::FETCH_DEFAULT, mixed ...$args): array { return ['101', '102']; }
+            };
+        }
         expectBroadcast(str_starts_with($query, 'SELECT * FROM marzban_panel'), 'Unexpected query');
         return new class extends PDOStatement {
             private bool $fetched = false;
@@ -71,13 +89,18 @@ $pdo = new class extends PDO {
 };
 function broadcastRequest(string $datain, string $text = ''): void
 {
-    global $broadcastSource, $textbotlang, $pdo, $from_id;
+    global $broadcastSource, $creditSource, $textbotlang, $pdo, $from_id;
     $from_id = 123;
     $message_id = 456;
     $user = $GLOBALS['storedUser'];
     $backadmin = $keyboardadmin = json_encode(['keyboard' => [[['text' => 'Back']]]]);
     $GLOBALS['sent'] = [];
-    eval($broadcastSource);
+    if (str_starts_with($datain, 'typebalanceall_') || str_starts_with($datain, 'typecustomer_')
+        || in_array($user['step'], ['bulk_credit_purchase_days', 'getmeesagestatus'], true)) {
+        eval($creditSource);
+    } else {
+        eval($broadcastSource);
+    }
 }
 function broadcastData(): array { return json_decode($GLOBALS['storedUser']['Processing_value'], true); }
 function expectBroadcastPrompt(string $key): void
@@ -97,7 +120,7 @@ function broadcastCase(string $name, callable $test): void
     catch (Throwable $e) { $failures[] = $name . ': ' . $e->getMessage(); }
 }
 foreach (['xdaynotmessage', 'sendmessage', 'forwardmessage'] as $service) {
-    foreach (['all', 'nonecustomer', 'customer', 'expired_unrenewed'] as $kind) {
+    foreach (['all', 'nonecustomer', 'customer', 'expired_unrenewed', 'no_purchase_empty_wallet', 'single_purchase_old'] as $kind) {
         foreach (['all', 'f', 'n', 'n2'] as $agent) {
             broadcastCase("$service/$kind/$agent", static function () use ($service, $kind, $agent): void {
                 broadcastRequest('typeservice-' . $service);
@@ -110,6 +133,9 @@ foreach (['xdaynotmessage', 'sendmessage', 'forwardmessage'] as $service) {
                 } elseif ($kind === 'expired_unrenewed') {
                     expectBroadcastPrompt('askExpiredRange');
                     broadcastRequest('', '7-30');
+                } elseif ($kind === 'single_purchase_old') {
+                    expectBroadcastPrompt('askPurchaseDays');
+                    broadcastRequest('', '۳۰');
                 }
                 expectBroadcastPrompt('askPin');
                 broadcastRequest('typepinmessage-no');
@@ -117,7 +143,7 @@ foreach (['xdaynotmessage', 'sendmessage', 'forwardmessage'] as $service) {
                     expectBroadcastPrompt('askButton');
                     broadcastRequest('btntypemessage-none');
                 }
-                if ($service === 'xdaynotmessage' && $kind !== 'expired_unrenewed') {
+                if ($service === 'xdaynotmessage' && !in_array($kind, ['expired_unrenewed', 'single_purchase_old'], true)) {
                     expectBroadcastPrompt('askInactiveDays');
                     broadcastRequest('', '7');
                 }
@@ -130,6 +156,8 @@ foreach (['xdaynotmessage', 'sendmessage', 'forwardmessage'] as $service) {
                     expectBroadcast(!isset($criteria['inactive_before']), 'Expiry audience has an inactivity filter');
                     expectBroadcast($criteria['days_from'] === 7 && $criteria['days_to'] === 30,
                         'Expiry day range lost');
+                } elseif ($kind === 'single_purchase_old') {
+                    expectBroadcast(!isset($criteria['inactive_before']) && $criteria['purchase_days'] === 30, 'Purchase days lost or mixed with inactivity');
                 } elseif ($service === 'xdaynotmessage') {
                     expectBroadcast(abs($criteria['inactive_before'] - (time() - 7 * 86400)) <= 1,
                         'Inactive day filter lost');
@@ -185,6 +213,62 @@ broadcastCase('Expiry range back button and invalid range', static function (): 
     expectBroadcast(broadcastData()['agent'] === 'n2' && broadcastData()['days_from'] === 7
         && broadcastData()['days_to'] === 30, 'Range or updated group was lost');
 });
+broadcastCase('Purchase threshold validation and back navigation', static function (): void {
+    broadcastRequest('typeservice-sendmessage');
+    broadcastRequest('typeusermessage-single_purchase_old');
+    broadcastRequest('typeagent-all');
+    foreach (['0', '-1', '3651', '7-30', '1.5', 'garbage'] as $input) {
+        broadcastRequest('', $input);
+        expectBroadcastPrompt('invalidPurchaseDays');
+        expectBroadcast($GLOBALS['storedUser']['step'] === 'bulk_purchase_days', 'Invalid days changed step');
+    }
+    broadcastRequest('typeusermessage-no_purchase_empty_wallet');
+    broadcastRequest('typeagent-f');
+    expectBroadcastPrompt('askPin');
+    expectBroadcast(broadcastData()['typeusermessage'] === 'no_purchase_empty_wallet', 'Back action lost audience');
+});
+foreach (['no_purchase_empty_wallet', 'single_purchase_old'] as $kind) {
+    foreach (['sendmessage', 'forwardmessage'] as $service) {
+        broadcastCase("Preview and queue $kind/$service", static function () use ($kind, $service): void {
+            broadcastRequest('typeservice-' . $service);
+            expectBroadcast(str_contains(json_encode($GLOBALS['sent']), 'typeusermessage-' . $kind), 'Audience missing from menu');
+            broadcastRequest('typeusermessage-' . $kind);
+            broadcastRequest('typeagent-all');
+            if ($kind === 'single_purchase_old') { broadcastRequest('', '30'); }
+            broadcastRequest('typepinmessage-no');
+            if ($service !== 'forwardmessage') { broadcastRequest('btntypemessage-none'); }
+            broadcastRequest('', 'Offer');
+            expectBroadcast(str_contains($GLOBALS['sent'][0]['text'], 'تعداد مخاطبان: 2'), 'Preview count missing');
+            if ($kind === 'single_purchase_old') {
+                expectBroadcast(str_contains($GLOBALS['sent'][0]['text'], '30'), 'Threshold missing from preview');
+            }
+            $previewSql = $GLOBALS['audienceSql'];
+            broadcastRequest('startaction_' . broadcastData()['preview_token']);
+            expectBroadcast($GLOBALS['queued'][1] === ['101', '102'], 'Queue recipients lost');
+            expectBroadcast(str_contains($previewSql, $GLOBALS['audienceSql']), 'Preview and queue queries differ');
+        });
+    }
+    broadcastCase('Credit audience ' . $kind, static function () use ($kind): void {
+        $GLOBALS['storedUser']['Processing_value'] = json_encode(['price' => '1000']);
+        broadcastRequest('typebalanceall_n');
+        expectBroadcast(str_contains(json_encode($GLOBALS['sent']), 'typecustomer_' . $kind), 'Credit menu missing audience');
+        broadcastRequest('typecustomer_' . $kind);
+        if ($kind === 'single_purchase_old') {
+            expectBroadcastPrompt('askPurchaseDays');
+            broadcastRequest('', '0');
+            expectBroadcastPrompt('invalidPurchaseDays');
+            broadcastRequest('', '٣٠');
+        }
+        expectBroadcast($GLOBALS['storedUser']['step'] === 'getmeesagestatus', 'Credit notification step missing');
+        broadcastRequest('', '1');
+        expectBroadcast($GLOBALS['creditPrepared'][2] === 1000 && $GLOBALS['creditPrepared'][3] === ['101', '102'], 'Credit preview recipients or amount lost');
+        expectBroadcast($GLOBALS['audienceParams'][':audience_agent'] === 'n', 'Credit group lost');
+        expectBroadcast(!str_contains($GLOBALS['audienceSql'], 'User_Status'), 'Existing credit status policy changed');
+        if ($kind === 'single_purchase_old') {
+            expectBroadcast(isset($GLOBALS['audienceParams'][':purchase_cutoff']), 'Credit cutoff lost');
+        }
+    });
+}
 restore_error_handler();
 if ($failures) {
     throw new RuntimeException(implode("\n", $failures));

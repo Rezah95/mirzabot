@@ -898,6 +898,12 @@ elseif ($datain == "systemsms") {
                 ['text' => $textbotlang['Admin']['messageBulk']['expiredUnrenewed'], 'callback_data' => 'typeusermessage-expired_unrenewed'],
             ],
             [
+                ['text' => $textbotlang['Admin']['messageBulk']['noPurchaseEmptyWallet'], 'callback_data' => 'typeusermessage-no_purchase_empty_wallet'],
+            ],
+            [
+                ['text' => $textbotlang['Admin']['messageBulk']['singlePurchaseOld'], 'callback_data' => 'typeusermessage-single_purchase_old'],
+            ],
+            [
                 ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'systemsms'],
             ],
         ]
@@ -941,6 +947,14 @@ elseif ($datain == "systemsms") {
         return;
     }
     savedata("save", "agent", $type);
+    if ($userdata['typeusermessage'] === 'single_purchase_old') {
+        $daysKeyboard = json_encode(['inline_keyboard' => [[
+            ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeusermessage-single_purchase_old'],
+        ]]]);
+        Editmessagetext($from_id, $message_id, $textbotlang['Admin']['messageBulk']['askPurchaseDays'], $daysKeyboard);
+        step('bulk_purchase_days', $from_id);
+        return;
+    }
     if ($userdata['typeusermessage'] == 'expired_unrenewed') {
         $rangeKeyboard = json_encode(['inline_keyboard' => [[
             ['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeusermessage-expired_unrenewed'],
@@ -981,6 +995,22 @@ elseif ($datain == "systemsms") {
     }
     step("gettextSystemMessage", $from_id);
     sendmessage($from_id, $textbotlang['Admin']['messageBulk']['askText'], $backadmin, 'HTML');
+} elseif ($user['step'] == 'bulk_purchase_days') {
+    $days = bulkParsePurchaseDays($text);
+    if ($days === null) {
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['invalidPurchaseDays'], $backadmin, 'HTML');
+        return;
+    }
+    savedata('save', 'purchase_days', $days);
+    $pinKeyboard = json_encode(['inline_keyboard' => [
+        [
+            ['text' => $textbotlang['keyboard']['yes'], 'callback_data' => 'typepinmessage-yes'],
+            ['text' => $textbotlang['keyboard']['no'], 'callback_data' => 'typepinmessage-no'],
+        ],
+        [['text' => $textbotlang['keyboard']['backToPrev'], 'callback_data' => 'typeusermessage-single_purchase_old']],
+    ]]);
+    sendmessage($from_id, $textbotlang['Admin']['messageBulk']['askPin'], $pinKeyboard, 'HTML');
+    step('home', $from_id);
 } elseif ($user['step'] == 'bulk_expired_days') {
     $range = bulkParseDayRange((string) $text);
     if ($range === null) {
@@ -1130,6 +1160,8 @@ elseif ($datain == "systemsms") {
         "customer" => $textbotlang['Admin']['messageBulk']['targetCustomers'],
         "nonecustomer" => $textbotlang['Admin']['messageBulk']['targetNoPurchase'],
         "expired_unrenewed" => $textbotlang['Admin']['messageBulk']['expiredUnrenewed'],
+        'no_purchase_empty_wallet' => $textbotlang['Admin']['messageBulk']['noPurchaseEmptyWallet'],
+        'single_purchase_old' => $textbotlang['Admin']['messageBulk']['singlePurchaseOld'],
     ][$userdata['typeusermessage'] ?? ''] ?? ($userdata['typeusermessage'] ?? '');
     if (bulkBroadcastUsesInactivityFilter($userdata)) {
         $textday = sprintf($textbotlang['Admin']['messageBulk']['inactiveDaysLabel'], $userdata['daynoyuse'] ?? '');
@@ -1138,6 +1170,9 @@ elseif ($datain == "systemsms") {
     }
     if (($userdata['typeusermessage'] ?? '') === 'expired_unrenewed') {
         $textday = sprintf($textbotlang['Admin']['messageBulk']['expiredRangeSummary'], $userdata['days_from'], $userdata['days_to']);
+    }
+    if (($userdata['typeusermessage'] ?? '') === 'single_purchase_old') {
+        $textday = sprintf($textbotlang['Admin']['messageBulk']['purchaseDaysSummary'], $userdata['purchase_days']);
     }
     $textconfirm = sprintf($textbotlang['Admin']['messageBulk']['confirmSummary2'], $typesend, $typeservice, $userdata['agent'] ?? '', $textday);
     try {
@@ -2024,6 +2059,12 @@ elseif ($datain == "systemsms") {
                 ['text' => $textbotlang['Admin']['messageBulk']['expiredUnrenewed'], 'callback_data' => 'typecustomer_expired_unrenewed'],
             ],
             [
+                ['text' => $textbotlang['Admin']['messageBulk']['noPurchaseEmptyWallet'], 'callback_data' => 'typecustomer_no_purchase_empty_wallet'],
+            ],
+            [
+                ['text' => $textbotlang['Admin']['messageBulk']['singlePurchaseOld'], 'callback_data' => 'typecustomer_single_purchase_old'],
+            ],
+            [
                 ['text' => $textbotlang['keyboard']['backToMain'], 'callback_data' => 'backuser'],
             ]
         ]
@@ -2032,6 +2073,11 @@ elseif ($datain == "systemsms") {
 } elseif (preg_match('/typecustomer_(\w+)/', $datain, $dataget)) {
     $typecustomer = $dataget[1];
     savedata("save", "typecustomer", $typecustomer);
+    if ($typecustomer === 'single_purchase_old') {
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['askPurchaseDays'], $backadmin, 'HTML');
+        step('bulk_credit_purchase_days', $from_id);
+        return;
+    }
     if ($typecustomer === 'expired_unrenewed') {
         sendmessage($from_id, $textbotlang['Admin']['messageBulk']['askExpiredRange'], $backadmin, 'HTML');
         step('bulk_credit_expired_days', $from_id);
@@ -2039,6 +2085,15 @@ elseif ($datain == "systemsms") {
     }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['askNotify'], $backadmin, 'HTML');
     step("getmeesagestatus", $from_id);
+} elseif ($user['step'] == 'bulk_credit_purchase_days') {
+    $days = bulkParsePurchaseDays($text);
+    if ($days === null) {
+        sendmessage($from_id, $textbotlang['Admin']['messageBulk']['invalidPurchaseDays'], $backadmin, 'HTML');
+        return;
+    }
+    savedata('save', 'purchase_days', $days);
+    sendmessage($from_id, $textbotlang['Admin']['Balance']['askNotify'], $backadmin, 'HTML');
+    step('getmeesagestatus', $from_id);
 } elseif ($user['step'] == 'bulk_credit_expired_days') {
     $range = bulkParseDayRange((string) $text);
     if ($range === null) {
@@ -2061,6 +2116,7 @@ elseif ($datain == "systemsms") {
         'agent' => $data['agent'] ?? '',
         'days_from' => $data['days_from'] ?? -1,
         'days_to' => $data['days_to'] ?? -1,
+        'purchase_days' => $data['purchase_days'] ?? null,
     ];
     try {
         $recipientIds = bulkAudienceIds($pdo, $criteria, false);
@@ -2082,6 +2138,12 @@ elseif ($datain == "systemsms") {
         number_format((int) $data['price'] * count($recipientIds)),
         $text === '1' ? $textbotlang['keyboard']['yes'] : $textbotlang['keyboard']['no']
     );
+    if (in_array($kind, ['single_purchase_old', 'no_purchase_empty_wallet'], true)) {
+        $summary .= "\n" . $textbotlang['Admin']['messageBulk'][$kind === 'single_purchase_old' ? 'singlePurchaseOld' : 'noPurchaseEmptyWallet'];
+    }
+    if ($kind === 'single_purchase_old') {
+        $summary .= "\n" . sprintf($textbotlang['Admin']['messageBulk']['purchaseDaysSummary'], $data['purchase_days']);
+    }
     if ($kind === 'expired_unrenewed') {
         $summary .= "\n" . sprintf($textbotlang['Admin']['messageBulk']['expiredRangeSummary'], $data['days_from'], $data['days_to']);
     }

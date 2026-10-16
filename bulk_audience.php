@@ -64,7 +64,7 @@ function bulkAudienceQuery(array $criteria, bool $activeOnly = true, ?int $now =
 {
     $now ??= time();
     $kind = $criteria['kind'] ?? 'all';
-    if (!in_array($kind, ['all', 'customer', 'nonecustomer', 'expired_unrenewed'], true)) {
+    if (!in_array($kind, ['all', 'customer', 'nonecustomer', 'expired_unrenewed', 'no_purchase_empty_wallet', 'single_purchase_old'], true)) {
         throw new InvalidArgumentException('Invalid bulk audience');
     }
     $agent = $criteria['agent'] ?? 'all';
@@ -81,7 +81,40 @@ function bulkAudienceQuery(array $criteria, bool $activeOnly = true, ?int $now =
         $conditions[] = 'u.agent = :audience_agent';
         $params[':audience_agent'] = $agent;
     }
-    if ($kind === 'customer') {
+    if (in_array($kind, ['no_purchase_empty_wallet', 'single_purchase_old'], true)) {
+        // Count delivered services, including later disabled/removed services. Pending,
+        // failed orders and trial names in every supported language are not purchases.
+        $purchasedInvoice = "ci.Status IN ('active', 'end_of_time', 'end_of_volume', 'sendedwarn',
+            'send_on_hold', 'disabledn', 'disablebyadmin', 'removebyadmin')
+            AND COALESCE(ci.name_product, '') NOT IN ('سرویس تست', 'Test service', 'Тестовый сервис', '测试服务')";
+        $paidRenewal = "sr.type = 'extend_user' AND sr.status = 'paid'";
+        if ($kind === 'no_purchase_empty_wallet') {
+            $conditions[] = 'u.Balance = 0';
+            $conditions[] = "NOT EXISTS (SELECT 1 FROM invoice ci WHERE ci.id_user = u.id AND $purchasedInvoice)";
+            $conditions[] = "NOT EXISTS (SELECT 1 FROM service_other sr WHERE sr.id_user = u.id AND $paidRenewal)";
+        } else {
+            $days = bulkParsePurchaseDays($criteria['purchase_days'] ?? null);
+            if ($days === null) {
+                throw new InvalidArgumentException('Invalid purchase day count');
+            }
+            $params[':purchase_cutoff'] = $now - $days * 86400;
+            // Renewal history uses PHP-local date strings; compare in that same timezone.
+            $params[':renewal_cutoff'] = date('Y/m/d H:i:s', $params[':purchase_cutoff']);
+            $conditions[] = "u.id IN (
+                SELECT purchases.id_user FROM (
+                    SELECT ci.id_user, (ci.time_sell REGEXP '^[0-9]+$'
+                        AND CAST(ci.time_sell AS UNSIGNED) > 0
+                        AND CAST(ci.time_sell AS UNSIGNED) < :purchase_cutoff) AS old_enough
+                    FROM invoice ci WHERE $purchasedInvoice
+                    UNION ALL
+                    SELECT sr.id_user, (sr.time REGEXP '^[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$'
+                        AND sr.time < :renewal_cutoff) AS old_enough
+                    FROM service_other sr WHERE $paidRenewal
+                ) purchases GROUP BY purchases.id_user
+                HAVING COUNT(*) = 1 AND MAX(purchases.old_enough) = 1
+            )";
+        }
+    } elseif ($kind === 'customer') {
         $panel = $criteria['panel'] ?? 'all';
         if ($panel === 'all') {
             $conditions[] = 'EXISTS (SELECT 1 FROM invoice ci WHERE ci.id_user = u.id)';
@@ -164,9 +197,17 @@ function bulkAudienceCount(PDO $pdo, array $criteria, bool $activeOnly = true): 
 
 function bulkBroadcastUsesInactivityFilter(array $data): bool
 {
-    // Service expiry uses its own day range, regardless of the last bot interaction.
+    // Expiry and purchase age use their own clocks, independent of bot interaction.
     return ($data['typeservice'] ?? '') === 'xdaynotmessage'
-        && ($data['typeusermessage'] ?? '') !== 'expired_unrenewed';
+        && !in_array($data['typeusermessage'] ?? '', ['expired_unrenewed', 'single_purchase_old'], true);
+}
+
+/** Whole days, accepting the same Persian/Arabic digits as expiry ranges. */
+function bulkParsePurchaseDays(mixed $input): ?int
+{
+    if (!is_string($input) && !is_int($input)) { return null; }
+    $range = bulkParseDayRange(trim((string) $input) . '-' . trim((string) $input));
+    return $range !== null && $range[0] >= 1 ? $range[0] : null;
 }
 
 function bulkBroadcastCriteria(PDO $pdo, array $data): array
@@ -186,6 +227,9 @@ function bulkBroadcastCriteria(PDO $pdo, array $data): array
     if ($criteria['kind'] === 'expired_unrenewed') {
         $criteria['days_from'] = $data['days_from'] ?? -1;
         $criteria['days_to'] = $data['days_to'] ?? -1;
+    }
+    if ($criteria['kind'] === 'single_purchase_old') {
+        $criteria['purchase_days'] = $data['purchase_days'] ?? null;
     }
     if (bulkBroadcastUsesInactivityFilter($data)) {
         $days = filter_var($data['daynoyuse'] ?? null, FILTER_VALIDATE_INT);

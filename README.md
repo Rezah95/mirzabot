@@ -369,3 +369,19 @@ contains this release. The previous fork release was `0.5.10`.
 Graphify artifacts are refreshed locally and remain untracked under the existing
 `graphify-out/` ignore rule. Local tests use fixtures and an isolated MySQL server;
 they do not certify live provider connectivity or a production deployment.
+
+
+### Purchase-based audiences (0.8.0)
+
+From **مدیریت کاربران → بخش ارسال پیام**, choose send/forward and then:
+
+- **بدون خرید با موجودی صفر**: current wallet balance is exactly zero and there is no successful service purchase or paid user renewal in the retained history. Negative balances are excluded; previous wallet deposits alone do not count as purchases.
+- **فقط یک خرید قدیمی**: exactly one successful service purchase or paid user renewal in total, older than the entered number of days (1–3650). For example, `30` means strictly more than 30 × 24 hours. A purchase followed by a successful renewal is two purchases and is excluded. This filter uses purchase time, not last bot activity.
+
+Choose the user group, enter the day threshold if requested, then configure the message and review the recipient count before confirming. Both audiences are also available under **شارژ گروهی** with the existing amount/notification/confirmation flow. Broadcasts target active users; bulk credit retains its existing user-status policy. Broadcast recipients are selected again on confirmation; credit batches retain their prepared recipient snapshot.
+
+Trials (in all four supported languages), unpaid/waiting/failed orders, wallet top-ups, quota add-ons and administrator renewals are not counted as purchases. Successful non-trial service orders count even when a discount makes their price zero. Disabled/expired services still count. Selection uses retained `invoice` and `service_other` records; permanently deleted history cannot be reconstructed. No new cron or database migration is required.
+
+Version `0.8.0` is a backward-compatible feature release after `0.7.1`, following the pre-1.0 minor-for-features policy. The authoritative version is `version`; development is on `dev`, and approved production releases are promoted to `master` and tagged `v<version>`. This release follows the maintainer's standing instruction to publish both branches.
+
+Checks: `php tests/broadcast_flow_test.php`, `php tests/bulk_operations_test.php` and `php tests/purchase_audience_test.php`. The last test runs real SQL only when `AUDIENCE_TEST_SOCKET` points to a disposable MySQL server under `/tmp/mirza-audience-test.*`; otherwise it runs input validation and reports the skipped SQL checks.

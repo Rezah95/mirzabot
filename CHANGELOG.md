@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0 — 2026-10-16
+
+- Add zero-balance nonbuyers and users with exactly one older successful purchase to broadcast/forward and bulk-credit audiences, with user-group filtering and recipient previews.
+- Count successful user renewals as purchases; exclude trials, pending/failed orders, wallet deposits, quota add-ons and admin renewals. Preserve zero-priced non-trial orders and disabled/expired purchase history.
+- Accept Persian, Arabic and ASCII day counts from 1 to 3650, use a strict purchase-age cutoff and keep it independent of last bot interaction.
+- Add real-MySQL recipient selection checks and admin navigation, preview, queue and credit-flow regression coverage. Update all four interface languages.
+
+Upgrade: use the normal updater; no new schema or cron is required. A compatible feature increments the pre-1.0 minor version from 0.7.1 to 0.8.0. Counts depend on retained purchase history. Local fixtures do not certify production data or live Telegram delivery.
+
 ## 0.7.1 — 2026-10-16
 
 - Promote the locally validated 0.7.1-dev.1 integration with maintainer approval: upstream panel drivers and WireGuard delivery retain fork discount, payment, renewal-reminder and cron protections.
