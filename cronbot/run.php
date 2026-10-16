@@ -23,6 +23,8 @@ if (!flock($lockFh, LOCK_EX | LOCK_NB)) {
 $cronStatusFile = dirname($cronbotDir) . '/storage/cron_status.json';
 $cronStatus = json_decode((string) @file_get_contents($cronStatusFile), true);
 $cronStatus = is_array($cronStatus) ? $cronStatus : [];
+$cronStatus['php_cli'] = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
+$cronStatus['pdo_mysql'] = extension_loaded('pdo_mysql');
 $cronStatus['dispatcher'] = time();
 $cronStatus['state'] = 'running';
 $cronStatus['error'] = null;
@@ -72,9 +74,13 @@ $cronTick = new DateTimeImmutable('now');
 try {
     foreach (mirza_cron_jobs() as $job) {
         if (!mirza_cron_is_due($job['schedule'], $cronTick)) { continue; }
+        $jobStart = time();
+        // Compare starts, not completion times: a slow job may finish in the next minute.
+        $previousStart = (int) ($cronStatus['jobs'][$job['job']]['started_at'] ?? 0);
+        if (intdiv($previousStart, 60) === intdiv($jobStart, 60)) { continue; }
         $script = $cronbotDir . '/' . $job['job'] . '.php';
         $cronStatus['active_job'] = $job['job'];
-        $cronStatus['jobs'][$job['job']] = ['time' => time(), 'state' => 'running', 'error' => null];
+        $cronStatus['jobs'][$job['job']] = ['time' => $jobStart, 'started_at' => $jobStart, 'state' => 'running', 'error' => null];
         mirza_cron_save_status($cronStatusFile, $cronStatus);
         $jobError = null;
         $jobState = 'completed';
@@ -92,7 +98,7 @@ try {
             ini_set('error_log', $cronLogFile);
         }
         if ($jobError !== null) { error_log('mirza cron: ' . $job['job'] . ': ' . $jobError); }
-        $cronStatus['jobs'][$job['job']] = ['time' => time(), 'state' => $jobState, 'error' => $jobError];
+        $cronStatus['jobs'][$job['job']] = ['time' => time(), 'started_at' => $jobStart, 'state' => $jobState, 'error' => $jobError];
         $cronStatus['active_job'] = null;
         $cronStatus['dispatcher'] = time();
         mirza_cron_save_status($cronStatusFile, $cronStatus);

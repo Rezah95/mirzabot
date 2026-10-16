@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.1-dev.1 — 2026-10-16 (prerelease)
+
+- Integrate upstream 0.7.1, including the provider registry, Nexora/WGMate drivers, WireGuard delivery, low-balance alerts and order cleanup.
+- Resolve merge conflicts while retaining the fork's safe discount redemption, payment fulfillment, renewal reminders and cron runtime diagnostics.
+- Maintain invoice expiry/depletion caches after successful driver operations; preserve zero for unlimited WireGuard expiry. Return an explicit failure for unsupported driver operations.
+- Prevent same-minute dispatcher repeats using a separate start timestamp; retain interruption, dependency and lock diagnostics.
+- Remove duplicated legacy schema setup from table.php and retain db/bootstrap.php, report-topic synchronization and webhook secrets.
+- Adapt renewal and gateway navigation regression fixtures to the integrated driver and explicit-navigation contracts; add dispatcher/cache coverage.
+
+Compatibility: unused alireza_single and s_ui panels are removed. Before 1.0, features or incompatible changes increment the minor line; retain the incoming 0.7.1 target above 0.5.10. Back up and run the normal updater/schema migration. No live deployment or provider verification is included. Local Graphify output remains ignored by repository policy.
+
 ## 0.5.10 — 2026-10-01
 
 - Fix cron registration selecting an executable without MySQL support: probe PHP CLI >= 8.2, `mysqli_connect` and `pdo_mysql`, and pin the verified executable. VPS updates register the dispatcher using the migration-compatible CLI as `www-data`.

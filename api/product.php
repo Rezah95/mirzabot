@@ -286,6 +286,8 @@ function prod_set_inbounds(array $data, string $method): void
                 unset($DataUserOut[$proxyKey][$key]['private_key']);
                 unset($DataUserOut[$proxyKey][$key]['public_key']);
                 unset($DataUserOut[$proxyKey][$key]['peer_ips']);
+            } elseif ($key == "hysteria") {
+                unset($DataUserOut[$proxyKey][$key]['auth']);
             } else {
                 unset($DataUserOut[$proxyKey][$key]['id']);
             }
@@ -312,16 +314,6 @@ function prod_set_inbounds(array $data, string $method): void
         if ($user_data == null)
             sendJsonResponse(false, "User Not Found", [], 200);
         $datainbound = $user_data['inboundId'];
-    } elseif ($panel['type'] == "s_ui") {
-        $user_data = GetClientsS_UI($data['input'], $panel['name_panel']);
-        if (!is_array($user_data) || count($user_data) == 0 || !isset($user_data['inbounds'])) {
-            sendJsonResponse(false, "User Not Found", [], 200);
-        }
-        $servies = [];
-        foreach ($user_data['inbounds'] as $service) {
-            $servies[] = $service;
-        }
-        $datainbound = json_encode($servies);
     } elseif ($panel['type'] == "ibsng" || $panel['type'] == "mikrotik") {
         $datainbound = $data['input'];
     } else {

@@ -114,7 +114,7 @@ try {
     paymentGatewayAdminHandle('gatewayname_list', '', $adminUser);
     checkTonpays($adminUser['step'] === 'home', 'Back left stale rename state');
     paymentGatewayAdminHandle('gatewayname_edit_tetraminator', '', $adminUser);
-    checkTonpays(!paymentGatewayAdminHandle('', $textbotlang['keyboard']['financial'], $adminUser)
+    checkTonpays(!paymentGatewayAdminHandle('', $textbotlang['Admin']['backAdminBtn'], $adminUser)
         && gatewayUserLabel('tetraminator') === 'کارت به کارت', 'Navigation text replaced the label');
     checkTonpays(!paymentGatewayAdminHandle('gatewayname_edit_invalid', '', $adminUser), 'Invalid gateway accepted');
     paymentGatewayAdminHandle('tonpays_set_api_key', '', $adminUser);

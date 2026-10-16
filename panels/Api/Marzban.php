@@ -1,6 +1,6 @@
 <?php
-include('config.php');
-require_once 'request.php';
+require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../request.php';
 date_default_timezone_set('Asia/Tehran');
 #-----------------------------#
 function token_panel($code_panel, $verify = true)
@@ -221,7 +221,9 @@ function adduser($location, $data_limit, $username_ac, $timestamp, $note = '', $
     $url = $marzban_list_get['url_panel'] . "/api/user";
     if ($marzban_list_get['inbounds'] != null and $marzban_list_get['inbounds'] != "null") {
         if ($name_product != false and $name_product != "usertest") {
-            $product = select("product", "*", "name_product", $name_product, "select");
+            $stmt = $GLOBALS['pdo']->prepare("SELECT * FROM product WHERE name_product = ? AND (Location = ? OR Location = '/all') ORDER BY Location = '/all' LIMIT 1");
+            $stmt->execute([$name_product, $location]);
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($product == false || $product['inbounds'] == false) {
                 $inbounds = json_decode($marzban_list_get['inbounds'], true);
             } else {

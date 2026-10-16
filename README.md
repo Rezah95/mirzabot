@@ -343,3 +343,28 @@ sudo -u www-data /usr/bin/php -r 'echo PHP_VERSION, PHP_EOL; var_dump(function_e
 Install/enable the MySQL package matching that PHP version if either check is false. Once available, the existing minute schedule resumes automatically. After upgrading to 0.5.10, the admin **تنظیم مجدد کرون** button can replace a stale PHP path; it does not run payment or service jobs immediately. CLI registration is also available through `sudo -u www-data /path/to/verified/php /path/to/bot/cronbot/register.php`.
 
 Cron regression checks: `php tests/cron_dispatcher_test.php` and `php tests/cron_registration_test.php`. These use isolated fixtures and never change system crontabs or production data.
+
+
+### Integrated panel drivers and cron dispatcher (0.7.1)
+
+The upstream 0.7.1 panel-driver layout is integrated with this fork's discount,
+payment, renewal-reminder and cron diagnostics behavior. APIs now live under
+`panels/Api/`, and `panels/PanelRegistry.php` selects provider drivers. Nexora and
+WGMate are included; the unused `alireza_single` and `s_ui` integrations are removed.
+After successful creation, renewal or quota changes, invoice expiry/depletion
+caches are maintained before returning the driver result. WireGuard link handling
+is retained. The dispatcher records `started_at` separately from completion time
+and skips a job already started in the same minute.
+
+Requires PHP >= 8.2 with `mysqli` and `pdo_mysql` for the CLI as well as the web
+runtime. Use the normal updater and its `table.php` schema migration; database
+structure is defined under `db/`, rather than duplicated in `table.php`. Back up
+before upgrading. Existing invoices, custom settings and provider credentials must
+be preserved. Removal of the two unused panel types is a pre-1.0 compatibility
+change; retain the upstream minor-line target 0.7.1, above the prior fork 0.5.10.
+
+Release preparation uses `0.7.1-dev.1` on `dev`; after the maintainer-approved
+promotion, `version` and the stable annotated tag identify `0.7.1` on `master`.
+Graphify artifacts are refreshed locally and remain untracked under the existing
+`graphify-out/` ignore rule. Local tests use fixtures and an isolated MySQL server;
+they do not certify live provider connectivity or a production deployment.

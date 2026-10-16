@@ -36,6 +36,26 @@ try {
     expectCron($state()['state'] === 'completed' && $state()['jobs']['later']['error'] === null, 'Completed state missing');
     flock($lock, LOCK_UN); fclose($lock); $lock = null;
 
+    // Same-minute starts must be skipped, while an older start with a recent finish must run.
+    $plan(['counted']);
+    file_put_contents($root . '/cronbot/counted.php', '<?php file_put_contents(__DIR__ . "/counted-ran", "x", FILE_APPEND);');
+    expectCron($invoke() === 0, 'Initial counted job failed');
+    $s = $state();
+    expectCron(isset($s['jobs']['counted']['started_at'], $s['php_cli'], $s['pdo_mysql']), 'Start time or PHP diagnostics missing');
+    // Seed a start in the current minute without relying on the preceding process timing.
+    $s['jobs']['counted']['started_at'] = time();
+    file_put_contents($root . '/storage/cron_status.json', json_encode($s));
+    expectCron($invoke() === 0 && file_get_contents($root . '/cronbot/counted-ran') === 'x', 'Same-minute start ran twice');
+    $s['jobs']['counted']['started_at'] = time() - 120;
+    $s['jobs']['counted']['time'] = time();
+    file_put_contents($root . '/storage/cron_status.json', json_encode($s));
+    expectCron($invoke() === 0 && file_get_contents($root . '/cronbot/counted-ran') === 'xx', 'Recent completion incorrectly suppressed an older start');
+    // Legacy status has no trustworthy start timestamp; do not treat its finish as a start.
+    $s = $state();
+    unset($s['jobs']['counted']['started_at']);
+    file_put_contents($root . '/storage/cron_status.json', json_encode($s));
+    expectCron($invoke() === 0 && file_get_contents($root . '/cronbot/counted-ran') === 'xxx', 'Legacy completion was treated as a start');
+
     // Caught exceptions and CWD/log mutations cannot hide or prevent the following job.
     file_put_contents($root . '/cronbot/broken.php', '<?php chdir("/tmp"); ini_set("error_log", __DIR__ . "/wrong.log"); throw new RuntimeException("fixture failure");');
     $plan(['broken', 'later', 'missing']);

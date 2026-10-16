@@ -27,10 +27,11 @@ $confirmationSource = 'if' . substr(renewalSourceBetween($source,
 $functions = file_get_contents(dirname(__DIR__) . '/function.php');
 eval(renewalSourceBetween($functions, 'function deductBalance(', 'function claimPaymentPaid('));
 $panelSource = file_get_contents(dirname(__DIR__) . '/panels.php');
-eval('class RenewalPanel extends RenewalPanelTransport {' . renewalSourceBetween($panelSource,
-    '    function extend(', '    function extra_volume(') . '}');
+eval(substr($panelSource, strpos($panelSource, 'class ManagePanel')));
+require_once dirname(__DIR__) . '/panels/BasePanelDriver.php';
+require_once dirname(__DIR__) . '/panels/PanelRegistry.php';
 
-class RenewalPanelTransport
+class RenewalPanel extends ManagePanel
 {
     public bool $succeed = true;
     public int $modifications = 0;
@@ -39,7 +40,7 @@ class RenewalPanelTransport
 
     public function DataUser($panel, $username): array { return $this->state; }
     public function ResetUserDataUsage($username, $panel): array { return ['status' => true]; }
-    public function Modifyuser($username, $panel, $data): array
+    public function Modifyuser($username, $panel, $data = []): array
     {
         $this->modifications++;
         if (!$this->succeed) { return ['status' => false, 'msg' => 'Test panel failure']; }
@@ -139,6 +140,9 @@ function renewalRequest(bool $panelSucceeds = true, bool $cacheFails = false): v
         'type' => 'marzban', 'Methodextend' => 'resetVolumeTime', 'status_extend' => 'on_extend',
         'pricecustomvolume' => '{"f":0}', 'pricecustomtime' => '{"f":0}', 'inbounds' => '{}'];
     $GLOBALS['messages'] = $GLOBALS['renewalRecords'] = [];
+    // Each fixture simulates a separate webhook request with a fresh driver registry.
+    $instances = new ReflectionProperty(PanelRegistry::class, 'instances');
+    $instances->setValue(null, []);
     $ManagePanel = new RenewalPanel();
     $ManagePanel->succeed = $panelSucceeds;
     $user = $GLOBALS['storedUser'];
