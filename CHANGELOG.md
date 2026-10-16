@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1 — 2026-10-16
+
+- Promote the locally validated 0.7.1-dev.1 integration with maintainer approval: upstream panel drivers and WireGuard delivery retain fork discount, payment, renewal-reminder and cron protections.
+- Preserve invoice expiry/depletion cache maintenance and prevent same-minute cron repeats using independent start timestamps. Fix the leftover table.php merge brace.
+- Remove unused alireza_single and s_ui panel integrations. Upgrade through the normal updater/db bootstrap after a backup; no live deployment is performed.
+- Validation: PHP syntax checks, isolated dispatcher/renewal/gateway/broadcast/bulk tests, and temporary-MySQL callback and reminder integration tests passed. Graphify refreshed locally; generated artifacts remain ignored.
+
 ## 0.7.1-dev.1 — 2026-10-16 (prerelease)
 
 - Integrate upstream 0.7.1, including the provider registry, Nexora/WGMate drivers, WireGuard delivery, low-balance alerts and order cleanup.

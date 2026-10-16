@@ -363,8 +363,9 @@ before upgrading. Existing invoices, custom settings and provider credentials mu
 be preserved. Removal of the two unused panel types is a pre-1.0 compatibility
 change; retain the upstream minor-line target 0.7.1, above the prior fork 0.5.10.
 
-Release preparation uses `0.7.1-dev.1` on `dev`; after the maintainer-approved
-promotion, `version` and the stable annotated tag identify `0.7.1` on `master`.
+The validated development candidate is tagged `v0.7.1-dev.1`. The maintainer-approved
+local release uses `0.7.1` in `version` and tag `v0.7.1` on `master`; `dev` also
+contains this release. The previous fork release was `0.5.10`.
 Graphify artifacts are refreshed locally and remain untracked under the existing
 `graphify-out/` ignore rule. Local tests use fixtures and an isolated MySQL server;
 they do not certify live provider connectivity or a production deployment.
