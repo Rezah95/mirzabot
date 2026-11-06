@@ -11,8 +11,9 @@ return [
     ['Giftcodeconsumed', 'idx_gift_user_code', '`id_user`(100), `code`(40)'],
     ['DiscountSell', 'idx_discount_sell_code', '`codeDiscount`(40)'],
     ['Discount', 'idx_discount_gift_code', '`code`(40)'],
+    ['invoice', 'idx_invoice_id_payment', '`id_payment`'],
     ['Payment_report', 'idx_payreport_id_user', '`id_user`(100)'],
-    ['Payment_report', 'idx_payreport_id_order', '`id_order`(191)'],
+    ['Payment_report', 'idx_payreport_id_order', '`id_order`'],
     ['Payment_report', 'idx_payreport_status', '`payment_Status`(100)'],
     ['marzban_panel', 'idx_panel_name', '`name_panel`(150)'],
     ['marzban_panel', 'idx_panel_code', '`code_panel`(100)'],
@@ -21,6 +22,7 @@ return [
     ['manualsell', 'idx_manualsell_codepanel', '`codepanel`(100)'],
     ['service_other', 'idx_serviceother_username', '`username`(150)'],
     ['service_other', 'idx_serviceother_type', '`type`(100)'],
+    ['service_other', 'idx_serviceother_id_payment', '`id_payment`'],
     ['user', 'idx_user_affiliates', '`affiliates`'],
     ['departman', 'uniq_departman_entry', '`idsupport`(100), `name_departman`(150)', true],
 ];

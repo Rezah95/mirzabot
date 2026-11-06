@@ -16,6 +16,6 @@ return static function (PDO $pdo, Schema $schema): void {
 
     $index = $pdo->query("SHOW INDEX FROM Payment_report WHERE Key_name = 'uniq_payment_order'")->fetch();
     if (!$index) {
-        $pdo->exec('ALTER TABLE Payment_report ADD UNIQUE KEY uniq_payment_order (id_order(191))');
+        $pdo->exec('ALTER TABLE Payment_report ADD UNIQUE KEY uniq_payment_order (id_order)');
     }
 };

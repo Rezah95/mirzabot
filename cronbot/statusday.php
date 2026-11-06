@@ -9,12 +9,11 @@ $textbotlang = languagechange();
 $setting = select("setting","*",null,null,"select");
 
 //________________[ time 12 report]________________
-$midnight_time = date("H:i");
 $reportnight = select("topicid","idreport","report","reportnight","select")['idreport'];
 // if(true){
-if ($midnight_time == "23:45") {
-$datefirst = date("Y-m-d") . " 00:00:00";
-$dateend = date("Y-m-d") . " 23:59:59";
+if (date("H") == "00" && intval(date("i")) < 15) {
+$datefirst = date("Y-m-d", strtotime("-1 day")) . " 00:00:00";
+$dateend = date("Y-m-d", strtotime("-1 day")) . " 23:59:59";
 
 // Helper function to execute a prepared statement
 function executeQuery($pdo, $sql, $params) {
@@ -56,14 +55,14 @@ $stmt = executeQuery($pdo, $sqlNewUsers, [':startDate' => $datefirst, ':endDate'
 $usernew = $stmt->fetchColumn() ?? 0;
 
 // Fetch extension data
-$datefirstextend = date("Y/m/d") . " 00:00:00";
-$dateendextend = date("Y/m/d") . " 23:59:59";
+$datefirstextend = date("Y/m/d", strtotime("-1 day")) . " 00:00:00";
+$dateendextend = date("Y/m/d", strtotime("-1 day")) . " 23:59:59";
 
 $sqlExtensions = "SELECT COUNT(*) AS count, SUM(price) AS total_price 
                   FROM service_other 
                   WHERE (time BETWEEN :startDate AND :endDate) 
                   AND type = 'extend_user'
-                  AND status != 'unpaid'";
+                  AND status NOT IN ('unpaid', 'failed')";
 $params = [':startDate' => $datefirstextend, ':endDate' => $dateendextend];
 $stmt = executeQuery($pdo, $sqlExtensions, $params);
 $result = $stmt->fetch(PDO::FETCH_ASSOC);

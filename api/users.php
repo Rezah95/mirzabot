@@ -102,7 +102,7 @@ function usr_user(array $data, string $method): void
         $invoice = $stmt->fetch(PDO::FETCH_ASSOC);
         $users[0]['count_invoice'] = $invoice['count_invoice'];
         $users[0]['sum_invoice'] = $invoice['sum_price'];
-        $stmt = $pdo->prepare("SELECT SUM(price) as sum_price,COUNT(*) as count_payment FROM Payment_report WHERE id_user = :user_id AND Payment_Method not in ('Unpaid','reject','expire')");
+        $stmt = $pdo->prepare("SELECT SUM(price) as sum_price,COUNT(*) as count_payment FROM Payment_report WHERE id_user = :user_id AND payment_Status = 'paid'");
         $stmt->bindValue(':user_id', intval($users[0]['user_id']), PDO::PARAM_INT);
         $stmt->execute();
         $payment_report = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -117,7 +117,7 @@ function usr_user(array $data, string $method): void
         $bot_agent = select("botsaz", "*", "id_user", $data['chat_id'], "select");
         $list_panel = [];
         if ($bot_agent) {
-            $stmt = $pdo->prepare("SELECT * FROM marzban_panel WHERE status = 'active'");
+            $stmt = $pdo->prepare("SELECT * FROM marzban_panel WHERE status = 'active' ORDER BY display_order, id");
             $stmt->execute();
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $list_panel[] = $row['name_panel'];

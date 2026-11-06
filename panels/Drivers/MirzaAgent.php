@@ -12,7 +12,7 @@ class MirzaAgentPanelDriver extends BasePanelDriver
         $invoice = $vars['invoice'];
         $domainhosts = $vars['domainhosts'];
         //create user
-        $ConnectToPanel = create_user_mirza($Get_Data_Panel, $data_limit / pow(1024, 3), $expire == 0 ? 0 : ($expire - time()) / 86400, $usernameC);
+        $ConnectToPanel = create_user_mirza($Get_Data_Panel, $data_limit / pow(1024, 3), $expire == 0 ? 0 : (int) round(($expire - time()) / 86400), $usernameC);
         if (!empty($ConnectToPanel['status']) && $ConnectToPanel['status'] != 200) {
             return array(
                 'status' => 'Unsuccessful',
@@ -34,10 +34,10 @@ class MirzaAgentPanelDriver extends BasePanelDriver
                 $Output['msg'] = '';
             }
         } else {
+            $data_Output = $data_Output['obj'];
             if ($invoice != false) {
                 $data_Output['subscription_url'] = "https://$domainhosts/sub/" . $invoice['id_invoice'];
             }
-            $data_Output = $data_Output['obj'];
             $Output['status'] = 'successful';
             $Output['username'] = $data_Output['username'];
             $Output['subscription_url'] = $data_Output['subscription_url'];

@@ -42,7 +42,7 @@ $totalSuccess = 0;
 $todayCount = 0;
 try {
   $totalSuccess = (int) db_query($pdo, "SELECT COALESCE(SUM(price),0) FROM Payment_report WHERE payment_Status ='paid' AND (fulfillment_status IS NULL OR fulfillment_status = 'fulfilled')")->fetchColumn();
-  $todayCount = db_count($pdo, "SELECT COUNT(*) FROM Payment_report WHERE time > ?", [strtotime('today')]);
+  $todayCount = db_count($pdo, "SELECT COUNT(*) FROM Payment_report WHERE time LIKE ?", [date('Y/m/d') . '%']);
 } catch (Exception $e) {
 }
 

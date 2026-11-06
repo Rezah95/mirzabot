@@ -3,6 +3,7 @@
 $version = file_get_contents('version');
 $textadmin = ["panel", "/panel", $textbotlang['Admin']['panelAdmin']];
 $text_panel_admin_login_template = sprintf($textbotlang['Admin']['report']['aboutBot'], $version);
+$aboutBotKeyboard = json_encode(['inline_keyboard' => [[['text' => $textbotlang['Admin']['report']['btnDonate'], 'url' => 'https://nowpayments.io/donation/mahdi']]]]);
 
 if (!in_array($from_id, $admin_ids))
     return;
@@ -68,7 +69,7 @@ $backmenu_register(["merchant_id_aqayepardakht", "getcashahaypar", "getmaaxaqaye
 $backmenu_register(["apinowpayment", "getcashplisio", "gethelpplisio", "getmainplisio", "getmaxplisio"], $NowPaymentsManage);
 $backmenu_register(["marchent_tronseller", "getcashnowpayment", "gethelpnowpayment", "getmainaqnowpayment", "maxbalancenowpayment"], $nowpayment_setting_keyboard);
 $backmenu_register(["marchent_floypay", "getcashiranpay1", "gethelpiranpay1", "getmaaxiranpay1", "getmainiranpay1"], $Swapinokey);
-$backmenu_register(["apiiranpay", "helpiranpay3", "maxbalanceiranpay", "minbalanceiranpay"], $iranpaykeyboard);
+$backmenu_register(["apiiranpay", "getcashiranpay3", "helpiranpay3", "maxbalanceiranpay", "minbalanceiranpay"], $iranpaykeyboard);
 $backmenu_register(["apiiranpay4", "endpointiranpay4", "getcashiranpay4", "getdailyiranpay4", "getmaaxiranpay4", "getmainiranpay4", "helpiranpay4"], $abangatewaykeyboard);
 $backmenu_register(["getmaindigitaltron", "getmaxdigitaltron", "helpofflinearze"], $tronnowpayments);
 $backmenu_register(["chashbackstar", "gethelpstar", "getmainaqstar", "maxbalancestar"], $Startelegram);
@@ -143,7 +144,8 @@ if ($datain == "paygwback") {
     $version_mini_app = file_get_contents('app/version');
     activecron();
     $text_admin = sprintf($text_panel_admin_login_template, $version, $version_mini_app);
-    sendmessage($from_id, $text_admin, $keyboardadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['report']['adminMenuHint'], $keyboardadmin, 'HTML');
+    sendmessage($from_id, $text_admin, $aboutBotKeyboard, 'HTML');
     $miniAppInstructionHidden = isset($user['hide_mini_app_instruction']) ? (string) $user['hide_mini_app_instruction'] : '0';
     if ($miniAppInstructionHidden !== '1') {
         $miniAppInstructionKeyboard = json_encode([
@@ -162,7 +164,8 @@ if ($datain == "paygwback") {
     }
     $version_mini_app = file_get_contents('app/version');
     $text_admin = sprintf($text_panel_admin_login_template, $version, $version_mini_app);
-    sendmessage($from_id, $text_admin, $keyboardadmin, 'HTML');
+    sendmessage($from_id, $textbotlang['Admin']['report']['adminMenuHint'], $keyboardadmin, 'HTML');
+    sendmessage($from_id, $text_admin, $aboutBotKeyboard, 'HTML');
     step('home', $from_id);
     return;
 } elseif ($datain == "hide_mini_app_instruction") {
@@ -307,6 +310,10 @@ if ($datain == "paygwback") {
     update("user", "Processing_value", $iduser, "id", $from_id);
     step('get_number_limit', $from_id);
 } elseif ($user['step'] == "get_number_limit") {
+    if (!ctype_digit($text)) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['getlimitusertest']['setLimit'], $keyboardadmin, 'HTML');
     step('home', $from_id);
     update("user", "limit_usertest", $text, "id", $user['Processing_value']);
@@ -314,6 +321,10 @@ if ($datain == "paygwback") {
     sendmessage($from_id, $textbotlang['Admin']['getlimitusertest']['limitAll'], $backadmin, 'HTML');
     step('limit_usertest_allusers', $from_id);
 } elseif ($user['step'] == "limit_usertest_allusers") {
+    if (!ctype_digit($text)) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['getlimitusertest']['setLimitAll'], $keyboardadmin, 'HTML');
     step('home', $from_id);
     update("user", "limit_usertest", $text);
@@ -343,7 +354,7 @@ if ($datain == "paygwback") {
     $invoiceSumRow = $sql33->fetch(PDO::FETCH_ASSOC);
     $invoiceTotal = isset($invoiceSumRow['total_price']) ? (float) $invoiceSumRow['total_price'] : 0;
     $invoicesumall = number_format($invoiceTotal, 0);
-    $sql3 = "SELECT SUM(price) AS total_extend FROM service_other WHERE type = 'extend_user'";
+    $sql3 = "SELECT SUM(price) AS total_extend FROM service_other WHERE type = 'extend_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt3 = $pdo->query($sql3);
     $extendSumRow = $stmt3->fetch(PDO::FETCH_ASSOC);
     $extendsum = isset($extendSumRow['total_extend']) ? (float) $extendSumRow['total_extend'] : 0;
@@ -421,19 +432,19 @@ if ($datain == "paygwback") {
     $stmt->bindParam(':requestedDateend', $time_current);
     $stmt->execute();
     $count_test = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  time  >= NOW() - INTERVAL 1 HOUR AND type = 'extend_user' AND status != 'unpaid'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  time  >= NOW() - INTERVAL 1 HOUR AND type = 'extend_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $extend_stat = $stmt->fetch(PDO::FETCH_ASSOC);
     $count_extend = $extend_stat['count'];
     $sum_extend = number_format($extend_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  time  >= NOW() - INTERVAL 1 HOUR AND type = 'extra_user'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  time  >= NOW() - INTERVAL 1 HOUR AND type = 'extra_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $extra_volume_stat = $stmt->fetch(PDO::FETCH_ASSOC);
     $count_extra_volume = $extra_volume_stat['count'];
     $sum_extra_volume = number_format($extra_volume_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  time  >= NOW() - INTERVAL 1 HOUR AND type = 'extra_time_user'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  time  >= NOW() - INTERVAL 1 HOUR AND type = 'extra_time_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $extra_time_stat = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -471,7 +482,7 @@ if ($datain == "paygwback") {
     $stmt->bindParam(':requestedDateend', $end_time_timestamp);
     $stmt->execute();
     $count_test = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND status != 'unpaid'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -479,7 +490,7 @@ if ($datain == "paygwback") {
     $extend_stat = $stmt->fetch(PDO::FETCH_ASSOC);
     $count_extend = $extend_stat['count'];
     $sum_extend = number_format($extend_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -487,7 +498,7 @@ if ($datain == "paygwback") {
     $extra_volume_stat = $stmt->fetch(PDO::FETCH_ASSOC);
     $count_extra_volume = $extra_volume_stat['count'];
     $sum_extra_volume = number_format($extra_volume_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -529,7 +540,7 @@ if ($datain == "paygwback") {
     $stmt->bindParam(':requestedDateend', $end_time_timestamp);
     $stmt->execute();
     $count_test = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND status != 'unpaid'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -537,7 +548,7 @@ if ($datain == "paygwback") {
     $extend_stat = $stmt->fetch(PDO::FETCH_ASSOC);
     $count_extend = $extend_stat['count'];
     $sum_extend = number_format($extend_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -545,7 +556,7 @@ if ($datain == "paygwback") {
     $extra_volume_stat = $stmt->fetch(PDO::FETCH_ASSOC);
     $count_extra_volume = $extra_volume_stat['count'];
     $sum_extra_volume = number_format($extra_volume_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -589,7 +600,7 @@ if ($datain == "paygwback") {
     $stmt->bindParam(':requestedDateend', $end_time_timestamp);
     $stmt->execute();
     $count_test = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND status != 'unpaid'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -597,7 +608,7 @@ if ($datain == "paygwback") {
     $extend_stat = $stmt->fetch(PDO::FETCH_ASSOC);
     $count_extend = $extend_stat['count'];
     $sum_extend = number_format($extend_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -605,7 +616,7 @@ if ($datain == "paygwback") {
     $extra_volume_stat = $stmt->fetch(PDO::FETCH_ASSOC);
     $count_extra_volume = $extra_volume_stat['count'];
     $sum_extra_volume = number_format($extra_volume_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -649,7 +660,7 @@ if ($datain == "paygwback") {
     $stmt->bindParam(':requestedDateend', $end_time_timestamp);
     $stmt->execute();
     $count_test = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND status != 'unpaid'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -657,7 +668,7 @@ if ($datain == "paygwback") {
     $extend_stat = $stmt->fetch(PDO::FETCH_ASSOC);
     $count_extend = $extend_stat['count'];
     $sum_extend = number_format($extend_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -665,7 +676,7 @@ if ($datain == "paygwback") {
     $extra_volume_stat = $stmt->fetch(PDO::FETCH_ASSOC);
     $count_extra_volume = $extra_volume_stat['count'];
     $sum_extra_volume = number_format($extra_volume_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -723,7 +734,7 @@ if ($datain == "paygwback") {
     $stmt->bindParam(':requestedDateend', $end_time_timestamp);
     $stmt->execute();
     $count_test = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND status != 'unpaid'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extend_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -731,7 +742,7 @@ if ($datain == "paygwback") {
     $extend_stat = $stmt->fetch(PDO::FETCH_ASSOC);
     $count_extend = $extend_stat['count'];
     $sum_extend = number_format($extend_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -739,7 +750,7 @@ if ($datain == "paygwback") {
     $extra_volume_stat = $stmt->fetch(PDO::FETCH_ASSOC);
     $count_extra_volume = $extra_volume_stat['count'];
     $sum_extra_volume = number_format($extra_volume_stat['sum'], 0);
-    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user'";
+    $sql = "SELECT COUNT(*) AS count,SUM(price) as sum FROM service_other WHERE  (time BETWEEN :requestedDate AND :requestedDateend) AND type = 'extra_time_user' AND COALESCE(status, '') NOT IN ('unpaid', 'failed')";
     $stmt = $pdo->prepare($sql);
     $stmt->bindParam(':requestedDate', $start_time);
     $stmt->bindParam(':requestedDateend', $end_time);
@@ -964,7 +975,7 @@ elseif ($datain == "systemsms") {
         return;
     }
     if ($userdata['typeusermessage'] == "customer") {
-        $stmt = $pdo->prepare("SELECT * FROM marzban_panel WHERE agent = :agent OR agent = 'all'");
+        $stmt = $pdo->prepare("SELECT * FROM marzban_panel WHERE agent = :agent OR agent = 'all' ORDER BY display_order, id");
         $stmt->bindParam(':agent', $type);
         $stmt->execute();
         $list_panel = ['inline_keyboard' => []];
@@ -1604,6 +1615,7 @@ elseif ($datain == "systemsms") {
     $stmt->bindParam(':note', $text, PDO::PARAM_STR);
     $stmt->bindParam(':hide_panel', $varhide_panel, PDO::PARAM_STR);
     $stmt->execute();
+    $pdo->prepare("UPDATE product SET display_order = id WHERE id = ?")->execute([$pdo->lastInsertId()]);
     sendmessage($from_id, $textbotlang['Admin']['Product']['saveProduct'], $shopkeyboard, 'HTML');
     step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['adminSection'] && $adminrulecheck['rule'] == "administrator") {
@@ -1663,14 +1675,14 @@ elseif ($datain == "systemsms") {
         ));
         return;
     }
-    $sql = "SELECT * FROM Payment_report WHERE id_user = '{$Payment_report['id_user']}' AND payment_Status != 'paid' AND payment_Status != 'Unpaid' AND payment_Status != 'expire' AND payment_Status != 'reject' AND  (id_invoice  LIKE CONCAT('%','getconfigafterpay', '%') OR id_invoice  LIKE CONCAT('%','getextenduser', '%') OR id_invoice  LIKE CONCAT('%','getextravolumeuser', '%') OR id_invoice  LIKE CONCAT('%','getextratimeuser', '%'))";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute();
-    $countpay = $stmt->rowCount();
-    $typepay = explode('|', $Payment_report['id_invoice']);
-    if ($countpay > 0 and !in_array($typepay[0], ['getconfigafterpay', 'getextenduser', 'getextravolumeuser', 'getextratimeuser'])) {
-        sendmessage($from_id, $textbotlang['Admin']['Payment']['reviewReceiptsFirst'], null, 'HTML');
-        return;
+    $currentOrder = paymentOrder($order_id);
+    if (!$currentOrder['invoice'] && !$currentOrder['service']) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM Payment_report p WHERE p.id_user = ? AND p.payment_Status NOT IN ('paid', 'Unpaid', 'expire', 'reject') AND (EXISTS (SELECT 1 FROM invoice i WHERE i.id_payment = p.id_order) OR EXISTS (SELECT 1 FROM service_other s WHERE s.id_payment = p.id_order))");
+        $stmt->execute([$Payment_report['id_user']]);
+        if ((int) $stmt->fetchColumn() > 0) {
+            sendmessage($from_id, $textbotlang['Admin']['Payment']['reviewReceiptsFirst'], null, 'HTML');
+            return;
+        }
     }
     $format_price_cart = number_format($Payment_report['price']);
     $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
@@ -1819,7 +1831,7 @@ elseif ($datain == "systemsms") {
     update("user", "Processing_value_tow", $typeagent, "id", $from_id);
     $product = [];
     $panel = select("marzban_panel", "*", "code_panel", $user['Processing_value_one'], "select");
-    $getdataproduct = $pdo->prepare("SELECT * FROM product WHERE (Location = ? or Location = '/all') AND agent = ?");
+    $getdataproduct = $pdo->prepare("SELECT * FROM product WHERE (Location = ? or Location = '/all') AND agent = ? ORDER BY display_order, id");
     $getdataproduct->bindValue(1, $panel['name_panel'], PDO::PARAM_STR);
     $getdataproduct->bindValue(2, $typeagent, PDO::PARAM_STR);
     $getdataproduct->execute();
@@ -1942,6 +1954,7 @@ elseif ($datain == "systemsms") {
     $stmt->bindParam(':Location', $panel['name_panel']);
     $stmt->bindParam(':agent', $user['Processing_value_tow']);
     $stmt->execute();
+    update("user", "Processing_value_tow", $text, "id", $from_id);
     sendmessage($from_id, $textbotlang['Admin']['Product']['nameUpdated'], $shopkeyboard, 'HTML');
     step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['volumeResetType'] && $adminrulecheck['rule'] == "administrator") {
@@ -1965,8 +1978,13 @@ elseif ($datain == "systemsms") {
         sendmessage($from_id, $textbotlang['Admin']['Product']['cannotChangeToAll'], $shopkeyboard, 'HTML');
         return;
     }
-    $product = select("product", "*", "name_product", $user['Processing_value']);
+    $product = select("product", "*", "id", $user['Processing_value'], "select");
     $panel = select("marzban_panel", "*", "code_panel", $user['Processing_value_one'], "select");
+    $newPanel = select("marzban_panel", "*", "name_panel", $text, "select");
+    if ($newPanel == false) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $shopkeyboard, 'HTML');
+        return;
+    }
     $stmt = $pdo->prepare("UPDATE product SET Location = :Location2 WHERE id = :name_product AND (Location = :Location OR Location = '/all') AND agent = :agent");
     $stmt->bindParam(':Location2', $text);
     $stmt->bindParam(':name_product', $user['Processing_value']);
@@ -1978,6 +1996,7 @@ elseif ($datain == "systemsms") {
     $stmt->bindParam(':name_product', $product['name_product']);
     $stmt->bindParam(':Location', $panel['name_panel']);
     $stmt->execute();
+    update("user", "Processing_value_one", $newPanel['code_panel'], "id", $from_id);
     sendmessage($from_id, $textbotlang['Admin']['Product']['locationUpdated'], $shopkeyboard, 'HTML');
     step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['volume'] && $adminrulecheck['rule'] == "administrator") {
@@ -3646,7 +3665,7 @@ elseif ($datain == "systemsms") {
     $keyboard_json = json_encode($keyboardlists);
     update("user", "pagenumber", $next_page, "id", $from_id);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['manageUser']['manageUserBtnDesc'], $keyboard_json);
-} elseif (preg_match('/addbalanceuser_(\w+)/', $datain, $dataget)) {
+} elseif (preg_match('/addbalanceuser_(\w+)/', $datain, $dataget) && ($adminrulecheck['rule'] == "administrator" || $adminrulecheck['rule'] == "Seller")) {
     $iduser = $dataget[1];
     update("user", "Processing_value", $iduser, "id", $from_id);
     telegram('sendmessage', [
@@ -3657,7 +3676,7 @@ elseif ($datain == "systemsms") {
         'reply_to_message_id' => $message_id,
     ]);
     step('addbalanceusercurrent', $from_id);
-} elseif ($user['step'] == "addbalanceusercurrent") {
+} elseif ($user['step'] == "addbalanceusercurrent" && ($adminrulecheck['rule'] == "administrator" || $adminrulecheck['rule'] == "Seller")) {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['Admin']['Balance']['invalidPrice'], $backadmin, 'HTML');
         return;
@@ -3692,7 +3711,7 @@ elseif ($datain == "systemsms") {
             'parse_mode' => "HTML"
         ]);
     }
-} elseif (preg_match('/lowbalanceuser_(\w+)/', $datain, $dataget)) {
+} elseif (preg_match('/lowbalanceuser_(\w+)/', $datain, $dataget) && ($adminrulecheck['rule'] == "administrator" || $adminrulecheck['rule'] == "Seller")) {
     $iduser = $dataget[1];
     update("user", "Processing_value", $iduser, "id", $from_id);
     telegram('sendmessage', [
@@ -3703,7 +3722,7 @@ elseif ($datain == "systemsms") {
         'reply_to_message_id' => $message_id,
     ]);
     step('addbalanceuser', $from_id);
-} elseif ($user['step'] == "addbalanceuser") {
+} elseif ($user['step'] == "addbalanceuser" && ($adminrulecheck['rule'] == "administrator" || $adminrulecheck['rule'] == "Seller")) {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['Admin']['Balance']['invalidPrice'], $backadmin, 'HTML');
         return;
@@ -3875,26 +3894,24 @@ elseif ($datain == "systemsms") {
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['removedService'], $keyboardadmin, 'HTML');
     Editmessagetext($from_id, $message_id, $text_inline, json_encode(['inline_keyboard' => []]));
     step('home', $from_id);
-} elseif (preg_match('/removeserviceandback-(\w+)/', $datain, $dataget)) {
+} elseif (preg_match('/removeserviceandback-(\w+)/', $datain, $dataget) && ($adminrulecheck['rule'] == "administrator" || $adminrulecheck['rule'] == "Seller")) {
     $username = $dataget[1];
     $info_product = select("invoice", "*", "id_invoice", $username, "select");
-    if ($info_product['Status'] == "removebyadmin") {
-        sendmessage($from_id, $textbotlang['Admin']['order']['alreadyDeleted'], $keyboardadmin, 'HTML');
-        return;
-    }
     $DataUserOut = $ManagePanel->DataUser($info_product['Service_location'], $info_product['username']);
     if (isset($DataUserOut['msg']) && $DataUserOut['msg'] == "User not found") {
         sendmessage($from_id, $textbotlang['users']['status']['userNotFound'], null, 'html');
-    } else {
-        if ($DataUserOut['status'] == "Unsuccessful") {
-            sendmessage($from_id, $textbotlang['Admin']['errorOccurred'], $keyboardadmin, 'HTML');
-        }
+    } elseif ($DataUserOut['status'] == "Unsuccessful") {
+        sendmessage($from_id, $textbotlang['Admin']['errorOccurred'], $keyboardadmin, 'HTML');
+        return;
+    }
+    $stmt = $pdo->prepare("UPDATE invoice SET Status = 'removebyadmin' WHERE id_invoice = ? AND Status NOT IN ('removebyadmin', 'removeTime', 'removevolume', 'removebyuser', 'unpaid', 'Unpaid', 'Unsuccessful')");
+    $stmt->execute([$username]);
+    if ($stmt->rowCount() == 0) {
+        sendmessage($from_id, $textbotlang['Admin']['order']['alreadyDeleted'], $keyboardadmin, 'HTML');
+        return;
     }
     $ManagePanel->RemoveUser($info_product['Service_location'], $info_product['username']);
-    update('invoice', 'status', 'removebyadmin', 'id_invoice', $username);
-    $Balance_user = select("user", "*", "id", $info_product['id_user'], "select");
-    $Balance_add_user = $Balance_user['Balance'] + $info_product['price_product'];
-    update("user", "Balance", $Balance_add_user, "id", $info_product['id_user']);
+    addBalance($info_product['id_user'], $info_product['price_product']);
     $textadd = sprintf($textbotlang['users']['Balance']['addedNotice2'], $info_product['price_product']);
     sendmessage($info_product['id_user'], $textadd, null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['removedService'], $keyboardadmin, 'HTML');
@@ -4155,7 +4172,10 @@ elseif ($datain == "systemsms") {
     $id_order = $datagetr[1];
     $Payment_report = select("Payment_report", "*", "id_order", $id_order, "select");
     update("user", "Processing_value", $id_order, "id", $from_id);
-    if ($Payment_report['payment_Status'] == "paid" || $Payment_report['payment_Status'] == "reject") {
+    $claim = $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid' WHERE id_order = ? AND payment_Status NOT IN ('paid', 'reject')");
+    $claim->execute([$id_order]);
+    clearSelectCache('Payment_report');
+    if ($claim->rowCount() === 0) {
         telegram('answerCallbackQuery', array(
             'callback_query_id' => $callback_query_id,
             'text' => $textbotlang['Admin']['Payment']['reviewedPayment'],
@@ -4164,7 +4184,6 @@ elseif ($datain == "systemsms") {
         ));
         return;
     }
-    update("Payment_report", "payment_Status", "paid", "id_order", $id_order);
 
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['addBalanceUserDesc'], $backadmin, 'html');
     step('addbalancemanual', $from_id);
@@ -4177,9 +4196,8 @@ elseif ($datain == "systemsms") {
     sendmessage($from_id, $textbotlang['Admin']['Balance']['addBalanceUser'], $keyboardadmin, 'HTML');
     $Payment_report = select("Payment_report", "*", "id_order", $user['Processing_value'], "select");
     $Balance_user = select("user", "*", "id", $Payment_report['id_user'], "select");
-    $Balance_add_user = $Balance_user['Balance'] + $text;
     $balanceusers = number_format($text, 0);
-    update("user", "Balance", $Balance_add_user, "id", $Payment_report['id_user']);
+    addBalance($Payment_report['id_user'], $text);
     $textadd = sprintf($textbotlang['users']['Balance']['addedNotice3'], $balanceusers);
     sendmessage($Payment_report['id_user'], $textadd, null, 'HTML');
     $text_report = sprintf($textbotlang['Admin']['reportgroup']['balanceManualAdd'], $Payment_report['id_user'], $Balance_user['username'], $Payment_report['price'], $text);
@@ -4213,7 +4231,9 @@ elseif ($datain == "systemsms") {
     }
     step('home', $from_id);
     $balancemaax = json_decode(select("PaySetting", "ValuePay", "NamePay", "minbalance", "select")['ValuePay'], true);
-    $balancemaax[$text] = $user['Processing_value'];
+    foreach ($text == "allusers" ? ["f", "n", "n2"] : [$text] as $agentKey) {
+        $balancemaax[$agentKey] = $user['Processing_value'];
+    }
     $balancemaax = json_encode($balancemaax);
     sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $keyboardadmin, 'HTML');
     update("PaySetting", "ValuePay", $balancemaax, "NamePay", "minbalance");
@@ -4238,7 +4258,9 @@ elseif ($datain == "systemsms") {
     }
     step('home', $from_id);
     $balancemaax = json_decode(select("PaySetting", "ValuePay", "NamePay", "maxbalance", "select")['ValuePay'], true);
-    $balancemaax[$text] = $user['Processing_value'];
+    foreach ($text == "allusers" ? ["f", "n", "n2"] : [$text] as $agentKey) {
+        $balancemaax[$agentKey] = $user['Processing_value'];
+    }
     $balancemaax = json_encode($balancemaax);
     sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $keyboardadmin, 'HTML');
     update("PaySetting", "ValuePay", $balancemaax, "NamePay", "maxbalance");
@@ -4807,96 +4829,13 @@ elseif ($datain == "systemsms") {
     update("cancel_service", "description", $text, "username", $user['Processing_value']);
     step("home", $from_id);
     sendmessage($nameloc['id_user'], sprintf($textbotlang['users']['status']['deleteRequestRejected'], $user['Processing_value'], $text), null, 'HTML');
-} elseif (preg_match('/remoceserviceadmin-(\w+)/', $datain, $dataget)) {
-    $id_invoice = $dataget[1];
-    $invoice = select("invoice", "*", "id_invoice", $id_invoice, "select");
-    $requestcheck = select("cancel_service", "*", "username", $invoice['username'], "select");
-    if ($requestcheck['status'] == "accept" || $requestcheck['status'] == "reject") {
-        telegram('answerCallbackQuery', array(
-            'callback_query_id' => $callback_query_id,
-            'text' => $textbotlang['keyboard']['alreadyReviewed'],
-            'show_alert' => true,
-            'cache_time' => 5,
-        ));
-        return;
-    }
-    $nameloc = select("invoice", "*", "username", $requestcheck['username'], "select");
-    $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
-    $DataUserOut = $ManagePanel->DataUser($nameloc['Service_location'], $requestcheck['username']);
-    $stmt = $pdo->prepare("SELECT  SUM(price) FROM service_other WHERE username = :username AND type != 'change_location' AND type != 'extend_user' LIMIT 1");
-    $stmt->bindParam(':username', $nameloc['username']);
-    $stmt->execute();
-    $sumproduct = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (isset($DataUserOut['msg']) && $DataUserOut['msg'] == "User not found") {
-        sendmessage($from_id, $textbotlang['users']['status']['userNotFound'], null, 'html');
-        step('home', $from_id);
-        return;
-    }
-    if ($DataUserOut['data_limit'] == null && $DataUserOut['expire'] == null) {
-        sendmessage($from_id, $textbotlang['Admin']['cronjob']['cannotDeleteUnlimited'], null, 'html');
-        step('home', $from_id);
-        return;
-    }
-    if ($DataUserOut['status'] == "on_hold") {
-        $pricelast = $invoice['price_product'];
-    } elseif ($DataUserOut['data_limit'] == null) {
-        $serviceTime = (float) ($nameloc['Service_time'] ?? 0);
-        if ($serviceTime > 0) {
-            $pricetime = ($nameloc['price_product'] / $serviceTime) + intval($sumproduct['SUM(price)']);
-            $pricelast = (($DataUserOut['expire'] - time()) / 86400) * $pricetime;
-        } else {
-            $pricelast = 0;
-        }
-    } elseif ($DataUserOut['expire'] == null) {
-        $dataLimit = isset($DataUserOut['data_limit']) ? (float) $DataUserOut['data_limit'] : 0;
-        if ($dataLimit > 0) {
-            $volumelefts = ($dataLimit - (float) ($DataUserOut['used_traffic'] ?? 0)) / pow(1024, 3);
-            $volumeDivisor = $dataLimit / pow(1024, 3);
-            $volumeleft = $volumeDivisor > 0 ? $volumelefts / $volumeDivisor : 0;
-            $pricelast = round($volumeleft * ($nameloc['price_product'] + intval($sumproduct['SUM(price)'])), 2);
-        } else {
-            $pricelast = 0;
-        }
-    } else {
-        $serviceTime = (float) ($nameloc['Service_time'] ?? 0);
-        $dataLimit = isset($DataUserOut['data_limit']) ? (float) $DataUserOut['data_limit'] : 0;
-        $volumeDivisor = $dataLimit / pow(1024, 3);
-        if ($serviceTime > 0 && $volumeDivisor > 0) {
-            $timeleft = (round(($DataUserOut['expire'] - time()) / 86400, 0)) / $serviceTime;
-            $volumelefts = ($dataLimit - (float) ($DataUserOut['used_traffic'] ?? 0)) / pow(1024, 3);
-            $volumeleft = $volumelefts / $volumeDivisor;
-            $pricelast = round($timeleft * $volumeleft * ($nameloc['price_product'] + intval($sumproduct['SUM(price)'])), 2);
-        } else {
-            $pricelast = 0;
-        }
-    }
-    $pricelast = intval($pricelast);
-    if (intval($pricelast) != 0) {
-        $Balance_id_cancel = select("user", "*", "id", $nameloc['id_user'], "select");
-        $Balance_id_cancel_fee = intval($Balance_id_cancel['Balance']) + intval($pricelast);
-        update("user", "Balance", $Balance_id_cancel_fee, "id", $nameloc['id_user']);
-        sendmessage($nameloc['id_user'], sprintf($textbotlang['users']['Balance']['addedNotice4'], $pricelast), null, 'HTML');
-    }
-    $ManagePanel->RemoveUser($nameloc['Service_location'], $requestcheck['username']);
-    update("cancel_service", "status", "accept", "username", $requestcheck['username']);
-    update("invoice", "status", "removedbyadmin", "username", $requestcheck['username']);
-    sendmessage($from_id, sprintf($textbotlang['Admin']['Balance']['addedToUserNotice'], $pricelast), null, 'HTML');
-    sendmessage($nameloc['id_user'], sprintf($textbotlang['users']['status']['deleteRequestApproved'], $nameloc['username']), null, 'HTML');
-    $text_report = sprintf($textbotlang['Admin']['reportgroup']['deleteRequestApproved'], $from_id, $pricelast, $requestcheck['username'], $nameloc['id_user']);
-    if (strlen($setting['Channel_Report']) > 0) {
-        telegram('sendmessage', [
-            'chat_id' => $setting['Channel_Report'],
-            'message_thread_id' => $otherreport,
-            'text' => $text_report,
-            'parse_mode' => "HTML"
-        ]);
-    }
 } elseif (preg_match('/remoceserviceadminmanual-(\w+)/', $datain, $dataget)) {
     $id_invoice = $dataget[1];
     update("user", "Processing_value", $id_invoice, "id", $from_id);
     $invoice = select("invoice", "*", "id_invoice", $id_invoice, "select");
-    $requestcheck = select("cancel_service", "*", "username", $invoice['username'], "select");
-    if ($requestcheck['status'] == "accept" || $requestcheck['status'] == "reject") {
+    $stmt = $pdo->prepare("UPDATE cancel_service SET status = 'accept' WHERE username = ? AND status NOT IN ('accept', 'reject')");
+    $stmt->execute([$invoice['username']]);
+    if ($stmt->rowCount() == 0) {
         telegram('answerCallbackQuery', array(
             'callback_query_id' => $callback_query_id,
             'text' => $textbotlang['keyboard']['alreadyReviewed'],
@@ -4905,10 +4844,8 @@ elseif ($datain == "systemsms") {
         ));
         return;
     }
-    $marzban_list_get = select("marzban_panel", "*", "name_panel", $invoice['Service_location'], "select");
-    $ManagePanel->RemoveUser($invoice['Service_location'], $requestcheck['username']);
-    update("cancel_service", "status", "accept", "username", $requestcheck['username']);
-    update("invoice", "status", "removedbyadmin", "username", $requestcheck['username']);
+    $ManagePanel->RemoveUser($invoice['Service_location'], $invoice['username']);
+    update("invoice", "status", "removebyadmin", "username", $invoice['username']);
     sendmessage($invoice['id_user'], sprintf($textbotlang['users']['status']['deleteRequestApproved2'], $invoice['username']), null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['order']['askRefundAmount'], $backadmin, 'HTML');
     step("getpricebackremove", $from_id);
@@ -4921,6 +4858,7 @@ elseif ($datain == "systemsms") {
     $Balance_id_cancel = select("user", "*", "id", $invoice['id_user'], "select");
     $Balance_id_cancel_fee = intval($Balance_id_cancel['Balance']) + intval($text);
     update("user", "Balance", $Balance_id_cancel_fee, "id", $invoice['id_user']);
+    step('home', $from_id);
     sendmessage($invoice['id_user'], sprintf($textbotlang['users']['Balance']['addedNotice5'], $text), null, 'HTML');
     sendmessage($from_id, $textbotlang['Admin']['Balance']['addedToUser'], $keyboardadmin, 'HTML');
     $text_report = sprintf($textbotlang['Admin']['reportgroup']['deleteRequestApproved2'], $from_id, $text, $invoice['username'], $invoice['id_user']);
@@ -5026,6 +4964,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['disableShowCardStatus'], null, 'HTML');
+    step('home', $from_id);
     if (intval($text) == "1") {
         update("user", "cardpayment", "0");
         update("setting", "showcard", "0");
@@ -5058,9 +4997,9 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $typepanel = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
     outtypepanel($typepanel['type'], $textbotlang['Admin']['algorithmExtend']['saveData']);
     step('home', $from_id);
-} elseif ($text == "/token2") {
+} elseif ($text == $textbotlang['keyboard']['apiToken'] && $adminrulecheck['rule'] == "administrator") {
     $token = bin2hex(random_bytes(16));
-    file_put_contents('api/hash.txt', $token);
+    update("setting", "api_token", $token, null, null);
     sendmessage($from_id, sprintf($textbotlang['Admin']['api']['token'], $token), null, 'HTML');
     $apiDocsUrl = "https://$domainhostsEscaped/api/index.html";
     sendmessage($from_id, sprintf($textbotlang['Admin']['api']['docsLink'], $apiDocsUrl), null, 'HTML');
@@ -5101,6 +5040,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     $stmt->execute();
     $info_product = $stmt->fetch(PDO::FETCH_ASSOC);
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $user['Processing_value_tow'], "select");
+    if ($info_product == false || $marzban_list_get == false) {
+        sendmessage($from_id, $textbotlang['users']['status']['error'], $keyboardadmin, 'HTML');
+        step("home", $from_id);
+        return;
+    }
     $DataUserOut = $ManagePanel->DataUser($user['Processing_value_tow'], $user['Processing_value_one']);
     if ($DataUserOut['status'] == "Unsuccessful") {
         $datetimestep = strtotime("+" . $info_product['Service_time'] . "days");
@@ -5128,8 +5072,8 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
                     'text' => $texterros,
                     'parse_mode' => "HTML"
                 ]);
-                step("home", $from_id);
             }
+            step("home", $from_id);
             return;
         }
     } else {
@@ -5200,6 +5144,10 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, $textmin, $backadmin, 'HTML');
     step('minbalancebulk', $from_id);
 } elseif ($user['step'] == "minbalancebulk") {
+    if (!ctype_digit($text)) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['SettingnowPayment']['saveApi'], $shopkeyboard, 'HTML');
     update("shopSetting", "value", $text, "Namevalue", "minbalancebuybulk");
     step('home', $from_id);
@@ -5223,12 +5171,9 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     step("home", $from_id);
 } elseif (preg_match('/rejectrequesta_(\w+)/', $datain, $datagetr)) {
     $id_user = $datagetr[1];
-    $request_agent = select("Requestagent", "*", "id", $id_user, "select");
-    update("Requestagent", "status", "reject", "id", $id_user);
-    $userinfo = select("user", "*", "id", $id_user, "select");
-    $Balancenew = $userinfo['Balance'] + intval($setting['agentreqprice']);
-    update("user", "Balance", $Balancenew, "id", $id_user);
-    if ($request_agent['status'] == "reject" || $request_agent['status'] == "accept") {
+    $stmt = $pdo->prepare("UPDATE Requestagent SET status = 'reject' WHERE id = ? AND status NOT IN ('reject', 'accept')");
+    $stmt->execute([$id_user]);
+    if ($stmt->rowCount() === 0) {
         telegram('answerCallbackQuery', array(
             'callback_query_id' => $callback_query_id,
             'text' => $textbotlang['keyboard']['alreadyReviewed'],
@@ -5237,6 +5182,9 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         ));
         return;
     }
+    clearSelectCache('Requestagent');
+    $request_agent = select("Requestagent", "*", "id", $id_user, "select");
+    addBalance($id_user, intval($request_agent['price'] ?? $setting['agentreqprice']));
     $keyboardreject = json_encode([
         'inline_keyboard' => [
             [['text' => $textbotlang['keyboard']['requestRejected'], 'callback_data' => "reject"]],
@@ -5258,7 +5206,9 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         ));
         return;
     }
-    if ($request_agent['status'] == "reject" || $request_agent['status'] == "accept") {
+    $stmt = $pdo->prepare("UPDATE Requestagent SET status = 'accept' WHERE id = ? AND status NOT IN ('reject', 'accept')");
+    $stmt->execute([$id_user]);
+    if ($stmt->rowCount() === 0) {
         telegram('answerCallbackQuery', array(
             'callback_query_id' => $callback_query_id,
             'text' => $textbotlang['keyboard']['alreadyReviewed'],
@@ -5267,12 +5217,12 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         ));
         return;
     }
+    clearSelectCache('Requestagent');
     $defaultAgentType = 'n';
     $agentTypeLabels = [
         'n' => $textbotlang['keyboard']['normalAgent'],
         'n2' => $textbotlang['keyboard']['advancedAgent'],
     ];
-    update("Requestagent", "status", "accept", "id", $id_user);
     update("Requestagent", "type", $defaultAgentType, "id", $id_user);
     update("user", "agent", $defaultAgentType, "id", $id_user);
     update("user", "expire", null, "id", $id_user);
@@ -5657,7 +5607,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         $randomString = bin2hex(random_bytes(5));
         $output_config_link = $panel['sublink'] == "onsublink" ? $dataoutput['subscription_url'] : "";
         $config = "";
-        if ($marzban_list_get['config'] == "onconfig" && is_array($dataoutput['configs'])) {
+        if ($panel['config'] == "onconfig" && is_array($dataoutput['configs'])) {
             foreach ($dataoutput['configs'] as $link) {
                 $config .= "\n" . $link;
             }
@@ -5695,10 +5645,6 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     }
     update("user", "Processing_value", $userdata['idpanel'], "id", $from_id);
     step("home", $from_id);
-} elseif ($text == $textbotlang['keyboard']['botReport'] && $adminrulecheck['rule'] == "administrator") {
-    $textupdate = $textbotlang['Admin']['report']['botReportIntro'];
-    sendmessage($from_id, $textupdate, null, 'HTML');
-    step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['manageNodes'] || $datain == "bakcnode") {
     if ($adminnumber != $from_id) {
         sendmessage($from_id, $textbotlang['Admin']['mainAdminOnly'], null, 'HTML');
@@ -6145,7 +6091,10 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, sprintf($textbotlang['Admin']['gateway']['cubepayFeeAsk'], $feeValueNow), $backadmin, 'HTML');
     step("getfeeiranpay2", $from_id);
 } elseif ($user['step'] == "getfeeiranpay2") {
-
+    if (!is_numeric($text) || $text < 0) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
     update("PaySetting", "ValuePay", (string) $text, "NamePay", "feeternado");
     $feeExample = number_format(cubepayApplyFee(100000, $text));
     $feeSavedText = $text <= 100
@@ -6166,8 +6115,8 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     update("PaySetting", "ValuePay", $text, "NamePay", "chashbackiranpay2");
 } elseif ($text == $textbotlang['keyboard']['cashbackIranPay3']) {
     sendmessage($from_id, $textbotlang['Admin']['price']['askPaymentCashback'], $backadmin, 'HTML');
-    step("getcashiranpay4", $from_id);
-} elseif ($user['step'] == "getcashiranpay4") {
+    step("getcashiranpay3", $from_id);
+} elseif ($user['step'] == "getcashiranpay3") {
     if (!ctype_digit($text)) {
         sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
         return;
@@ -6232,7 +6181,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     update("PaySetting", "ValuePay", $text, "NamePay", "chashbackvariza");
 } elseif ($text == $textbotlang['keyboard']['addConfig']) {
     $product = [];
-    $stmt = $pdo->prepare("SELECT * FROM product WHERE Location = :text or Location = '/all' ");
+    $stmt = $pdo->prepare("SELECT * FROM product WHERE Location = :text or Location = '/all' ORDER BY display_order, id");
     $stmt->bindParam(':text', $user['Processing_value'], PDO::PARAM_STR);
     $stmt->execute();
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -6314,9 +6263,9 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     step("getnameremove", $from_id);
 } elseif ($user['step'] == "getnameremove") {
     sendmessage($from_id, $textbotlang['Admin']['config']['deleted'], $panelOptions['Manualsale'], 'HTML');
-    $stmt = $pdo->prepare("DELETE FROM manualsell WHERE namerecord = ?");
-    $stmt->bindParam(1, $text);
-    $stmt->execute();
+    $panel = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
+    $stmt = $pdo->prepare("DELETE FROM manualsell WHERE namerecord = ? AND codepanel = ?");
+    $stmt->execute([$text, $panel['code_panel']]);
     step("home", $from_id);
 } elseif ($text == $textbotlang['keyboard']['changeLocationPrice'] && $adminrulecheck['rule'] == "administrator") {
     sendmessage($from_id, $textbotlang['Admin']['price']['askChangeLocation'], $backadmin, 'HTML');
@@ -6522,7 +6471,10 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     step("getcontentedit", $from_id);
 } elseif ($user['step'] == "getcontentedit") {
     sendmessage($from_id, $textbotlang['Admin']['saved'], $panelOptions['Manualsale'], 'HTML');
-    update("manualsell", "contentrecord", $text, "namerecord", $user['Processing_value_one']);
+    $panel = select("marzban_panel", "*", "name_panel", $user['Processing_value'], "select");
+    $stmt = $pdo->prepare("UPDATE manualsell SET contentrecord = ? WHERE namerecord = ? AND codepanel = ?");
+    $stmt->execute([$text, $user['Processing_value_one'], $panel['code_panel']]);
+    step('home', $from_id);
 } elseif ($text == $textbotlang['keyboard']['increaseGroupPrice']) {
     sendmessage($from_id, $textbotlang['Admin']['price']['askIncreasePanel'], $json_list_marzban_panel, 'HTML');
     step("getaddpricepeoductloc", $from_id);
@@ -6602,7 +6554,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         sendmessage($from_id, $textbotlang['Admin']['price']['noProductFound'], $shopkeyboard, 'HTML');
         return;
     }
-    $stmt = $pdo->prepare("UPDATE product SET price_product = ROUND(price_product - :price) WHERE Location = :location AND agent = :agent");
+    $stmt = $pdo->prepare("UPDATE product SET price_product = GREATEST(ROUND(price_product - :price), 0) WHERE Location = :location AND agent = :agent");
     $stmt->bindValue(':price', intval($text), PDO::PARAM_INT);
     $stmt->bindParam(':location', $userdata['namepanel'], PDO::PARAM_STR);
     $stmt->bindParam(':agent', $userdata['agent'], PDO::PARAM_STR);
@@ -6614,6 +6566,10 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, $textbotlang['Admin']['Balance']['askMinDeposit'], $backadmin, 'HTML');
     step("getmaincart", $from_id);
 } elseif ($user['step'] == "getmaincart") {
+    if (!ctype_digit($text)) {
+        sendmessage($from_id, $textbotlang['common']['invalidInput'], $backadmin, 'HTML');
+        return;
+    }
     sendmessage($from_id, $textbotlang['Admin']['Balance']['minDepositSaved'], $CartManage, 'HTML');
     step("home", $from_id);
     update("PaySetting", "ValuePay", $text, "NamePay", "minbalancecart");
@@ -6968,8 +6924,8 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     sendmessage($from_id, $textsetservice, $backadmin, 'HTML');
     step('getservceid', $from_id);
 } elseif ($user['step'] == "getservceid") {
-    $userdata = json_decode(getuserm($text, $user['Processing_value'])['body'], true);
-    if (isset($userdata['detail']) and $userdata['detail'] == "User not found") {
+    $userdata = json_decode(getuserm($text, $user['Processing_value'])['body'] ?? '', true);
+    if (!is_array($userdata) || !isset($userdata['service_ids']) || !is_array($userdata['service_ids'])) {
         sendmessage($from_id, $textbotlang['Admin']['managepanel']['userNotInPanel'], null, 'HTML');
         return;
     }
@@ -7387,6 +7343,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
         return;
     }
     sendmessage($from_id, $textbotlang['Admin']['manageUser']['transferDone'], $keyboardadmin, 'HTML');
+    $targetBalance = intval(select("user", "Balance", "id", $text, "select")['Balance'] ?? 0);
     $stmt = $pdo->prepare("DELETE FROM user WHERE id = :id_user");
     $stmt->bindParam(':id_user', $text, PDO::PARAM_STR);
     $stmt->execute();
@@ -7396,6 +7353,7 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
     update("support_message", "iduser", $text, "iduser", $user['Processing_value']);
     update("service_other", "id_user", $text, "id_user", $user['Processing_value']);
     update("Giftcodeconsumed", "id_user", $text, "id_user", $user['Processing_value']);
+    addBalance($text, $targetBalance);
     step("home", $from_id);
 } elseif ($text == $textbotlang['keyboard']['qrBackground']) {
     sendmessage($from_id, $textbotlang['Admin']['managepanel']['askQrBackground'], $backadmin, 'HTML');
@@ -7437,30 +7395,11 @@ if ($datain == "settimecornremove" && $adminrulecheck['rule'] == "administrator"
                 return;
             }
             $DataUserOut = json_decode($DataUserOut['body'], true);
-            if ((isset($DataUserOut['msg']) && $DataUserOut['msg'] == "User not found") or !isset($DataUserOut['proxy_settings'])) {
+            if ((isset($DataUserOut['msg']) && $DataUserOut['msg'] == "User not found") or !isset($DataUserOut['group_ids'])) {
                 sendmessage($from_id, $textbotlang['users']['status']['userNotFound'], null, 'html');
                 return;
             }
-            foreach ($DataUserOut['proxy_settings'] as $key => &$value) {
-                if ($key == "shadowsocks") {
-                    unset($DataUserOut['proxy_settings'][$key]['password']);
-                } elseif ($key == "trojan") {
-                    unset($DataUserOut['proxy_settings'][$key]['password']);
-                }elseif ($key == "wireguard") {
-                    unset($DataUserOut['proxy_settings'][$key]['private_key']);
-                    unset($DataUserOut['proxy_settings'][$key]['public_key']);
-                    unset($DataUserOut['proxy_settings'][$key]['peer_ips']);
-                } elseif ($key == "hysteria") {
-                    unset($DataUserOut['proxy_settings'][$key]['auth']);
-                }  else {
-                    unset($DataUserOut['proxy_settings'][$key]['id']);
-                }
-                if (count($DataUserOut['proxy_settings'][$key]) == 0) {
-                    $DataUserOut['proxy_settings'][$key] = new stdClass();
-                }
-            }
             update("marzban_panel", "inbounds", json_encode($DataUserOut['group_ids']), "name_panel", $user['Processing_value']);
-            update("marzban_panel", "proxies", json_encode($DataUserOut['proxy_settings'], true), "name_panel", $user['Processing_value']);
         } else {
             $DataUserOut = getuser($text, $user['Processing_value']);
             if (!empty($DataUserOut['error'])) {
@@ -7824,38 +7763,40 @@ elseif ($text == $textbotlang['keyboard']['hidePanelForUser'] && $adminrulecheck
             return;
         }
         $DataUserOut = json_decode($DataUserOut['body'], true);
-        $proxyKey = $marzban_list_get['version_panel'] == "1" ? 'proxy_settings' : 'proxies';
-        if ((isset($DataUserOut['msg']) && $DataUserOut['msg'] == "User not found") or !isset($DataUserOut[$proxyKey])) {
+        $isPasarguard = $marzban_list_get['version_panel'] == "1";
+        if ((isset($DataUserOut['msg']) && $DataUserOut['msg'] == "User not found") or !isset($DataUserOut[$isPasarguard ? 'group_ids' : 'proxies'])) {
             sendmessage($from_id, $textbotlang['users']['status']['userNotFound'], null, 'html');
             return;
         }
-        foreach ($DataUserOut[$proxyKey] as $key => &$value) {
-            if ($key == "shadowsocks" || $key == "trojan") {
-                unset($DataUserOut[$proxyKey][$key]['password']);
-            } elseif ($key == "wireguard") {
-                unset($DataUserOut[$proxyKey][$key]['private_key']);
-                unset($DataUserOut[$proxyKey][$key]['public_key']);
-                unset($DataUserOut[$proxyKey][$key]['peer_ips']);
-            } elseif ($key == "hysteria") {
-                unset($DataUserOut[$proxyKey][$key]['auth']);
-            } else {
-                unset($DataUserOut[$proxyKey][$key]['id']);
+        if (!$isPasarguard) {
+            foreach ($DataUserOut['proxies'] as $key => &$value) {
+                if ($key == "shadowsocks" || $key == "trojan") {
+                    unset($DataUserOut['proxies'][$key]['password']);
+                } elseif ($key == "wireguard") {
+                    unset($DataUserOut['proxies'][$key]['private_key']);
+                    unset($DataUserOut['proxies'][$key]['public_key']);
+                    unset($DataUserOut['proxies'][$key]['peer_ips']);
+                } elseif ($key == "hysteria") {
+                    unset($DataUserOut['proxies'][$key]['auth']);
+                } else {
+                    unset($DataUserOut['proxies'][$key]['id']);
+                }
+                if (count($DataUserOut['proxies'][$key]) == 0) {
+                    $DataUserOut['proxies'][$key] = new stdClass();
+                }
             }
-            if (count($DataUserOut[$proxyKey][$key]) == 0) {
-                $DataUserOut[$proxyKey][$key] = new stdClass();
-            }
+            $stmt = $pdo->prepare("UPDATE product SET proxies = :proxies WHERE id = :name_product AND (Location = :Location OR Location = '/all') AND agent = :agent");
+            $proxies_json = json_encode($DataUserOut['proxies']);
+            $stmt->bindParam(':proxies', $proxies_json);
+            $stmt->bindParam(':name_product', $user['Processing_value']);
+            $stmt->bindParam(':Location', $marzban_list_get['name_panel']);
+            $stmt->bindParam(':agent', $user['Processing_value_tow']);
+            $stmt->execute();
         }
-        $stmt = $pdo->prepare("UPDATE product SET proxies = :proxies WHERE id = :name_product AND (Location = :Location OR Location = '/all') AND agent = :agent");
-        $proxies_json = json_encode($DataUserOut[$proxyKey]);
-        $stmt->bindParam(':proxies', $proxies_json);
-        $stmt->bindParam(':name_product', $user['Processing_value']);
-        $stmt->bindParam(':Location', $marzban_list_get['name_panel']);
-        $stmt->bindParam(':agent', $user['Processing_value_tow']);
-        $stmt->execute();
-        $datainbound = json_encode($marzban_list_get['version_panel'] == "1" ? $DataUserOut['group_ids'] : $DataUserOut['inbounds']);
+        $datainbound = json_encode($isPasarguard ? $DataUserOut['group_ids'] : $DataUserOut['inbounds']);
     } elseif ($marzban_list_get['type'] == "marzneshin") {
-        $userdata = json_decode(getuserm($text, $marzban_list_get['name_panel'])['body'], true);
-        if (isset($userdata['detail']) and $userdata['detail'] == "User not found") {
+        $userdata = json_decode(getuserm($text, $marzban_list_get['name_panel'])['body'] ?? '', true);
+        if (!is_array($userdata) || !isset($userdata['service_ids']) || !is_array($userdata['service_ids'])) {
             sendmessage($from_id, $textbotlang['Admin']['managepanel']['userNotInPanel'], null, 'HTML');
             return;
         }
@@ -7943,10 +7884,7 @@ elseif ($text == $textbotlang['keyboard']['hidePanelForUser'] && $adminrulecheck
     $prodcut['price_product'] = 0;
     $prodcut['Service_time'] = $text;
     $prodcut['Volume_constraint'] = $userdate['volume'];
-    update("invoice", "name_product", $prodcut['name_product'], "id_invoice", $userdate['id_invoice']);
-    update("invoice", "price_product", $prodcut['price_product'], "id_invoice", $userdate['id_invoice']);
-    update("invoice", "Volume", $prodcut['Volume_constraint'], "id_invoice", $userdate['id_invoice']);
-    update("invoice", "Service_time", $prodcut['Service_time'], "id_invoice", $userdate['id_invoice']);
+    savedata("save", "time", $text);
     step("home", $from_id);
     $keyboardextend = json_encode([
         'inline_keyboard' => [
@@ -7967,14 +7905,19 @@ elseif ($text == $textbotlang['keyboard']['hidePanelForUser'] && $adminrulecheck
 } elseif (preg_match('/^confirmserivceadmin-(.*)/', $datain, $dataget)) {
     Editmessagetext($from_id, $message_id, $text_inline, json_encode(['inline_keyboard' => []]));
     $id_invoice = $dataget[1];
+    $userdate = json_decode((string) $user['Processing_value'], true);
     $nameloc = select("invoice", "*", "id_invoice", $id_invoice, "select");
+    if (($userdate['id_invoice'] ?? null) != $id_invoice || !isset($userdate['volume'], $userdate['time'])) {
+        sendmessage($from_id, $textbotlang['Admin']['order']['renewError'], null, 'HTML');
+        return;
+    }
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
     $prodcut['code_product'] = "custom_volume";
     $prodcut['name_product'] = $nameloc['name_product'];
     $prodcut['price_product'] = 0;
-    $prodcut['Service_time'] = $nameloc['Service_time'];
-    $prodcut['Volume_constraint'] = $nameloc['Volume'];
-    if ($prodcut == false || !in_array($nameloc['Status'], ['active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold'])) {
+    $prodcut['Service_time'] = $userdate['time'];
+    $prodcut['Volume_constraint'] = $userdate['volume'];
+    if ($nameloc == false || !in_array($nameloc['Status'], ['active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold'])) {
         sendmessage($from_id, $textbotlang['Admin']['order']['renewError'], null, 'HTML');
         return;
     }
@@ -8007,6 +7950,10 @@ elseif ($text == $textbotlang['keyboard']['hidePanelForUser'] && $adminrulecheck
     $output_json = json_encode($extend);
     $stmt->bindParam(':output', $output_json, PDO::PARAM_STR);
     $stmt->execute();
+    savedata("clear", "id_invoice", null);
+    update("invoice", "price_product", $prodcut['price_product'], "id_invoice", $id_invoice);
+    update("invoice", "Volume", $prodcut['Volume_constraint'], "id_invoice", $id_invoice);
+    update("invoice", "Service_time", $prodcut['Service_time'], "id_invoice", $id_invoice);
     update("invoice", "Status", "active", "id_invoice", $id_invoice);
     sendmessage($from_id, $textbotlang['users']['extend']['thanks'], null, 'HTML');
     $text_report = sprintf($textbotlang['Admin']['reportgroup']['renewedByAdmin'], $from_id, $nameloc['id_user'], $prodcut['name_product'], $nameloc['username'], $nameloc['Service_location']);
@@ -8409,9 +8356,7 @@ if (isset($update["inline_query"])) {
     }
     $userdate = json_decode($user['Processing_value'], true);
     step("home", $from_id);
-    $admin_ids = json_encode(array(
-        $userdate['id_user']
-    ));
+    $admin_ids = json_encode(array_values(array_unique([strval($userdate['id_user']), $text])));
     $destination = getcwd();
     $dirsource = "$destination/vpnbot/{$userdate['id_user']}{$userdate['username']}";
     if (is_dir($dirsource) && !deleteDirectory($dirsource)) {
@@ -8665,7 +8610,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
             ['text' => $textbotlang['keyboard']['exclusiveSubLink'], 'callback_data' => "none"],
         ];
     }
-    if (in_array($panel['type'], ["marzban"])) {
+    if ($panel['type'] == "marzban" && $panel['version_panel'] != "1") {
         $Bot_Status['inline_keyboard'][] = [
             ['text' => $inbocunddisable, 'callback_data' => "editpanel-inbocunddisable-{$panel['inboundstatus']}-{$panel['code_panel']}"],
             ['text' => $textbotlang['keyboard']['inactiveAccount'], 'callback_data' => "none"],
@@ -8903,7 +8848,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
             ['text' => $textbotlang['keyboard']['exclusiveSubLink'], 'callback_data' => "none"],
         ];
     }
-    if (in_array($panel['type'], ["marzban"])) {
+    if ($panel['type'] == "marzban" && $panel['version_panel'] != "1") {
         $Bot_Status['inline_keyboard'][] = [
             ['text' => $inbocunddisable, 'callback_data' => "editpanel-inbocunddisable-{$panel['inboundstatus']}-{$panel['code_panel']}"],
             ['text' => $textbotlang['keyboard']['inactiveAccount'], 'callback_data' => "none"],
@@ -9412,6 +9357,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     $stmt = $pdo->prepare("INSERT INTO category (remark) VALUES (?)");
     $stmt->bindParam(1, $text);
     $stmt->execute();
+    $pdo->prepare("UPDATE category SET display_order = id WHERE id = ?")->execute([$pdo->lastInsertId()]);
 } elseif ($text == $textbotlang['keyboard']['deleteCategory']) {
     sendmessage($from_id, $textbotlang['Admin']['category']['selectDelete'], KeyboardCategoryadmin(), 'HTML');
     step("removecategory", $from_id);
@@ -9444,7 +9390,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     update("product", "hide_panel", json_encode($list_panel), "id", $user['Processing_value']);
     sendmessage($from_id, $textbotlang['Admin']['managepanel']['panelSelectedEndHide'], null, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['deleteAllHiddenPanels'] && $adminrulecheck['rule'] == "administrator") {
-    update("product", "hide_panel", "{}", "name_product", $user['Processing_value']);
+    update("product", "hide_panel", "{}", "id", $user['Processing_value']);
     sendmessage($from_id, $textbotlang['Admin']['managepanel']['hiddenPanelsCleared'], null, 'HTML');
 } elseif ($text == $textbotlang['keyboard']['reWebhookAgentBots']) {
     $bots_agent = select("botsaz", "*", null, null, "fetchAll");
@@ -9735,10 +9681,14 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
     ]);
     Editmessagetext($from_id, $message_id, $textbotlang['Admin']['Product']['firstPurchaseDesc'], $Response);
 } elseif (($text == $textbotlang['keyboard']['productSaleStatus'] || preg_match('/^status_sale-(.+)$/', $datain, $dataget)) && $adminrulecheck['rule'] == "administrator") {
-    $panel = select("marzban_panel", "*", "code_panel", $user['Processing_value_one'], "select");
-    $stmt = $pdo->prepare("SELECT * FROM product WHERE id = :name_product AND agent = :agent AND (Location = :Location OR Location = '/all') LIMIT 1");
-    $stmt->execute([':name_product' => $user['Processing_value'], ':agent' => $user['Processing_value_tow'], ':Location' => $panel['name_panel']]);
-    $product = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (isset($dataget[1])) {
+        $product = select("product", "*", "id", $dataget[1], "select");
+    } else {
+        $panel = select("marzban_panel", "*", "code_panel", $user['Processing_value_one'], "select");
+        $stmt = $pdo->prepare("SELECT * FROM product WHERE id = :name_product AND agent = :agent AND (Location = :Location OR Location = '/all') LIMIT 1");
+        $stmt->execute([':name_product' => $user['Processing_value'], ':agent' => $user['Processing_value_tow'], ':Location' => $panel['name_panel']]);
+        $product = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
     if (!$product) {
         return;
     }

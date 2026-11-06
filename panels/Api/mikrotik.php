@@ -18,7 +18,6 @@ function login_mikrotik($url,$username,$password){
 $response = curl_exec($curl);
 if($response === false)return array("error" => 404);
 $response = json_decode($response,true);
-curl_close($curl);
 return $response;
 
 }
@@ -37,7 +36,7 @@ function addUser_mikrotik($name_panel,$username,$password,$group){
       CURLOPT_RETURNTRANSFER => true,
       CURLOPT_ENCODING => '',
       CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
+      CURLOPT_TIMEOUT => 20,
       CURLOPT_FOLLOWLOCATION => true,
       CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
       CURLOPT_CUSTOMREQUEST => 'POST',
@@ -51,7 +50,6 @@ $response = curl_exec($curl);
 if($response === false)return array("error" => 404);
 set_profile_mikrotik($name_panel,$username,$group);
 $response = json_decode($response,true);
-curl_close($curl);
 return $response;
 }
 function set_profile_mikrotik($name_panel,$username,$prof_name){
@@ -68,7 +66,7 @@ function set_profile_mikrotik($name_panel,$username,$prof_name){
       CURLOPT_RETURNTRANSFER => true,
       CURLOPT_ENCODING => '',
       CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
+      CURLOPT_TIMEOUT => 20,
       CURLOPT_FOLLOWLOCATION => true,
       CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
       CURLOPT_CUSTOMREQUEST => 'POST',
@@ -81,7 +79,6 @@ function set_profile_mikrotik($name_panel,$username,$prof_name){
 $response = curl_exec($curl);
 if($response === false)return array("error" => 404);
 $response = json_decode($response,true);
-curl_close($curl);
 return $response;
 }
 function GetUsermikrotik($name_panel,$username){
@@ -93,7 +90,7 @@ function GetUsermikrotik($name_panel,$username){
       CURLOPT_USERPWD => $panel['username_panel'] . ":" . $panel['password_panel'],
       CURLOPT_ENCODING => '',
       CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
+      CURLOPT_TIMEOUT => 20,
       CURLOPT_FOLLOWLOCATION => true,
       CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
       CURLOPT_CUSTOMREQUEST => 'GET',
@@ -105,7 +102,6 @@ function GetUsermikrotik($name_panel,$username){
 $response = curl_exec($curl);
 if($response === false)return array("error" => 404);
 $response = json_decode($response,true);
-curl_close($curl);
 return $response;
 }
 function GetUsermikrotik_volume($name_panel,$id){
@@ -121,7 +117,7 @@ function GetUsermikrotik_volume($name_panel,$id){
       CURLOPT_USERPWD => $panel['username_panel'] . ":" . $panel['password_panel'],
       CURLOPT_ENCODING => '',
       CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
+      CURLOPT_TIMEOUT => 20,
       CURLOPT_FOLLOWLOCATION => true,
       CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
       CURLOPT_CUSTOMREQUEST => 'POST', 
@@ -134,7 +130,6 @@ function GetUsermikrotik_volume($name_panel,$id){
 $response = curl_exec($curl);
 if($response === false)return array("error" => 404);
 $response = json_decode($response,true)[0];
-curl_close($curl);
 return $response;
 }
 function deleteUser_mikrotik($name_panel,$username){
@@ -149,7 +144,7 @@ function deleteUser_mikrotik($name_panel,$username){
       CURLOPT_USERPWD => $panel['username_panel'] . ":" . $panel['password_panel'],
       CURLOPT_ENCODING => '',
       CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
+      CURLOPT_TIMEOUT => 20,
       CURLOPT_FOLLOWLOCATION => true,
       CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
       CURLOPT_CUSTOMREQUEST => 'POST', 
@@ -161,7 +156,6 @@ function deleteUser_mikrotik($name_panel,$username){
 
 $response = curl_exec($curl);
 if($response === false)return array("error" => 404);
-$response = json_decode($response,true)[0];
-curl_close($curl);
+$response = json_decode($response,true);
 return $response;
 }

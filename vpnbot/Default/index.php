@@ -28,6 +28,23 @@ $dataBase = select("botsaz", "*", "bot_token", $ApiToken, "select");
 $agentWebhookSecret = ensureAgentWebhookSecret($dataBase);
 if (!$agentWebhookSecret['created'] && $agentWebhookSecret['secret'] !== '' && !webhookSecretMatches($agentWebhookSecret['secret']))
     die("Unauthorized access");
+if (version_compare(PHP_VERSION, MIN_PHP_VERSION, '<')) {
+    if ($callback_query_id)
+        telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id]);
+    if (intval($from_id) != 0 && $Chat_type == "private")
+        sendmessage($from_id, $textbotlang['phpVersion']['user'], null, 'html');
+    return;
+}
+if (intval($from_id) != 0) {
+    $userLock = $pdo->prepare("SELECT GET_LOCK(?, 0)");
+    $userLock->execute(["mirza_user_" . $from_id]);
+    if ((int) $userLock->fetchColumn() !== 1) {
+        if ($callback_query_id) {
+            telegram('answerCallbackQuery', ['callback_query_id' => $callback_query_id]);
+        }
+        return;
+    }
+}
 $admin_ids = json_decode($dataBase['admin_ids']);
 $setting = json_decode($dataBase['setting'], true);
 if (!empty($setting['channel'])) {
@@ -69,7 +86,7 @@ if (!is_dir('data')) {
 }
 if (!in_array($from_id, $users_ids) && $settingmain['statusnewuser'] == "onnewuser" && $from_id != 0) {
 
-    $newuser = sprintf($textbotlang['Admin']['reportgroup']['newUser'], $first_name, $username, "<a href = \"tg://user?id=$from_id\">$from_id</a>");
+    $newuser = sprintf($textbotlang['Admin']['reportgroup']['newUser'], htmlspecialchars($first_name), $username, "<a href = \"tg://user?id=$from_id\">$from_id</a>");
     foreach ($admin_ids as $admin) {
         sendmessage($admin, $newuser, null, 'HTML');
     }
@@ -109,7 +126,7 @@ $reportcron = select("topicid", "idreport", "report", "reportcron", "select")['i
 $otherservice = select("topicid", "idreport", "report", "otherservice", "select")['idreport'];
 
 $paymentreports = select("topicid", "idreport", "report", "paymentreport", "select")['idreport'];
-$admin_idsmain = select("admin", "id_admin", null, null, "FETCH_COLUMN");
+$admin_idsmain = select("admin", "id_admin", "rule", "administrator", "FETCH_COLUMN");
 $id_invoice = select("invoice", "id_invoice", null, null, "FETCH_COLUMN");
 $userbot = select("user", "*", "id", $dataBase['id_user'], "select");
 if ($user['bottype'] != $ApiToken) {
@@ -119,7 +136,7 @@ if ($user['username'] != $username) {
     update("user", "username", $username, "id", $from_id);
 }
 if ($text == "/start") {
-    $textstart = "✋سلام $first_name عزیز به ربات ما خوش اومدی.
+    $textstart = "✋سلام " . htmlspecialchars($first_name) . " عزیز به ربات ما خوش اومدی.
 
 برای ادامه  یک بخش را انتخاب کنید:";
     if (!in_array($from_id, $admin_ids)) {
@@ -590,7 +607,7 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
     step("statusnamecustom", $from_id);
     return;
 } elseif ($text == $text_bot_var['btn_keyboard']['buy'] || $user['step'] == "statusnamecustom") {
-    $locationproduct = $pdo->prepare("SELECT * FROM marzban_panel  WHERE status = 'active' AND (agent = ? OR agent = 'all')");
+    $locationproduct = $pdo->prepare("SELECT * FROM marzban_panel  WHERE status = 'active' AND (agent = ? OR agent = 'all') ORDER BY display_order, id");
     $locationproduct->bindValue(1, $userbot['agent'], PDO::PARAM_STR);
     $locationproduct->execute();
     if (($locationproduct)->rowCount() == 0) {
@@ -600,7 +617,7 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
     if (($locationproduct)->rowCount() == 1) {
         $location = ($locationproduct)->fetch(PDO::FETCH_ASSOC)['name_panel'];
         $locationproduct = select("marzban_panel", "*", "name_panel", $location, "select");
-        $query = "SELECT * FROM product WHERE (Location = '{$locationproduct['name_panel']}' OR Location = '/all')AND agent= '{$userbot['agent']}'";
+        $query = "SELECT * FROM product WHERE (Location = '{$locationproduct['name_panel']}' OR Location = '/all')AND agent= '{$userbot['agent']}' AND status_product != 'disable' ORDER BY display_order, id";
         $stmt = $pdo->prepare($query);
         $stmt->execute();
         $productnotexits = $stmt->rowCount();
@@ -703,7 +720,7 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
             return;
         }
     }
-    $query = "SELECT * FROM product WHERE (Location = '{$locationproduct['name_panel']}' OR Location = '/all')AND agent= '{$userbot['agent']}'";
+    $query = "SELECT * FROM product WHERE (Location = '{$locationproduct['name_panel']}' OR Location = '/all')AND agent= '{$userbot['agent']}' AND status_product != 'disable' ORDER BY display_order, id";
     $stmt = $pdo->prepare($query);
     $stmt->execute();
     $productnotexits = $stmt->rowCount();
@@ -750,7 +767,7 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
     $categorynames = select("category", "remark", "id", $categorynames, "select")['remark'];
     $userdate = json_decode($user['Processing_value'], true);
     $locationproduct = select("marzban_panel", "*", "name_panel", $userdate['name_panel'], "seelct");
-    $query = "SELECT * FROM product WHERE (Location = '{$locationproduct['name_panel']}' OR Location = '/all') AND category = '$categorynames' AND agent= '{$userbot['agent']}' ";
+    $query = "SELECT * FROM product WHERE (Location = '{$locationproduct['name_panel']}' OR Location = '/all') AND category = '$categorynames' AND agent= '{$userbot['agent']}' AND status_product != 'disable' ORDER BY display_order, id";
     $statuscustomvolume = json_decode($locationproduct['customvolume'], true)[$userbot['agent']];
     if ($statuscustomvolume == "1" && $locationproduct['type'] != "Manualsale") {
         $statuscustom = true;
@@ -859,7 +876,7 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
     }
     if (!in_array($user['step'], ["endstepuserscustom", "getvolumecustomuser"])) {
         $product = select("product", "*", "code_product", $code_product);
-        if ($product == false) {
+        if ($product == false || ($product['status_product'] ?? '') == "disable") {
             sendmessage($from_id, "❌ خطایی در هنگام خرید رخ داده لطفا مراحل را از اول طی کنید", $keyboard, 'html');
             step("home", $from_id);
             return;
@@ -949,7 +966,7 @@ if ($text == $text_bot_var['btn_keyboard']['buy'] && $setting['active_step_note'
     if (isset($userdate['code_product'])) {
         $product = $userdate['code_product'];
         $product = select("product", "*", "code_product", $product);
-        if ($product == false || ($product['Location'] != $marzban_list_get['name_panel'] && $product['Location'] != "/all")) {
+        if ($product == false || ($product['status_product'] ?? '') == "disable" || ($product['Location'] != $marzban_list_get['name_panel'] && $product['Location'] != "/all")) {
             sendmessage($from_id, "❌ خطایی رخ داده است مراحل خرید را از اول انجام دهید", $keyboard, 'html');
             step("home", $from_id);
             return;
@@ -1317,7 +1334,7 @@ $textonebuy
 ⚜️ نام کاربری: @$username
 💸 مبلغ پرداختی: $format_price_cart تومان
                 
-توضیحات: $caption $text
+توضیحات: " . htmlspecialchars("$caption $text") . "
 ✍️ در صورت درست بودن رسید پرداخت را تایید نمایید.";
     foreach ($admin_ids as $id_admin) {
         if ($photo) {
@@ -1587,7 +1604,7 @@ $output
     savedata("save", "name_panel", $nameloc['Service_location']);
     deletemessage($from_id, $message_id);
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
-    $query = "SELECT * FROM product WHERE (Location = '{$nameloc['Service_location']}' OR Location = '/all')AND agent= '{$userbot['agent']}'";
+    $query = "SELECT * FROM product WHERE (Location = '{$nameloc['Service_location']}' OR Location = '/all')AND agent= '{$userbot['agent']}' ORDER BY display_order, id";
     $stmt = $pdo->prepare($query);
     $stmt->execute();
     $productnotexits = $stmt->rowCount();
@@ -1598,7 +1615,7 @@ $output
         } else {
             $statuscustom = false;
         }
-        $query = "SELECT * FROM product WHERE (Location = '{$marzban_list_get['name_panel']}' OR Location = '/all')AND agent= '{$userbot['agent']}'";
+        $query = "SELECT * FROM product WHERE (Location = '{$marzban_list_get['name_panel']}' OR Location = '/all')AND agent= '{$userbot['agent']}' ORDER BY display_order, id";
         $prodcut = KeyboardProduct($marzban_list_get['name_panel'], $query, 0, "selectproductextends_", $statuscustom, "backuser", null, $customvolume = "customvolumeextend");
         sendmessage($from_id, "🛍️ لطفاً سرویسی که می‌خواهید تمدید کنید را انتخاب کنید!", $prodcut, 'HTML');
     } else {
@@ -1627,7 +1644,6 @@ $output
     sendmessage($from_id, $textcustom, $backuser, 'html');
     step('gettimecustomvolextend', $from_id);
 } elseif ($user['step'] == "gettimecustomvolextend") {
-    savedata("save", "volume", $text);
     $userdate = json_decode($user['Processing_value'], true);
     $stmt = $pdo->prepare("SELECT * FROM invoice WHERE id_invoice = ? AND id_user = ? AND bottype = ?");
     $stmt->execute([$userdate['id_invoice'], $from_id, $ApiToken]);
@@ -1650,8 +1666,9 @@ $output
         sendmessage($from_id, $textbotlang['common']['invalidVolume'], $backuser, 'HTML');
         return;
     }
+    savedata("save", "volume", $text);
     $customtimevalueprice = $setting['pricetime'];
-    $textcustom = "⌛️ زمان سرویس خود را انتخاب نمایید 
+    $textcustom = "⌛️ زمان سرویس خود را انتخاب نمایید
     📌 تعرفه هر روز  : $customtimevalueprice  تومان
     ⚠️ حداقل زمان $maintime روز  و حداکثر $maxtime روز  می توانید تهیه کنید";
     sendmessage($from_id, $textcustom, $backuser, 'html');
@@ -1759,6 +1776,9 @@ $output
             "price_productMain" => $priceproductmain,
         );
     } else {
+        if (!ctype_digit((string) ($userdate['volume'] ?? '')) || !ctype_digit((string) ($userdate['time'] ?? ''))) {
+            return;
+        }
         $custompricevalue = $setting['pricevolume'];
         $customtimevalueprice = $setting['pricetime'];
         $custompricevalueBot = $setting['minpricevolume'];

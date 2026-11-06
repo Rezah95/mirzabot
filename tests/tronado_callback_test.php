@@ -19,8 +19,8 @@ function select($table, $fields = '*', $field = null, $value = null, $mode = 'se
     if ($table === 'topicid') { return ['idreport' => 1]; }
     if ($table === 'admin') { return []; }
     if ($table === 'setting') { return ['Channel_Report' => '']; }
-    expectCallback(in_array($table, ['user', 'Payment_report'], true), 'Unexpected table');
-    expectCallback(in_array($field, ['id', 'id_order'], true), 'Unexpected lookup');
+    expectCallback(in_array($table, ['user', 'Payment_report', 'invoice', 'service_other'], true), 'Unexpected table');
+    expectCallback(in_array($field, ['id', 'id_order', 'id_payment'], true), 'Unexpected lookup');
     $q = $pdo->prepare("SELECT * FROM `$table` WHERE `$field` = ?");
     $q->execute([$value]);
     return $q->fetch(PDO::FETCH_ASSOC);
@@ -61,6 +61,9 @@ try {
     $pdo->exec("CREATE TABLE user (id INT PRIMARY KEY, Balance BIGINT NOT NULL, username VARCHAR(100),
         Processing_value TEXT, Processing_value_one TEXT, Processing_value_tow TEXT, Processing_value_four TEXT)");
     $pdo->exec("INSERT INTO user VALUES (123, 1000, 'tester', '0', '0', '0', '0')");
+    // Top-up callbacks still resolve the new optional order relationships.
+    $pdo->exec('CREATE TABLE invoice (id_payment VARCHAR(80))');
+    $pdo->exec('CREATE TABLE service_other (id_payment VARCHAR(80))');
     $callback = ['PaymentId' => '0123456789', 'OrderStatusID' => 30, 'IsPaid' => true,
         'Wallet' => 'T' . str_repeat('1', 33), 'TronAmount' => 7.1,
         'UserPaidTomanAmount' => 500000, 'TomanAmountWithoutWage' => 450000];

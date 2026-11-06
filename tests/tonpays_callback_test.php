@@ -22,6 +22,10 @@ require_once dirname(__DIR__) . '/payment/tonpays_lib.php';
 require_once dirname(__DIR__) . '/gateway_labels.php';
 require_once dirname(__DIR__) . '/gateway_settings_admin.php';
 require_once dirname(__DIR__) . '/db/Schema.php';
+$functions = file_get_contents(dirname(__DIR__) . '/function.php');
+$linkStart = strpos($functions, 'function linkPaymentToOrder(');
+$linkEnd = strpos($functions, 'function paymentOrder(', $linkStart);
+eval(substr($functions, $linkStart, $linkEnd - $linkStart));
 $socket = getenv('TONPAYS_TEST_SOCKET');
 if (!$socket) { echo "Set TONPAYS_TEST_SOCKET to an isolated test MySQL socket\n"; exit(1); }
 checkTonpays(str_starts_with($socket, '/tmp/mirza-tonpays-test.') && is_file(dirname($socket) . '/mysql.pid'), 'Refusing a non-test database');
@@ -161,7 +165,7 @@ try {
     $end = strpos($indexSource, "} elseif (\$datain === 'tronadopay') {", $start);
     $creationRoute = 'if (false) {' . substr($indexSource, $start, $end - $start) . '}';
     $datain = 'tonpays'; $from_id = -1; $keyboard = null; $domainhosts = 'bot.example.com';
-    $user = ['Processing_value' => '50000', 'Processing_value_tow' => 'addbalance', 'Processing_value_one' => '0'];
+    $user = ['step' => 'get_step_payment', 'Processing_value' => '50000', 'Processing_value_tow' => 'addbalance', 'Processing_value_one' => '0'];
     eval($creationRoute); // Invalid Telegram ID fails locally, with no gateway request.
     checkTonpays(str_contains(end($messages), 'TP-') && $pdo->query("SELECT payment_Status FROM Payment_report WHERE id_user = '-1'")->fetchColumn() === 'reject', 'Creation error was not reported or rejected');
     $pdo->exec('RENAME TABLE Payment_report TO saved_payment_report');

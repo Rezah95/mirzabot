@@ -29,7 +29,7 @@
   <a href="https://github.com/mahdiMGF2/mirzabot/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/mahdiMGF2/mirzabot?style=flat-square" alt="License"/>
   </a>
-  <img src="https://img.shields.io/badge/PHP-8.2-777BB4?style=flat-square&logo=php&logoColor=white" alt="PHP 8.2"/>
+  <img src="https://img.shields.io/badge/PHP-8.5.12%2B-777BB4?style=flat-square&logo=php&logoColor=white" alt="PHP 8.5.12+"/>
 </p>
 
 </div>
@@ -175,9 +175,9 @@ Mirza Bot integrates with the most popular VPN and network management panels:
 
 | Requirement | Details |
 |-------------|---------|
-| 🖥️ **OS** | A **clean** Ubuntu **22.04** or **24.04** server |
+| 🖥️ **OS** | A **clean** Ubuntu **22.04/24.04/26.04** or **Debian 12/13** server |
 | 🌐 **Domain** | A domain name pointed to your server's IP |
-| ⚙️ **Stack** | PHP 8.2, Apache, MySQL, SSL — *installed automatically by the script* |
+| ⚙️ **Stack** | PHP 8.5.12+, Apache, MySQL/MariaDB, SSL — *installed automatically by the script* |
 
 > 💡 Start from a fresh server with no existing web server, database, or panel installed.
 
@@ -332,7 +332,7 @@ Targeted checks: `php tests/tronado_gateway_test.php`, `php tests/gateway_names_
 
 An active system cron daemon does not prove that the PHP jobs succeeded. Check `storage/cron_status.json` and `cronbot/error_log`. The dispatcher records startup, the active job, completion and interruption; missing `mysqli` or `pdo_mysql` blocks jobs with a specific runtime error before partial database bootstrap can cause cascading `prepare() on null` failures.
 
-The installer and the administrator's cron repair now select a PHP CLI >= 8.2 that actually provides `mysqli_connect` and `pdo_mysql`. The generated crontab uses the verified versioned executable. VPS updates register the dispatcher as `www-data` using the compatible PHP selected for database migration. Registration replaces this bot's old commands atomically, preserves unrelated entries and reports failure instead of claiming success. A busy bulk-message worker returns to the dispatcher so later jobs can run.
+The installer and the administrator's cron repair now select a PHP CLI with MySQL extensions that actually provides `mysqli_connect` and `pdo_mysql`. The generated crontab uses the verified versioned executable. VPS updates register the dispatcher as `www-data` using the compatible PHP selected for database migration. Registration replaces this bot's old commands atomically, preserves unrelated entries and reports failure instead of claiming success. A busy bulk-message worker returns to the dispatcher so later jobs can run.
 
 For an existing VPS, inspect the exact binary in `sudo crontab -u www-data -l`, then check its modules as the same user, for example:
 
@@ -356,7 +356,7 @@ caches are maintained before returning the driver result. WireGuard link handlin
 is retained. The dispatcher records `started_at` separately from completion time
 and skips a job already started in the same minute.
 
-Requires PHP >= 8.2 with `mysqli` and `pdo_mysql` for the CLI as well as the web
+Requires PHP >= 8.5.12 with `mysqli` and `pdo_mysql` for the CLI as well as the web
 runtime. Use the normal updater and its `table.php` schema migration; database
 structure is defined under `db/`, rather than duplicated in `table.php`. Back up
 before upgrading. Existing invoices, custom settings and provider credentials must
@@ -370,6 +370,12 @@ Graphify artifacts are refreshed locally and remain untracked under the existing
 `graphify-out/` ignore rule. Local tests use fixtures and an isolated MySQL server;
 they do not certify live provider connectivity or a production deployment.
 
+
+### Development integration (0.9.0-dev.1)
+
+This local prerelease integrates upstream 0.9 with fork payment, discount, audience and cron protections. It requires PHP 8.5.12+ for the application; syntax and isolated regression checks on older PHP do not certify that runtime. Stable production remains the last approved release until this candidate is approved. No push or deployment is included.
+
+Gateway payments link to their pending invoice or service order. Telegram Stars validates the payer, currency and stored amount before claiming delivery; failed or refunded deliveries do not receive cashback. Database upgrades preserve fulfillment/discount indexes alongside the new payment relationships. The updater preserves fork backups and text overrides, and provides both `migrate-db` and `update-php` commands.
 
 ### Purchase-based audiences (0.8.0)
 

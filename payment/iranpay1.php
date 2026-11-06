@@ -21,7 +21,7 @@ $StatusPayment = $data['status'];
 $setting = select("setting", "*");
 $PaySetting = select("PaySetting", "*", "NamePay", "marchent_floypay", "select")['ValuePay'];
 $Payment_reports = select("Payment_report", "*", "id_order", $hashid, "select");
-if (!is_array($Payment_reports)) {
+if (!is_array($Payment_reports) || $Payment_reports['Payment_Method'] !== "Currency Rial 1") {
     http_response_code(404);
     exit('order not found');
 }
@@ -45,7 +45,7 @@ if ($StatusPayment == 100) {
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_ENCODING => '',
         CURLOPT_MAXREDIRS => 10,
-        CURLOPT_TIMEOUT => 0,
+        CURLOPT_TIMEOUT => 20,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
         CURLOPT_POSTFIELDS => json_encode($data),
@@ -56,7 +56,6 @@ if ($StatusPayment == 100) {
         ),
     ));
     $response = curl_exec($curl);
-    curl_close($curl);
     $response = json_decode($response, true);
     if (!empty($response['status']) && $response['status'] == 100) {
         $payment_status = $textbotlang['paymentGateway']['statusSuccess'];

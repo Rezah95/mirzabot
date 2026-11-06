@@ -21,11 +21,9 @@ function request_wgmate($location, $method, $path, $body = null)
     $response = curl_exec($ch);
     if ($response === false) {
         $error = curl_error($ch);
-        curl_close($ch);
         return array('status' => null, 'body' => null, 'error' => $error);
     }
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
     return array('status' => $status, 'body' => $response);
 }
 function getuser_wgmate($username_account, $location)
@@ -55,7 +53,9 @@ function links_wgmate($location, $user_id)
 }
 function adduser_wgmate($location, $data_limit, $username_ac, $timestamp, $name_product, $note = '', $limitip = null)
 {
-    $product = select('product', "*", "name_product", $name_product, "select");
+    $stmt = $GLOBALS['pdo']->prepare("SELECT * FROM product WHERE name_product = ? AND (Location = ? OR Location = '/all') ORDER BY Location = '/all' LIMIT 1");
+    $stmt->execute([$name_product, $location]);
+    $product = $stmt->fetch(PDO::FETCH_ASSOC);
     $panel = select("marzban_panel", "*", "name_panel", $location, "select");
     $template = json_decode($product['inbounds'] ?? $panel['proxies'] ?? '', true);
     $data = array(

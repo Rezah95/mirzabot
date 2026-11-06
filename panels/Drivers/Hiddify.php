@@ -65,7 +65,7 @@ class HiddifyPanelDriver extends BasePanelDriver
         $invoice = $vars['invoice'];
         $domainhosts = $vars['domainhosts'];
         $UsernameData = getdatauser($username, $Get_Data_Panel['name_panel']);
-        if (!isset($UsernameData)) {
+        if (empty($UsernameData)) {
             $Output = array(
                 'status' => 'Unsuccessful',
                 'msg' => "Not Connected TO paonel"
@@ -144,11 +144,18 @@ class HiddifyPanelDriver extends BasePanelDriver
                 'msg' => 'user not found on panel'
             );
         } else {
-            removeuserhi($name_panel, $data_user['uuid']);
-            $Output = array(
-                'status' => 'successful',
-                'msg' => ""
-            );
+            $removeResponse = removeuserhi($name_panel, $data_user['uuid']);
+            if (!empty($removeResponse['error']) || $removeResponse['status'] < 200 || $removeResponse['status'] >= 300) {
+                $Output = array(
+                    'status' => 'Unsuccessful',
+                    'msg' => $removeResponse['error'] ?? $removeResponse['body']
+                );
+            } else {
+                $Output = array(
+                    'status' => 'successful',
+                    'msg' => ""
+                );
+            }
         }
         return $Output;
     }
@@ -202,7 +209,7 @@ class HiddifyPanelDriver extends BasePanelDriver
         $panel = $vars['panel'];
         $day = $time_new - time();
         $data = array(
-            "package_days" => $day / 86400,
+            "package_days" => $time_new == 0 ? 111111 : (int) round($day / 86400),
             "usage_limit_GB" => $data_limit_new / pow(1024, 3),
             "start_date" => null
         );
@@ -235,7 +242,7 @@ class HiddifyPanelDriver extends BasePanelDriver
         $data = array(
             "current_usage_GB" => $datauser['current_usage_GB'],
             "usage_limit_GB" => $datauser['usage_limit_GB'],
-            "package_days" => $limit_time_new == 0 ? 0 : ($new_limit - time()) / 86400,
+            "package_days" => $limit_time_new == 0 ? 0 : (int) round(($new_limit - time()) / 86400),
             "start_date" => null
         );
         return $this->applyModify($username_account, $panel['name_panel'], $data);

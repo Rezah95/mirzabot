@@ -68,6 +68,18 @@ if (!$usercheck || !is_string($usercheck['token']) || !hash_equals($usercheck['t
     return;
 }
 $data['user_id'] = $usercheck['id'];
+if ($method !== "GET") {
+    $userLock = $pdo->prepare("SELECT GET_LOCK(?, 0)");
+    $userLock->execute(["mirza_user_" . $usercheck['id']]);
+    if ((int) $userLock->fetchColumn() !== 1) {
+        http_response_code(429);
+        echo json_encode([
+            'status' => false,
+            'msg' => "Too many requests",
+        ]);
+        return;
+    }
+}
 
 if ($usercheck['User_Status'] == "block") {
     http_response_code(402);
@@ -76,6 +88,20 @@ if ($usercheck['User_Status'] == "block") {
         'msg' => "user blocked",
     ]);
     return;
+}
+
+if (!in_array($usercheck['id'], select("admin", "id_admin", null, null, "FETCH_COLUMN"))) {
+    if ($setting['Bot_Status'] == "botstatusoff"
+        || ($setting['verifystart'] == "onverify" && intval($usercheck['verify']) == 0)
+        || ($setting['roll_Status'] == "rolleon" && $usercheck['roll_Status'] == 0)
+        || ($setting['get_number'] == "onAuthenticationphone" && $usercheck['number'] == "none")) {
+        http_response_code(403);
+        echo json_encode([
+            'status' => false,
+            'msg' => "access denied",
+        ]);
+        return;
+    }
 }
 
 $errorreport = topicId('errorreport');
@@ -356,7 +382,7 @@ function mini_countries(array $data, string $method): void
     }
     $user_info = select("user", "*", "token", $tokencheck, "select");
     if ($user_info) {
-        $stmt = $pdo->prepare("SELECT * FROM marzban_panel WHERE status = 'active' AND (agent = :agent OR agent = 'all') AND type != 'Manualsale'");
+        $stmt = $pdo->prepare("SELECT * FROM marzban_panel WHERE status = 'active' AND (agent = :agent OR agent = 'all') AND type != 'Manualsale' ORDER BY display_order, id");
         $stmt->bindParam(':agent', $user_info['agent']);
         $stmt->execute();
         $panel_list = [];
@@ -426,7 +452,7 @@ function mini_categories(array $data, string $method): void
             ));
             return;
         }
-        $stmt = $pdo->prepare("SELECT * FROM category");
+        $stmt = $pdo->prepare("SELECT * FROM category ORDER BY display_order, id");
         $stmt->execute();
         $category_list = [];
         $panel = select("marzban_panel", "*", "code_panel", $data['id_panel'], "select");
@@ -656,7 +682,7 @@ function mini_services(array $data, string $method): void
             $time_range_day = "AND Service_time = :trd";
             $queryParams[':trd'] = $data['time_range_day'];
         }
-        $stmt = $pdo->prepare("SELECT * FROM product WHERE (Location = :loc OR Location = '/all')AND agent= :ag AND status_product != 'disable' $category_remarks $time_range_day");
+        $stmt = $pdo->prepare("SELECT * FROM product WHERE (Location = :loc OR Location = '/all')AND agent= :ag AND status_product != 'disable' $category_remarks $time_range_day ORDER BY display_order, id");
         $stmt->execute($queryParams);
         $product_list = [];
         $countorder = null;
@@ -789,13 +815,26 @@ function mini_purchase(array $data, string $method): void
         ));
         return;
     }
-    if ($panel['status'] == "disable") {
+    $hidden_users = json_decode($panel['hide_user'] ?? '', true);
+    if ($panel['status'] != "active" || !in_array($panel['agent'], [$usercheck['agent'], 'all']) || $panel['type'] == "Manualsale" || (is_array($hidden_users) && in_array($usercheck['id'], $hidden_users))) {
         http_response_code(500);
         echo json_encode(array(
             'status' => false,
             'msg' => $textbotlang['users']['sell']['panelInactive']
         ));
         return;
+    }
+    if (is_numeric($panel['limit_panel'])) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM invoice WHERE Status IN ('active', 'end_of_time', 'end_of_volume', 'sendedwarn', 'send_on_hold') AND Service_location = ?");
+        $stmt->execute([$panel['name_panel']]);
+        if ((int) $stmt->fetchColumn() >= intval($panel['limit_panel'])) {
+            http_response_code(500);
+            echo json_encode(array(
+                'status' => false,
+                'msg' => strip_tags($textbotlang['users']['sell']['panelCapacityFull'])
+            ));
+            return;
+        }
     }
     $user_info = $usercheck;
     if (empty($data['custom_service'])) {
@@ -1055,7 +1094,7 @@ function mini_purchase(array $data, string $method): void
     $countinvoice = (int) $stmt->fetchColumn();
     if ($affiliatescommission['status_commission'] == "oncommission" && ($user_info['affiliates'] != null && intval($user_info['affiliates']) != 0)) {
         if ($marzbanporsant_one_buy['porsant_one_buy'] == "on_buy_porsant") {
-            if ($countinvoice == 1) {
+            if ($countinvoice <= 1) {
                 $result = ($product['price_product'] * $setting['affiliatespercentage']) / 100;
                 $user_Balance = select("user", "*", "id", $user_info['affiliates'], "select");
                 $Balance_prim = $user_Balance['Balance'] + $result;
@@ -1078,31 +1117,30 @@ function mini_purchase(array $data, string $method): void
                     ]);
                 }
                 sendmessage($user_info['affiliates'], $textadd, null, 'HTML');
-            } else {
-
-                $result = ($product['price_product'] * $setting['affiliatespercentage']) / 100;
-                $user_Balance = select("user", "*", "id", $user_info['affiliates'], "select");
-                $Balance_prim = $user_Balance['Balance'] + $result;
-                if (intval($setting['scorestatus']) == 1) {
-                    sendmessage($user_info['affiliates'], $textbotlang['users']['affiliates']['pointsEarned2b'], null, 'html');
-                    $scorenew = $user_Balance['score'] + 2;
-                    update("user", "score", $scorenew, "id", $user_info['affiliates']);
-                }
-                update("user", "Balance", $Balance_prim, "id", $user_info['affiliates']);
-                $result = number_format($result);
-                $dateacc = date('Y/m/d H:i:s');
-                $textadd = sprintf($textbotlang['users']['affiliates']['commissionPaidMiniapp2'], $result);
-                $textreportport = sprintf($textbotlang['Admin']['reportgroup']['commissionPaidMiniapp2'], $result, $user_info['affiliates'], $user_info['id'], $dateacc);
-                if (strlen($setting['Channel_Report']) > 0) {
-                    telegram('sendmessage', [
-                        'chat_id' => $setting['Channel_Report'],
-                        'message_thread_id' => $porsantreport,
-                        'text' => $textreportport,
-                        'parse_mode' => "HTML"
-                    ]);
-                }
-                sendmessage($user_info['affiliates'], $textadd, null, 'HTML');
             }
+        } else {
+            $result = ($product['price_product'] * $setting['affiliatespercentage']) / 100;
+            $user_Balance = select("user", "*", "id", $user_info['affiliates'], "select");
+            $Balance_prim = $user_Balance['Balance'] + $result;
+            if (intval($setting['scorestatus']) == 1) {
+                sendmessage($user_info['affiliates'], $textbotlang['users']['affiliates']['pointsEarned2b'], null, 'html');
+                $scorenew = $user_Balance['score'] + 2;
+                update("user", "score", $scorenew, "id", $user_info['affiliates']);
+            }
+            update("user", "Balance", $Balance_prim, "id", $user_info['affiliates']);
+            $result = number_format($result);
+            $dateacc = date('Y/m/d H:i:s');
+            $textadd = sprintf($textbotlang['users']['affiliates']['commissionPaidMiniapp2'], $result);
+            $textreportport = sprintf($textbotlang['Admin']['reportgroup']['commissionPaidMiniapp2'], $result, $user_info['affiliates'], $user_info['id'], $dateacc);
+            if (strlen($setting['Channel_Report']) > 0) {
+                telegram('sendmessage', [
+                    'chat_id' => $setting['Channel_Report'],
+                    'message_thread_id' => $porsantreport,
+                    'text' => $textreportport,
+                    'parse_mode' => "HTML"
+                ]);
+            }
+            sendmessage($user_info['affiliates'], $textadd, null, 'HTML');
         }
     }
     if (intval($setting['scorestatus']) == 1) {

@@ -12,7 +12,7 @@ function get_userwg($username, $namepanel)
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_ENCODING => '',
         CURLOPT_MAXREDIRS => 10,
-        CURLOPT_TIMEOUT => 0,
+        CURLOPT_TIMEOUT => 20,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
         CURLOPT_CUSTOMREQUEST => 'GET',
@@ -92,8 +92,12 @@ function addpear($namepanel, $usernameac)
         );
     }
     $ipconfig = json_decode($ipconfig['body'], true);
-    if (!empty($ipconfig['status']) && $ipconfig['status'] == false)
-        return $ipconfig;
+    if (empty($ipconfig['status']) || empty($ipconfig['data'])) {
+        return array(
+            'status' => false,
+            'msg' => $ipconfig['message'] ?? 'no available ip'
+        );
+    }
     $key = array_keys($ipconfig['data'])[0];
     $ipconfig = $ipconfig['data'][$key][0];
     $config = array(

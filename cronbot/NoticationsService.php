@@ -82,7 +82,7 @@ class ServiceMonitor
                 $this->shouldRemoveService($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
             if ($this->status_cron['remove_volume'])
                 $this->shouldRemoveServiceـvolume($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
-            if ($data['panel']['inboundstatus'] == "oninbounddisable" && $data['panel']['type'] == "marzban")
+            if ($data['panel']['inboundstatus'] == "oninbounddisable" && $data['panel']['type'] == "marzban" && $data['panel']['version_panel'] != "1")
                 $this->active_inbound_expire($data['invoice'], $data['userData'], $data['panel']);
         }
     }
@@ -149,6 +149,8 @@ class ServiceMonitor
     private function shouldRemoveService($invoice, $user, $userData, $username)
     {
         if (!in_array($userData['status'], ['limited', 'expired']))
+            return false;
+        if (empty($userData['expire']))
             return false;
         $timeService = $userData['expire'] - time();
         $daysRemaining = intval($timeService / 86400);
@@ -225,10 +227,9 @@ class ServiceMonitor
     }
     private function active_inbound_expire($invoice, $userData, $panel_info)
     {
-        if ($invoice['uuid'] != null || $userData['data_limit_reset'] != "no_reset")
+        if ($invoice['uuid'] != null || $userData['data_limit_reset'] != "no_reset" || !in_array($userData['status'], ['expired', 'limited']))
             return;
         $inbound = explode("*", $panel_info['inbound_deactive']);
-        update("invoice", "uuid", json_encode($userData['uuid']), "id_invoice", $invoice['id_invoice']);
         $proxies = [];
         $proxies[$inbound[0]] = new stdClass();
         ;
@@ -237,7 +238,9 @@ class ServiceMonitor
             "proxies" => $proxies,
             "inbounds" => $inbounds
         );
-        $this->Panel->Modifyuser($invoice['username'], $panel_info['code_panel'], $configs);
+        $modify = $this->Panel->Modifyuser($invoice['username'], $panel_info['name_panel'], $configs);
+        if (!empty($modify['status']))
+            update("invoice", "uuid", json_encode($userData['uuid']), "id_invoice", $invoice['id_invoice']);
     }
     private function checkTimeExpiration($invoice, $user, $userData, $username)
     {

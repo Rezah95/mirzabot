@@ -5,7 +5,7 @@ return [
     'create' => <<<SQL
         id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         id_user varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-        id_order varchar(2000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+        id_order varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
         time varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
         at_updated varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
         price varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
@@ -17,7 +17,7 @@ return [
         bottype varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
         message_id INT NULL,
         id_invoice varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
-        UNIQUE KEY uniq_payment_order (id_order(191))
+        UNIQUE KEY uniq_payment_order (id_order)
         SQL,
     'ensureUtf8mb4' => true,
     'columns' => [

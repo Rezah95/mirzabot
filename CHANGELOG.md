@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0-dev.1 — 2026-11-06 (prerelease)
+
+- Integrate upstream 0.9 with fork purchase audiences, transactional discounts, fulfillment status and cron diagnostics; resolve all remaining merge conflicts.
+- Link the four fork gateways to pending orders and preserve mixed wallet/online payment refunds. Run validated Stars handlers at early webhook dispatch, retain expected Star amounts, and stop cashback on failed delivery.
+- Preserve safe fork update sources, backups, custom files and language overrides alongside PHP upgrade/config compatibility. Keep `migrate-db` and `update-php`; do not add an unconditional full system upgrade to bot updates.
+- Combine payment relationship indexes with discount/expiry indexes; use a full unique payment-order index compatible with the incoming 80-character column. Count today's payments using their stored date-string format while retaining fulfilled-payment reporting.
+- Add isolated Stars and fresh/legacy MySQL schema regressions; adapt callback fixtures to linked orders. Application runtime now requires PHP 8.5.12+. Local checks on PHP 8.3 do not certify the full supported runtime or external providers.
+
+Upgrade: back up files/database, use a compatible PHP version and run normal schema migration. This is a local development candidate, with no remote publication or production deployment.
+
 ## 0.8.0 — 2026-10-16
 
 - Add zero-balance nonbuyers and users with exactly one older successful purchase to broadcast/forward and bulk-credit audiences, with user-group filtering and recipient previews.
