@@ -1866,13 +1866,55 @@ purge_installer_dir() {
     return 0
 }
 
+# Accept both flat hosting bundles and single-root GitHub source archives.
+mirza_update_package_root() {
+    local unpacked="$1" candidate found="" count=0
+    for candidate in "$unpacked" "$unpacked"/*; do
+        [ -d "$candidate" ] && [ ! -L "$candidate" ] || continue
+        [ -f "$candidate/index.php" ] && [ -f "$candidate/function.php" ] \
+            && [ -f "$candidate/table.php" ] && [ -f "$candidate/composer.json" ] \
+            && [ -s "$candidate/version" ] || continue
+        found="$candidate"; count=$((count + 1))
+    done
+    [ "$count" -eq 1 ] || return 1
+    printf '%s\n' "$found"
+}
+
+# Both trees are on the live filesystem. Never recursively delete a serving tree.
+mirza_publish_update() {
+    local live="$1" staged="$2" previous="$3" work
+    work=$(dirname "$previous")
+    [ -d "$live" ] && [ ! -L "$live" ] && [ -d "$staged" ] \
+        && [ ! -e "$previous" ] && [ ! -L "$previous" ] || return 1
+    [ "$(stat -c %d "$live")" = "$(stat -c %d "$staged")" ] || return 1
+    sudo mv -T -- "$live" "$previous" || return 1
+    if sudo mv -T -- "$staged" "$live"; then
+        printf 'Previous installation retained at: %s\n' "$previous"
+        return 0
+    fi
+    # A worker may recreate the old absolute path in the rename gap. Preserve it
+    # rather than deleting it; restore the intact previous tree if possible.
+    if [ -e "$live" ] || [ -L "$live" ]; then
+        sudo mv -T -- "$live" "$work/interrupted-writes" || {
+            printf 'Restore the previous installation from: %s\n' "$previous" >&2
+            return 1
+        }
+    fi
+    sudo mv -T -- "$previous" "$live" || {
+        printf 'Automatic rollback failed. Previous installation: %s\n' "$previous" >&2
+        return 1
+    }
+    echo 'Publication failed; previous installation restored.' >&2
+    return 1
+}
+
 move_extracted_files() {
     local src="$1" dest="$2"
     [ -d "$src" ] && [ -d "$dest" ] || return 1
     find "$src" -mindepth 1 -maxdepth 1 -exec mv -f -t "$dest/" {} +
 }
 
-# vpnbot instance dirs (not Default/update). update_bot wipes BOT_DIR.
+# vpnbot instance dirs (not Default/update); restored into the staged update.
 VPNBOT_BACKUP="/tmp/mirza_vpnbot_backup"
 
 vpnbot_instance_count() {
@@ -2777,7 +2819,8 @@ function migrate_database() {
 function update_bot() {
     clear
     banner
-    BOT_DIR="/var/www/html/mirzaprobotconfig"
+    local BOT_DIR="/var/www/html/mirzaprobotconfig"
+    local MIRZA_LIVE_DIR="$BOT_DIR" MIRZA_UPDATE_WORK
     if [ ! -d "$BOT_DIR" ]; then
         _sec "Update"
         printf " ${C_BAD}●${CR} ${C_BAD}Mirza is not installed. Install it first.${CR}\n"
@@ -2814,9 +2857,10 @@ function update_bot() {
     rm -rf "$TEMP_DIR"; mkdir -p "$TEMP_DIR"
     run_step "Downloading ${TARGET_LABEL}" "wget -q -O '$TEMP_DIR/bot.zip' '$ZIP_URL'" \
         || { show_step_error; echo -e "\e[91mError: Failed to download update package.\033[0m"; exit 1; }
-    run_step "Extracting update package" "unzip -o -q '$TEMP_DIR/bot.zip' -d '$TEMP_DIR'" \
+    mkdir -p "$TEMP_DIR/unpacked" || return 1
+    run_step "Extracting update package" "unzip -o -q '$TEMP_DIR/bot.zip' -d '$TEMP_DIR/unpacked'" \
         || { show_step_error; echo -e "\e[91mError: Failed to extract update package.\033[0m"; exit 1; }
-    EXTRACTED_DIR=$(find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
+    EXTRACTED_DIR=$(mirza_update_package_root "$TEMP_DIR/unpacked") || EXTRACTED_DIR=""
     if [ -z "$EXTRACTED_DIR" ] || [ ! -d "$EXTRACTED_DIR" ]; then
         echo -e "\e[91mError: Extracted update folder not found. Aborting before touching the current install.\033[0m"
         rm -rf "$TEMP_DIR"; sleep 2; show_menu; return 1
@@ -2849,25 +2893,25 @@ function update_bot() {
         echo -e "\e[91mError: vpnbot backup incomplete ($_vpnbot_bak/$_vpnbot_live). Update aborted.\033[0m"
         rm -rf "$TEMP_DIR"; sleep 2; show_menu; return 1
     fi
-    sudo rm -rf "$BOT_DIR" || {
-        echo -e "\e[91mFailed to remove old bot files!\033[0m"
-        echo -e "\e[93mvpnbot backup: ${VPNBOT_BACKUP}\033[0m"
-        exit 1
-    }
-    sudo mkdir -p "$BOT_DIR"
-    purge_installer_dir "$EXTRACTED_DIR"
-    purge_installer_dir "$BOT_DIR"
+    # Prepare and restore everything before touching the serving directory.
+    MIRZA_UPDATE_WORK=$(mktemp -d "$(dirname "$BOT_DIR")/.mirza-update.XXXXXX") || return 1
+    chmod 700 "$MIRZA_UPDATE_WORK" || return 1
+    BOT_DIR="$MIRZA_UPDATE_WORK/new"
+    CONFIG_PATH="$BOT_DIR/config.php"
+    mkdir "$BOT_DIR" || return 1
+    purge_installer_dir "$EXTRACTED_DIR" || return 1
+    purge_installer_dir "$BOT_DIR" || return 1
     move_extracted_files "$EXTRACTED_DIR" "$BOT_DIR" || {
         echo -e "\e[91mFile transfer failed!\033[0m"
         echo -e "\e[93mvpnbot backup: ${VPNBOT_BACKUP}\033[0m"
-        exit 1
+        return 1
     }
-    purge_installer_dir "$BOT_DIR"
+    purge_installer_dir "$BOT_DIR" || return 1
     if [ -f "$TEMP_CONFIG" ]; then
         sudo cp -a "$TEMP_CONFIG" "$CONFIG_PATH" || {
             echo -e "\e[91mConfig file restore failed!\033[0m"
             echo -e "\e[93mFull backup: ${UPDATE_BACKUP_DIR}\033[0m"
-            exit 1
+            return 1
         }
     fi
     for data_file in users.json cronbot/users.json cronbot/info cronbot/username.json \
@@ -2894,13 +2938,27 @@ function update_bot() {
     fi
     run_step "Restoring vpnbots" "restore_vpnbots '$BOT_DIR'" \
         || { show_step_error
-             echo -e "\e[91mError: Failed to restore vpnbots. Backup: ${VPNBOT_BACKUP}\033[0m"; }
+             echo "Update aborted before publication. Full backup: $UPDATE_BACKUP_DIR"; return 1; }
     _vpnbot_restored=$(vpnbot_instance_count "$BOT_DIR/vpnbot")
     if [ "$_vpnbot_bak" -gt 0 ] && [ "$_vpnbot_restored" -lt "$_vpnbot_bak" ]; then
-        echo -e "\e[91mError: vpnbot restore incomplete ($_vpnbot_restored/$_vpnbot_bak). Backup kept at ${VPNBOT_BACKUP}\033[0m"
-    else
-        rm -rf "$VPNBOT_BACKUP"
+        echo "Update aborted: incomplete vpnbot restoration. Backup: $VPNBOT_BACKUP"
+        return 1
     fi
+    for required in index.php function.php table.php config.php vendor/autoload.php; do
+        [ -s "$BOT_DIR/$required" ] && "$PHP_DB_BIN" -l "$BOT_DIR/$required" >/dev/null || {
+            echo "Update aborted: staged file validation failed ($required). Live installation unchanged."
+            return 1
+        }
+    done
+    sudo chown -R www-data:www-data "$BOT_DIR" && sudo chmod -R 755 "$BOT_DIR" || return 1
+    mirza_publish_update "$MIRZA_LIVE_DIR" "$BOT_DIR" "$MIRZA_UPDATE_WORK/previous" || {
+        echo "Update publication failed. Full backup: $UPDATE_BACKUP_DIR"
+        return 1
+    }
+    BOT_DIR="$MIRZA_LIVE_DIR"
+    CONFIG_PATH="$BOT_DIR/config.php"
+    # Keep both the full backup and the previous tree; neither is deleted by publication.
+    rm -rf "$VPNBOT_BACKUP"
     if [ -f "$BOT_DIR/install.sh" ]; then
         sed -i 's/\r$//' "$BOT_DIR/install.sh"
         if bash -n "$BOT_DIR/install.sh" 2>/dev/null; then
@@ -2913,8 +2971,6 @@ function update_bot() {
     else
         echo -e "\n\e[91mWarning: install.sh not found in update files.\033[0m"
     fi
-    sudo chown -R www-data:www-data "$BOT_DIR"
-    sudo chmod -R 755 "$BOT_DIR"
     DOMAIN_NAME=""
     if [ -f "$CONFIG_PATH" ]; then
         DOMAIN_NAME=$(grep "^\$domainhosts" "$CONFIG_PATH" | cut -d"'" -f2 | cut -d'/' -f1)

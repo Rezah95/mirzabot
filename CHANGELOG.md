@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.1-dev.1 — 2026-11-06 (prerelease)
+
+- Stop deleting the serving bot directory during updates. Prepare and validate a replacement first, then rename the old tree into a private retained workspace and publish the prepared tree.
+- Abort before publication on failed transfer, configuration/text/child-bot restoration, permissions or critical-file validation. On failed publication, retain concurrent writes and attempt to restore the old installation; print recovery paths if rollback cannot finish.
+- Detect project roots in flat hosting bundles and single-root GitHub ZIPs; reject missing or ambiguous roots before touching live files.
+- Add disposable filesystem regressions for ENOTEMPTY, open-directory writers, both archive layouts, custom config/text/child-bot preservation, staging failures and rename/rollback failures.
+
+Upgrade: no database or cron change. The existing master installer command is unchanged, but this fix is local to the development candidate until approved for production. Prior backups and the retired installation remain available; publication does not promise uninterrupted requests or automatic database rollback. This is a compatible updater repair after 0.9.0.
+
 ## 0.9.0 — 2026-11-06
 
 - Promote the maintainer-approved 0.9.0-dev.2 candidate with upstream 0.9 integration and retained fork payment, discount, audience and cron protections.
