@@ -862,7 +862,7 @@ elseif ($datain == "systemsms") {
                 ['text' => $textbotlang['keyboard']['cancelPinnedMessages'], 'callback_data' => 'typeservice-unpinmessage'],
             ],
             [
-                ['text' => '⏰ یادآوری خودکار تمدید', 'callback_data' => 'renewal_menu'],
+                ['text' => $textbotlang['renewalOffers']['entry'], 'callback_data' => 'renewal_menu'],
             ],
             [
                 ['text' => $textbotlang['keyboard']['backToMain'], 'callback_data' => 'backlistuser'],

@@ -11,6 +11,15 @@ function renewalReminderValidate(array $settings): void
             throw new InvalidArgumentException('Invalid reminder setting: ' . $key);
         }
     }
+    foreach (['warning_enabled' => [0, 1], 'warning_days' => [0, 365], 'warning_gb' => [0, 100000],
+        'warning_percent' => [1, 100], 'warning_valid_days' => [1, 365]] as $key => [$min, $max]) {
+        if (!array_key_exists($key, $settings)) { continue; } // Legacy settings before migration.
+        $value = filter_var($settings[$key], FILTER_VALIDATE_INT);
+        if ($value === false || $value < $min || $value > $max) { throw new InvalidArgumentException('Invalid warning setting'); }
+    }
+    if (!empty($settings['warning_enabled']) && (int) ($settings['warning_days'] ?? 3) === 0 && (int) ($settings['warning_gb'] ?? 5) === 0) {
+        throw new InvalidArgumentException('Enable at least one warning threshold');
+    }
     if (!discountValueValid(['price' => $settings['discount_value'] ?? null, 'discount_mode' => $settings['discount_mode'] ?? ''])
         || !is_string($settings['message_template'] ?? null)
         || trim($settings['message_template']) === ''
@@ -32,7 +41,7 @@ function renewalReminderSettings(PDO $pdo): array
 function renewalReminderSave(PDO $pdo, array $changes, ?int $now = null): void
 {
     $allowed = ['enabled', 'include_existing', 'interval_days', 'max_sends', 'message_template', 'discount_send',
-        'discount_mode', 'discount_value', 'discount_valid_days'];
+        'discount_mode', 'discount_value', 'discount_valid_days', 'warning_enabled', 'warning_days', 'warning_gb', 'warning_percent', 'warning_valid_days'];
     if (!$changes || array_diff(array_keys($changes), $allowed)) {
         throw new InvalidArgumentException('Unknown reminder setting');
     }
@@ -99,6 +108,18 @@ function renewalReminderRender(array $settings, array $invoice, int $number, int
     ]);
 }
 
+function renewalReminderCouponData(array $settings, array $invoice, int $now): array
+{
+    $coupon = [
+        'codeDiscount' => 'rn' . bin2hex(random_bytes(12)), 'price' => (int) $settings['discount_value'],
+        'discount_mode' => $settings['discount_mode'], 'target_user_id' => (string) $invoice['id_user'],
+        'limitDiscount' => 1, 'usedDiscount' => 0, 'agent' => 'allusers', 'usefirst' => 0, 'useuser' => 1,
+        'code_panel' => '/all', 'code_product' => 'all', 'time' => $now + (int) $settings['discount_valid_days'] * 86400,
+        'type' => 'extend',
+    ];
+    return $coupon;
+}
+
 function renewalReminderCoupon(PDO $pdo, array $settings, array $invoice, array $state, int $number, int $now): ?array
 {
     if ((int) $settings['discount_send'] === 0 || $number !== (int) $settings['discount_send']) { return null; }
@@ -107,13 +128,7 @@ function renewalReminderCoupon(PDO $pdo, array $settings, array $invoice, array 
         if (!$coupon) { throw new RuntimeException('Reminder discount was removed'); }
         return $coupon;
     }
-    $coupon = [
-        'codeDiscount' => 'rn' . bin2hex(random_bytes(12)), 'price' => (int) $settings['discount_value'],
-        'discount_mode' => $settings['discount_mode'], 'target_user_id' => (string) $invoice['id_user'],
-        'limitDiscount' => 1, 'usedDiscount' => 0, 'agent' => 'allusers', 'usefirst' => 0, 'useuser' => 1,
-        'code_panel' => '/all', 'code_product' => 'all', 'time' => $now + (int) $settings['discount_valid_days'] * 86400,
-        'type' => 'extend',
-    ];
+    $coupon = renewalReminderCouponData($settings, $invoice, $now);
     $pdo->beginTransaction();
     try {
         if (!discountCreate($pdo, $coupon)) { throw new RuntimeException('Reminder discount collision'); }

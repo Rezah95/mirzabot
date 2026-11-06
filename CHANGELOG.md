@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0-dev.2 — 2026-11-06 (prerelease)
+
+- Add opt-in automatic renewal coupons to the existing pre-expiry service monitor. The one-click preset offers 10% at three days or five GiB remaining, with independently configurable thresholds, percentage and validity.
+- Keep after-expiry reminders and their customized settings intact. New coupons are personal, single-use and renewal-only, with no restriction to one service. Each threshold sends once per expiry/quota cycle, including rearming after paid unlimited-time renewals.
+- Reserve delivery before sending, retry Telegram rate limits with the same coupon, and hold ambiguous deliveries instead of replaying. Avoid a duplicate ordinary warning for a handled condition.
+- Provide guided admin input, Persian/Arabic digit support, previews without real coupons, clear before/after status, delivery counters and a direct web text-editor link. New strings live in four language files under the editable Renewal offers category.
+- Add real-MySQL upgrade, coupon, retry and admin-flow regressions plus an actual web-editor save/runtime-load check for Persian, emoji and newlines.
+
+Upgrade: normal schema bootstrap adds warning settings and state without resetting existing messages or discounts. Offers default disabled; no new cron registration. Advance the existing 0.9.0 development target from dev.1 to dev.2. No production promotion, push or deployment.
+
 ## 0.9.0-dev.1 — 2026-11-06 (prerelease)
 
 - Integrate upstream 0.9 with fork purchase audiences, transactional discounts, fulfillment status and cron diagnostics; resolve all remaining merge conflicts.

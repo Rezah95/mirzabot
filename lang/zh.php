@@ -2,6 +2,59 @@
 
 
 return [
+        'renewalOffers' => [
+                'edit_web' => '📝 在网页编辑消息文本',
+                'stats' => '已发送：{sent} | 需检查：{errors}',
+                'entry' => '⏰ 续费提醒与优惠',
+                'hub' => '到期前：{before}
+到期后：{after}
+
+打开“到期前优惠”，可在剩余 3 天或 5 GB 时提供 10% 优惠。',
+                'after_enable' => '启用到期后提醒',
+                'after_disable' => '禁用到期后提醒',
+                'time' => '⏳ 服务“{service}”（{username}）将在 {days} 天后到期。',
+                'volume' => '📉 服务“{service}”（{username}）剩余 {remaining_gb} GB 流量。',
+                'coupon' => '🎁 续费可享 {percent}% 优惠。
+专属优惠码：{code}
+有效期至：{valid_until}
+仅限本人使用一次，仅用于服务续费。续费时请输入优惠码。',
+                'title' => '🎁 到期前续费优惠',
+                'on' => '✅ 已启用',
+                'off' => '❌ 已禁用',
+                'summary' => '{status}
+
+时间阈值：剩余 {days} 天
+流量阈值：剩余 {gb} GB
+优惠：{percent}% | 优惠码有效期：{valid_days} 天
+
+每个条件在每个有效期/配额周期仅发送一次。设为零可禁用该条件。
+优惠码仅限本人使用一次，可用于此用户的服务续费。
+到期后提醒单独设置。',
+                'open' => '🎁 到期前优惠',
+                'enable' => '启用优惠',
+                'disable' => '禁用优惠',
+                'preset' => '✨ 启用 10%：3 天 / 5 GB',
+                'days_button' => '⏳ 时间：{value} 天',
+                'gb_button' => '📉 流量：{value} GB',
+                'percent_button' => '🎁 优惠：{value}%',
+                'valid_button' => '📅 有效期：{value} 天',
+                'preview_time' => '👁 预览时间提醒',
+                'preview_volume' => '👁 预览流量提醒',
+                'back' => '返回',
+                'editor_hint' => '📝 编辑消息：网页后台 → 机器人文本 → 续费优惠',
+                'saved' => '✅ 设置已保存。',
+                'preview_note' => '👁 预览 — 示例优惠码无法使用。',
+                'ask_days' => '提前多少天发送？1–365；零表示禁用此条件。示例：3',
+                'ask_gb' => '剩余多少 GB 时发送？1–100000；零表示禁用此条件。示例：5',
+                'ask_percent' => '请输入优惠百分比（1–100）。示例：10',
+                'ask_valid_days' => '优惠码有效多少天？1–365。示例：7',
+                'invalid' => '数值无效。请输入指定范围内的整数。启用前至少一个阈值必须大于零。',
+                'error' => '无法读取或保存设置。请检查数据库更新。',
+                'renew' => '🔄 续费服务',
+                'group' => '续费优惠',
+                'sample_service' => '示例服务',
+        ],
+
         'bottext' => [
                 'open_button' => '📝 编辑机器人文本',
                 'home_text' => '📝 <b>编辑机器人文本</b>
@@ -4224,6 +4277,7 @@ f,n.n2',
                 'bottextPageLede' => '编辑所有机器人文本；修改后的文本保存在 lang/override',
                 'bottextLangLabel' => '语言',
                 'bottextGroups' => [
+                        'renewalOffers' => '续费优惠',
                         'bottext' => '机器人内文本编辑器',
                         'language' => '语言',
                         'common' => '通用',

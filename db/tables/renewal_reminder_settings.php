@@ -12,8 +12,20 @@ return [
         discount_send INT NOT NULL DEFAULT 0,
         discount_mode VARCHAR(10) NOT NULL DEFAULT 'percent',
         discount_value INT NOT NULL DEFAULT 10,
+        warning_enabled TINYINT NOT NULL DEFAULT 0,
+        warning_days INT NOT NULL DEFAULT 3,
+        warning_gb INT NOT NULL DEFAULT 5,
+        warning_percent INT NOT NULL DEFAULT 10,
+        warning_valid_days INT NOT NULL DEFAULT 7,
         discount_valid_days INT NOT NULL DEFAULT 7
         SQL,
+    'columns' => [
+        ['warning_enabled', null, 'TINYINT NOT NULL DEFAULT 0'],
+        ['warning_days', null, 'INT NOT NULL DEFAULT 3'],
+        ['warning_gb', null, 'INT NOT NULL DEFAULT 5'],
+        ['warning_percent', null, 'INT NOT NULL DEFAULT 10'],
+        ['warning_valid_days', null, 'INT NOT NULL DEFAULT 7'],
+    ],
     'seed' => [[
         'id' => 1,
         'message_template' => "سلام 👋\nزمان یا حجم سرویس «{service}» با نام کاربری {username} تمام شده است.\nبرای ادامهٔ استفاده، سرویس خود را تمدید کنید.\n{discount}",

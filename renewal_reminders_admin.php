@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/renewal_reminders.php';
+require_once __DIR__ . '/renewal_warnings_admin.php';
 
 function renewalReminderMenu(PDO $pdo): array
 {
@@ -20,8 +20,12 @@ function renewalReminderMenu(PDO $pdo): array
     $stats = $pdo->query("SELECT COALESCE(SUM(confirmed_count), 0) AS sent,
         COALESCE(SUM(status IN ('blocked', 'uncertain', 'sending')), 0) AS errors FROM renewal_reminder_state")->fetch(PDO::FETCH_ASSOC);
     $text .= "\n\nارسال موفق: {$stats['sent']} | سرویس با خطای ارسال: {$stats['errors']}";
+    global $textbotlang;
+    $t = $textbotlang['renewalOffers'];
+    $text = strtr($t['hub'], ['{before}' => !empty($s['warning_enabled']) ? $t['on'] : $t['off'], '{after}' => $s['enabled'] ? $t['on'] : $t['off']]) . "\n\n" . $text;
     $keyboard = ['inline_keyboard' => [
-        [['text' => (int) $s['enabled'] ? 'غیرفعال کردن' : 'فعال کردن', 'callback_data' => 'renewal_enabled_' . ((int) $s['enabled'] ? '0' : '1')]],
+        [['text' => $textbotlang['renewalOffers']['open'], 'callback_data' => 'renewal_offer_menu']],
+        [['text' => (int) $s['enabled'] ? $t['after_disable'] : $t['after_enable'], 'callback_data' => 'renewal_enabled_' . ((int) $s['enabled'] ? '0' : '1')]],
         [['text' => 'فاصلهٔ ارسال (روز)', 'callback_data' => 'renewal_edit_interval_days'], ['text' => 'تعداد پیام‌ها', 'callback_data' => 'renewal_edit_max_sends']],
         [['text' => 'سرویس‌های قبلی: ' . ((int) $s['include_existing'] ? 'بله' : 'خیر'), 'callback_data' => 'renewal_existing_' . ((int) $s['include_existing'] ? '0' : '1')]],
         [['text' => '✏️ متن پیام', 'callback_data' => 'renewal_edit_message_template'], ['text' => '👁 پیش‌نمایش', 'callback_data' => 'renewal_preview']],
@@ -36,6 +40,7 @@ function renewalReminderMenu(PDO $pdo): array
 function renewalReminderAdminHandle(string $datain, string $text, array $user): bool
 {
     global $pdo, $from_id, $message_id, $textbotlang;
+    if (renewalWarningAdminHandle($datain, $text, $user)) { return true; }
     $isInput = str_starts_with($user['step'] ?? '', 'renewal_input_') && $datain === '';
     if ($isInput && in_array($text, [$textbotlang['Admin']['backAdminBtn'], $textbotlang['Admin']['backMenuBtn']], true)) {
         step('home', $from_id);

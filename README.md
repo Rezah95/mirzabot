@@ -371,11 +371,23 @@ Graphify artifacts are refreshed locally and remain untracked under the existing
 they do not certify live provider connectivity or a production deployment.
 
 
-### Development integration (0.9.0-dev.1)
+### Development integration (0.9.0-dev.2)
 
 This local prerelease integrates upstream 0.9 with fork payment, discount, audience and cron protections. It requires PHP 8.5.12+ for the application; syntax and isolated regression checks on older PHP do not certify that runtime. Stable production remains the last approved release until this candidate is approved. No push or deployment is included.
 
 Gateway payments link to their pending invoice or service order. Telegram Stars validates the payer, currency and stored amount before claiming delivery; failed or refunded deliveries do not receive cashback. Database upgrades preserve fulfillment/discount indexes alongside the new payment relationships. The updater preserves fork backups and text overrides, and provides both `migrate-db` and `update-php` commands.
+
+### Before-expiry renewal offers (0.9.0-dev.2)
+
+Admin path: **پنل ادمین → مدیریت کاربران → بخش ارسال پیام → یادآوری و پیشنهاد تمدید → تخفیف پیش از اتمام**. Use **فعال‌سازی ۱۰٪: ۳ روز / ۵ گیگ** to enable the preset in one action. Time, remaining data, percentage and code validity can be changed individually; either threshold can be disabled with zero. Both conditions cannot be disabled while offers are enabled. After-expiry reminders retain their separate settings and customized message.
+
+Offers are disabled by default on installation and upgrade. The preset sends a personal 10% renewal coupon at **at most 3 days remaining** or **at most 5 GiB remaining**, with a seven-day validity. The existing service-monitor cron checks fresh panel data during its normal scan; processing capacity and panel availability determine when an eligible service is checked. Unlimited, unstarted, exhausted and expired services are excluded where applicable. Each condition sends once per observed expiry/quota cycle; successful paid renewal history also rearms unlimited-time services whose quota stays unchanged.
+
+Messages show the service, remaining time/data, a copyable coupon and a renewal button. Coupons are single-use and restricted to the recipient's renewals, **not to one invoice/service**. Each threshold has its own coupon. Rate limits retry with the saved code; ambiguous deliveries are held for review rather than automatically replayed. The admin menu displays successful sends and delivery problems.
+
+Edit all new message templates in **Web dashboard → Bot texts → Renewal offers** (Persian: **داشبورد وب → متن‌های ربات → پیشنهاد تمدید**), or use the direct editor button in the offer settings. Defaults live under `renewalOffers` in all four `lang/*.php` files and runtime overrides use the existing `lang/override` path. Supported fields: `{username}`, `{service}`, `{days}`, `{remaining_gb}`, `{percent}`, `{code}`, `{valid_until}`. Preserve these fields when customizing templates; HTML-like user values are escaped and the code is rendered as a copyable code span.
+
+Upgrade with the normal database bootstrap before enabling offers: additive settings columns and `renewal_warning_state` are required. No new cron registration is needed. Checks: `php tests/renewal_warnings_test.php` (full SQL checks require an isolated `WARNING_TEST_SOCKET`) and `php tests/renewal_warning_text_test.php` (actual editor save/runtime-load round trip in a temporary tree). Local fixtures do not certify live Telegram delivery or provider availability.
 
 ### Purchase-based audiences (0.8.0)
 

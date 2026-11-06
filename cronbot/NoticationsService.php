@@ -8,6 +8,7 @@ require_once __DIR__ . '/../botapi.php';
 require_once __DIR__ . '/../panels.php';
 require_once __DIR__ . '/../function.php';
 require_once __DIR__ . '/../bulk_audience.php';
+require_once __DIR__ . '/../renewal_warnings.php';
 $textbotlang = languagechange();
 class ServiceMonitor
 {
@@ -67,14 +68,23 @@ class ServiceMonitor
                 $this->pdo->prepare('UPDATE invoice SET depleted_at = NULL WHERE id_invoice = ?')
                     ->execute([$invoice['id_invoice']]);
             }
+            $offerKinds = [];
+            try {
+                $offerLang = languagechange(dirname(__DIR__), $data['user']['lang'] ?? 'fa');
+                $offerKinds = renewalWarningNotify($this->pdo, renewalReminderSettings($this->pdo), $data['invoice'], $data['user'], $data['userData'],
+                    function (array $invoice, string $message) use ($offerLang): array {
+                        $keyboard = json_encode(['inline_keyboard' => [[['text' => $offerLang['renewalOffers']['renew'], 'callback_data' => 'extend_' . $invoice['id_invoice']]]]]);
+                        return sendmessage($invoice['id_user'], $message, $keyboard, 'HTML', $invoice['bottype'] ?: null);
+                    }, $offerLang);
+            } catch (Throwable $e) { error_log('Renewal offer failed: ' . get_class($e)); }
             $result = false;
-            if (!$check_send['volume']) {
+            if (!$check_send['volume'] && !in_array('volume', $offerKinds, true)) {
                 if ($this->status_cron['volume'])
                     $result = $this->checkVolumeThreshold($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
             }
             if ($result)
                 $data['invoice'] = select("invoice", "*", "id_invoice", $invoice['id_invoice']);
-            if (!$check_send['time']) {
+            if (!$check_send['time'] && !in_array('time', $offerKinds, true)) {
                 if ($this->status_cron['day'])
                     $this->checkTimeExpiration($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
             }

@@ -2,6 +2,59 @@
 
 
 return [
+        'renewalOffers' => [
+                'edit_web' => '📝 Edit message texts on the web',
+                'stats' => 'Sent: {sent} | Needs review: {errors}',
+                'entry' => '⏰ Renewal reminders and offers',
+                'hub' => 'Before expiry: {before}
+After expiry: {after}
+
+Open “Before-expiry offers” to enable 10% off at 3 days or 5 GB remaining.',
+                'after_enable' => 'Enable after-expiry reminders',
+                'after_disable' => 'Disable after-expiry reminders',
+                'time' => '⏳ Your service “{service}” ({username}) ends in {days} days.',
+                'volume' => '📉 Your service “{service}” ({username}) has {remaining_gb} GB remaining.',
+                'coupon' => '🎁 Enjoy {percent}% off a renewal.
+Your code: {code}
+Valid until: {valid_until}
+Personal, single-use and for service renewals only. Enter the code when renewing.',
+                'title' => '🎁 Before-expiry renewal offers',
+                'on' => '✅ Enabled',
+                'off' => '❌ Disabled',
+                'summary' => '{status}
+
+Time warning: {days} days remaining
+Data warning: {gb} GB remaining
+Discount: {percent}% | Code validity: {valid_days} days
+
+Each condition sends once per expiry/quota cycle. Set a threshold to zero to disable it.
+Codes are personal, single-use and valid for this customer’s service renewals.
+After-expiry reminders have separate settings.',
+                'open' => '🎁 Before-expiry offers',
+                'enable' => 'Enable offers',
+                'disable' => 'Disable offers',
+                'preset' => '✨ Enable 10%: 3 days / 5 GB',
+                'days_button' => '⏳ Time: {value} days',
+                'gb_button' => '📉 Data: {value} GB',
+                'percent_button' => '🎁 Discount: {value}%',
+                'valid_button' => '📅 Validity: {value} days',
+                'preview_time' => '👁 Preview time message',
+                'preview_volume' => '👁 Preview data message',
+                'back' => 'Back',
+                'editor_hint' => '📝 Edit messages: Web dashboard → Bot texts → Renewal offers',
+                'saved' => '✅ Settings saved.',
+                'preview_note' => '👁 Preview — the sample code cannot be redeemed.',
+                'ask_days' => 'How many days before expiry? 1–365; zero disables this condition. Example: 3',
+                'ask_gb' => 'How many GB remaining? 1–100000; zero disables this condition. Example: 5',
+                'ask_percent' => 'Enter the discount percentage (1–100). Example: 10',
+                'ask_valid_days' => 'How many days is the code valid? 1–365. Example: 7',
+                'invalid' => 'Invalid value. Send an integer within the stated range. At least one threshold must be above zero before enabling offers.',
+                'error' => 'Settings could not be read or saved. Check the database upgrade.',
+                'renew' => '🔄 Renew service',
+                'group' => 'Renewal offers',
+                'sample_service' => 'Example service',
+        ],
+
         'bottext' => [
                 'open_button' => '📝 Edit bot texts',
                 'home_text' => '📝 <b>Edit bot texts</b>
@@ -4227,6 +4280,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                 'bottextPageLede' => 'Edit every bot text; changed texts are saved in lang/override',
                 'bottextLangLabel' => 'Language',
                 'bottextGroups' => [
+                        'renewalOffers' => 'Renewal offers',
                         'bottext' => 'In-bot text editor',
                         'language' => 'Language',
                         'common' => 'Common',
