@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.1 — 2026-11-06
+
+- Promote the approved 0.9.1-dev.1 updater repair: prepare and validate the replacement before publication, retain the previous tree and attempt rollback on rename failure.
+- Preserve configuration, text overrides and child-bot customizations before switching directories. Accept flat and single-root ZIP layouts; never recursively delete the serving bot directory.
+- Validation: disposable filesystem regressions reproduce ENOTEMPTY and cover open-directory writers, staging failures, preservation and rename rollback; shell syntax and cron regressions passed. No live VPS upgrade is claimed.
+
+Upgrade: download the updated master installer using the existing command. No additional schema/cron change beyond the selected application release. Keep existing recovery backups; retained previous trees are not automatically deleted. Publication has a short rename gap and does not automatically roll back database migrations.
+
 ## 0.9.1-dev.1 — 2026-11-06 (prerelease)
 
 - Stop deleting the serving bot directory during updates. Prepare and validate a replacement first, then rename the old tree into a private retained workspace and publish the prepared tree.

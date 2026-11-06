@@ -371,13 +371,13 @@ Graphify artifacts are refreshed locally and remain untracked under the existing
 they do not certify live provider connectivity or a production deployment.
 
 
-### Staged updater repair (0.9.1-dev.1)
+### Staged updater repair (0.9.1)
 
 The development updater prepares a complete replacement in a private `.mirza-update.*` directory on the live filesystem. It restores config, selected runtime files, language overrides and child-bot customizations, removes the web installer and validates critical PHP files before publication. Both flat hosting ZIPs and single-root GitHub archives are identified by project files rather than by the first directory in the ZIP.
 
 Publication renames the old directory into the private workspace and then renames the prepared tree to the serving path. It never recursively deletes the active installation. The previous tree and full site/database backup are retained; if the second rename fails, rollback preserves an unexpectedly recreated path as `interrupted-writes` and attempts to restore the old tree. A rollback failure prints the retained recovery path. There is a short rename gap; this does not promise uninterrupted requests or automatic database rollback.
 
-The entry command remains `curl -o install.sh -L https://raw.githubusercontent.com/Rezah95/mirzabot/master/install.sh && bash install.sh`. The repair is a development candidate until promoted to master, so that command still downloads the approved production installer. Filesystem regression checks run with `python3 tests/updater_files_test.py`; host services, network and database migration execution are fixture-controlled, not a live VPS upgrade.
+The entry command remains `curl -o install.sh -L https://raw.githubusercontent.com/Rezah95/mirzabot/master/install.sh && bash install.sh`. The approved 0.9.1 repair is published on master, so this command downloads the corrected installer. Filesystem regression checks run with `python3 tests/updater_files_test.py`; host services, network and database migration execution are fixture-controlled, not a live VPS upgrade.
 
 ### Release integration (0.9.0)
 
