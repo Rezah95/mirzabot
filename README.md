@@ -371,13 +371,13 @@ Graphify artifacts are refreshed locally and remain untracked under the existing
 they do not certify live provider connectivity or a production deployment.
 
 
-### Development integration (0.9.0-dev.2)
+### Release integration (0.9.0)
 
-This local prerelease integrates upstream 0.9 with fork payment, discount, audience and cron protections. It requires PHP 8.5.12+ for the application; syntax and isolated regression checks on older PHP do not certify that runtime. Stable production remains the last approved release until this candidate is approved. No push or deployment is included.
+Release 0.9.0 promotes the approved 0.9.0-dev.2 candidate, integrating upstream 0.9 with fork payment, discount, audience and cron protections. It requires PHP 8.5.12+ for the application; syntax and isolated regression checks on older PHP do not certify that runtime. Approved source releases are published on master and tagged v<version>; development continues on dev. Publishing a release does not deploy it to an existing server.
 
 Gateway payments link to their pending invoice or service order. Telegram Stars validates the payer, currency and stored amount before claiming delivery; failed or refunded deliveries do not receive cashback. Database upgrades preserve fulfillment/discount indexes alongside the new payment relationships. The updater preserves fork backups and text overrides, and provides both `migrate-db` and `update-php` commands.
 
-### Before-expiry renewal offers (0.9.0-dev.2)
+### Before-expiry renewal offers (0.9.0)
 
 Admin path: **پنل ادمین → مدیریت کاربران → بخش ارسال پیام → یادآوری و پیشنهاد تمدید → تخفیف پیش از اتمام**. Use **فعال‌سازی ۱۰٪: ۳ روز / ۵ گیگ** to enable the preset in one action. Time, remaining data, percentage and code validity can be changed individually; either threshold can be disabled with zero. Both conditions cannot be disabled while offers are enabled. After-expiry reminders retain their separate settings and customized message.
 

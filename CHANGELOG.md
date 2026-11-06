@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 — 2026-11-06
+
+- Promote the maintainer-approved 0.9.0-dev.2 candidate with upstream 0.9 integration and retained fork payment, discount, audience and cron protections.
+- Add opt-in before-expiry renewal offers with a one-click 10% / three-day / five-GiB preset, guided admin controls, previews and web-editable messages in four languages. Preserve after-expiry reminders and existing text overrides.
+- Keep coupons personal, single-use and renewal-only across the customer's services. Deduplicate each warning condition, retain codes for rate-limit retries and hold ambiguous deliveries for review.
+- Retain mixed wallet/payment refunds, validated Stars delivery, linked gateway orders, compatible payment indexes and safe updater backups/config restoration.
+- Validation: isolated MySQL upgrade/recipient/reminder/callback checks and local regressions are recorded under the candidate entries; its hosting-bundle workflow completed successfully. These checks do not certify live Telegram/provider delivery or full PHP 8.5.12 application execution.
+
+Upgrade: PHP 8.5.12+ and normal database bootstrap are required. New offers remain disabled until an administrator enables them; no new cron registration. This publishes source and a hosting bundle; no server deployment is performed.
+
 ## 0.9.0-dev.2 — 2026-11-06 (prerelease)
 
 - Add opt-in automatic renewal coupons to the existing pre-expiry service monitor. The one-click preset offers 10% at three days or five GiB remaining, with independently configurable thresholds, percentage and validity.
