@@ -95,6 +95,7 @@ if ($payment['payment_Status'] === 'paid') {
 $billed = (int) $payment['price'];
 if ($amount < $billed) {
     error_log("variza webhook: amount mismatch for {$slug}: billed {$billed}, got {$amount}");
+    reportEventQueue('payment_mismatch', ['gateway' => 'Variza', 'order' => $payment['id_order'], 'user' => $payment['id_user'], 'reason' => 'paid_amount_below_minimum', 'details' => 'invoice_toman=' . $billed . ', received_toman=' . $amount], $payment['id_order']);
     variza_webhook_respond(400, 'amount mismatch');
 }
 
@@ -132,7 +133,7 @@ if ($cashback > 0) {
 // Report to Channel_Report like zarinpal does.
 $setting = select("setting", "*");
 $paymentreports = select("topicid", "idreport", "report", "paymentreport", "select")['idreport'] ?? null;
-if (!empty($setting['Channel_Report']) && $paymentreports) {
+if (!empty($setting['Channel_Report'])) {
     $buyer = select("user", "*", "id", $payment['id_user'], "select");
     $text_report = sprintf(
         $textbotlang['paymentGateway']['reportVariza'],

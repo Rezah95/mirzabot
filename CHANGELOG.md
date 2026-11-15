@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.3-dev.2 — 2026-11-15 (prerelease)
+
+- Connect missing operational reports to the configured report channel: Tronado callback mismatches, cancellations and manual review, payment creation/delivery failures and refunds, and cron/service/reminder failures. Reuse the shared fulfillment marker across hosted gateways and Stars instead of changing acceptance rules.
+- Add a durable, deduplicated report outbox processed by the existing dispatcher every minute. Retry rejected/uncertain report delivery with backoff; fall back to the main channel when a report topic is missing or closed. Report retries never re-run payment fulfillment.
+- Add TonPays success reports in the financial topic and remove Variza's accidental requirement for a nonzero topic ID. Keep existing successful purchase/service reports. A cashback notification exception can no longer hide Tronado's financial report; failed Tronado report delivery enters the report outbox.
+- Localize new event reports under /lang and expose the new reportEvents group in the web text editor. Exclude unauthenticated callback probes and normal user-blocked notifications from channel noise.
+- Upgrade: normal database bootstrap must create report_event_outbox before the new worker. No manual crontab registration is required. Queueing/reporting failures do not change payment acceptance or wallet credit. Existing direct reports are not all migrated to the outbox; unavailable DB/Telegram/configuration can still prevent delivery, and a transport timeout may duplicate a report.
+- Validation: isolated MySQL outbox retries, deduplication, locks, topic fallback, financial isolation and migrations; real local HTTP/cron callback tests; TonPays success deduplication; renewal, Stars, shared payment and cron regressions. No live server or Telegram integration verification.
+
 ## 0.9.3-dev.1 — 2026-11-15 (prerelease)
 
 - Make intermittent Tronado 409 rejections diagnosable: record the internal payment ID, specific mismatch reason, numeric amount evidence and wallet-match boolean without credentials, tokens, raw payload or wallet addresses. Keep acceptance criteria, callback authentication, queueing and delivery policy unchanged.

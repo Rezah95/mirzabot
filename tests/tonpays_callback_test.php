@@ -7,6 +7,7 @@ set_error_handler(static function ($severity, $message, $file, $line): bool {
 function checkTonpays(bool $ok, string $message): void { if (!$ok) { throw new RuntimeException($message); } }
 function assertSqlIdentifier($name, $allowStar = false): void { checkTonpays((bool) preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name), 'Bad identifier'); }
 function clearSelectCache($table): void {}
+function select($table, ...$args) { return $table === 'setting' ? ['Channel_Report' => '-100123'] : []; }
 function getPaySettingValue($key, $default = '') {
     global $pdo;
     $q = $pdo->prepare('SELECT ValuePay FROM PaySetting WHERE NamePay = ?'); $q->execute([$key]);
@@ -40,6 +41,7 @@ try {
     $definition = require dirname(__DIR__) . '/db/tables/PaySetting.php';
     $schema->apply('PaySetting', $definition);
     $schema->apply('Payment_report', require dirname(__DIR__) . '/db/tables/Payment_report.php');
+    $schema->apply('report_event_outbox', require dirname(__DIR__) . '/db/tables/report_event_outbox.php');
     $pdo->exec('CREATE TABLE test_wallet (id INT PRIMARY KEY, balance BIGINT NOT NULL)');
     $pdo->exec('INSERT INTO test_wallet VALUES (123, 0)');
     $pdo->exec("UPDATE PaySetting SET ValuePay = 'کارت به کارت' WHERE NamePay = 'tetraminator_label'");
@@ -83,6 +85,7 @@ try {
     };
     checkTonpays($run(null, 'test-tonpays-key', null, $duringDelivery)[0] === 200 && $concurrent[0] === 503, 'Concurrent callback was not reserved');
     checkTonpays($run()[0] === 200 && $deliveries === 1 && (int) $pdo->query('SELECT balance FROM test_wallet')->fetchColumn() === 50000, 'Duplicate payment or wrong credited amount');
+    checkTonpays((int) $pdo->query("SELECT COUNT(*) FROM report_event_outbox WHERE event='payment_success'")->fetchColumn() === 1, 'TonPays financial report missing or duplicated');
     // Two callbacks can both read Unpaid before either claims the order.
     $pdo->exec("UPDATE Payment_report SET payment_Status = 'Unpaid', fulfillment_status = NULL");
     $pdo->exec('UPDATE test_wallet SET balance = 0');

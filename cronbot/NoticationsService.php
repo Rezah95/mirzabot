@@ -77,7 +77,10 @@ class ServiceMonitor
                             $keyboard = json_encode(['inline_keyboard' => [[['text' => $offerLang['renewalOffers']['renew'], 'callback_data' => 'extend_' . $invoice['id_invoice']]]]]);
                             return sendmessage($invoice['id_user'], $message, $keyboard, 'HTML', $invoice['bottype'] ?: null);
                         }, $offerLang, null, 'renewalDeliveryReport');
-                } catch (Throwable $e) { error_log('Renewal offer failed: ' . get_class($e)); }
+                } catch (Throwable $e) {
+                    error_log('Renewal offer failed: ' . get_class($e));
+                    reportEventQueue('renewal_failed', ['order' => $invoice['id_invoice'], 'service' => $invoice['username'], 'reason' => get_class($e)], 'offer:' . $invoice['id_invoice'] . ':' . date('YmdH'));
+                }
                 $result = false;
                 if (!$check_send['volume'] && !in_array('volume', $offerKinds, true)) {
                     if ($this->status_cron['volume'])
@@ -97,6 +100,7 @@ class ServiceMonitor
                     $this->active_inbound_expire($data['invoice'], $data['userData'], $data['panel']);
             } catch (Throwable $e) {
                 error_log('Service monitor failed: invoice=' . $invoice['id_invoice'] . ' ' . get_class($e));
+                reportEventQueue('service_monitor_failed', ['order' => $invoice['id_invoice'], 'service' => $invoice['username'], 'reason' => get_class($e)], $invoice['id_invoice'] . ':' . date('YmdH'));
             }
         }
     }
@@ -183,6 +187,7 @@ class ServiceMonitor
             $removeResult = $this->Panel->RemoveUser($invoice['Service_location'], $username);
             if (!is_array($removeResult) || ($removeResult['status'] ?? null) !== 'successful') {
                 error_log('Service removal failed for ' . $username . ': ' . json_encode($removeResult));
+                reportEventQueue('service_removal_failed', ['order' => $invoice['id_invoice'], 'service' => $username, 'reason' => 'panel_rejected'], $invoice['id_invoice'] . ':' . date('YmdH'));
                 return false;
             }
             update("invoice", "status", "removeTime", "username", $username);
@@ -230,6 +235,7 @@ class ServiceMonitor
             $removeResult = $this->Panel->RemoveUser($invoice['Service_location'], $username);
             if (!is_array($removeResult) || ($removeResult['status'] ?? null) !== 'successful') {
                 error_log('Service removal failed for ' . $username . ': ' . json_encode($removeResult));
+                reportEventQueue('service_removal_failed', ['order' => $invoice['id_invoice'], 'service' => $username, 'reason' => 'panel_rejected'], $invoice['id_invoice'] . ':' . date('YmdH'));
                 return false;
             }
             update("invoice", "status", "removevolume", "username", $username);
@@ -294,7 +300,11 @@ class ServiceMonitor
         $keyboard = $keyboard_active ? $keyboard : null;
         $result = sendmessage($invoice['id_user'], $message, $keyboard, 'HTML', $bot_token ?: null);
         $ok = ($result['ok'] ?? false) === true;
-        if (!$ok) { error_log('Service notification failed: invoice=' . $invoice['id_invoice'] . ' code=' . (int) ($result['error_code'] ?? 0)); }
+        if (!$ok) {
+            $code = (int) ($result['error_code'] ?? 0);
+            error_log('Service notification failed: invoice=' . $invoice['id_invoice'] . ' code=' . $code);
+            if ($code !== 403 && function_exists('reportEventQueue')) { reportEventQueue('notification_failed', ['order' => $invoice['id_invoice'], 'service' => $invoice['username'], 'reason' => 'telegram_' . $code], $code . ':' . date('YmdH')); }
+        }
         return $ok;
     }
 

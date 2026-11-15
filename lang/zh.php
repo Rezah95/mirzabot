@@ -2,6 +2,54 @@
 
 
 return [
+        'reportEvents' => [
+                'template' => '📣 {event}
+{context}
+时间：{time}',
+                'fields' => [
+                        'gateway' => '支付网关',
+                        'order' => '订单',
+                        'user' => '用户',
+                        'service' => '服务',
+                        'reason' => '原因',
+                        'details' => '详情',
+                        'job' => '定时任务',
+                ],
+                'events' => [
+                        'payment_creation_failed' => '支付网关订单创建失败',
+                        'payment_success' => '付款成功',
+                        'payment_mismatch' => '付款校验被拒绝',
+                        'payment_review' => '付款需要人工核对',
+                        'payment_cancelled' => '已确认付款被取消',
+                        'payment_failed' => '交付失败，需要人工检查',
+                        'payment_refunded' => '款项已退回钱包',
+                        'payment_notice_failed' => '付款后操作失败，请核对付款状态',
+                        'callback_storage_failed' => '无法保存付款回调',
+                        'cron_failed' => '定时任务执行失败',
+                        'renewal_failed' => '续费提醒处理失败',
+                        'notification_failed' => '消息发送故障，提供一个检查样例',
+                        'service_monitor_failed' => '服务处理失败',
+                        'service_removal_failed' => '面板未能删除服务',
+                ],
+                'reasons' => [
+                        'paid_amount_below_minimum' => '实付金额低于订单最低金额',
+                        'invalid_paid_amount' => '实付金额缺失或无效',
+                        'invalid_received_amount' => '收款金额缺失或无效',
+                        'invalid_delivered_tron' => '收到的 TRX 数量无效',
+                        'invalid_expected_tron' => '订单 TRX 数量无效',
+                        'invalid_order_metadata' => '订单信息无效',
+                        'missing_order_wallet' => '订单钱包缺失',
+                        'wallet_mismatch' => '钱包不匹配',
+                        'legacy_token_mismatch' => '旧订单令牌不匹配',
+                        'invalid_legacy_wallet' => '旧订单钱包无效',
+                        'requires_reconciliation' => '需要人工核对钱包和服务',
+                        'cancelled' => '付款已取消',
+                        'storage_error' => '数据库保存失败',
+                        'panel_rejected' => '面板未确认操作',
+                        'failed' => '付款交付失败',
+                        'refunded' => '已退回钱包',
+                ],
+        ],
         'renewalOffers' => [
                 'delivery_report' => '📨 Telegram 已接受续费通知
 服务：{username}
@@ -4298,6 +4346,7 @@ f,n.n2',
                         'textbot' => '主要文本和按钮',
                         'keyboard' => '键盘',
                         'panel' => '网页面板',
+                        'reportEvents' => '重要事件报告',
                         'paymentGateway' => '支付网关',
                         'db_defaults' => '默认值',
                 ],

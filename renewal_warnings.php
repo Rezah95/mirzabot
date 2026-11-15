@@ -87,6 +87,8 @@ function renewalWarningNotify(PDO $pdo, array $settings, array $invoice, array $
             $pdo->prepare('UPDATE renewal_warning_state SET status = ?, next_attempt_at = ? WHERE id = ?')->execute([$status, $retry, $id]);
             $handled[] = $kind;
             if ($status === 'sent') { renewalDeliveryReportSafely($report, $invoice, $result, $kind); }
+            $code = (int) ($result['error_code'] ?? 0);
+            if (in_array($status, ['blocked', 'uncertain'], true) && $code !== 403) { reportEventQueue('notification_failed', ['order' => $invoice['id_invoice'], 'user' => $invoice['id_user'], 'service' => $invoice['username'], 'reason' => 'telegram_' . $code], $code . ':' . date('YmdH')); }
         } finally { $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$lock]); }
     }
     return $handled;

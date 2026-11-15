@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/report_events.php';
+
 /** Persist Telegram evidence, never tokens, message bodies or coupon codes. */
 function renewalDeliveryRecord(PDO $pdo, string $table, string $id, array $result, int $now): void
 {

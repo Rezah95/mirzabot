@@ -217,10 +217,13 @@ function renewalReminderRun(PDO $pdo, callable $readPanel, callable $send, strin
                     $status = in_array((int) ($result['error_code'] ?? 0), [400, 401, 403], true) ? 'blocked' : 'uncertain';
                     $pdo->prepare('UPDATE renewal_reminder_state SET status = ? WHERE id = ?')->execute([$status, $id]);
                     error_log('Renewal reminder delivery failed: ' . $id . ' code=' . (int) ($result['error_code'] ?? 0));
+                    $code = (int) ($result['error_code'] ?? 0);
+                    if ($code !== 403) { reportEventQueue('notification_failed', ['order' => $invoice['id_invoice'], 'service' => $invoice['username'], 'reason' => 'telegram_' . $code], $code . ':' . date('YmdH')); }
                 }
             } catch (Throwable $e) {
                 $pdo->prepare('UPDATE renewal_reminder_state SET next_attempt_at = ? WHERE id = ?')->execute([$now + 600, $id]);
                 error_log('Renewal reminder failed: ' . $id . ' ' . get_class($e));
+                reportEventQueue('renewal_failed', ['order' => $invoice['id_invoice'], 'service' => $invoice['username'], 'reason' => get_class($e)], $invoice['id_invoice'] . ':' . date('YmdH'));
             }
         }
     } finally {

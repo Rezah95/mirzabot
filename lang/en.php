@@ -2,6 +2,54 @@
 
 
 return [
+        'reportEvents' => [
+                'template' => '📣 {event}
+{context}
+Time: {time}',
+                'fields' => [
+                        'gateway' => 'Gateway',
+                        'order' => 'Order',
+                        'user' => 'User',
+                        'service' => 'Service',
+                        'reason' => 'Reason',
+                        'details' => 'Details',
+                        'job' => 'Cron job',
+                ],
+                'events' => [
+                        'payment_creation_failed' => 'Gateway order creation failed',
+                        'payment_success' => 'Successful payment',
+                        'payment_mismatch' => 'Payment validation rejected',
+                        'payment_review' => 'Payment requires manual reconciliation',
+                        'payment_cancelled' => 'Previously accepted payment cancelled',
+                        'payment_failed' => 'Payment delivery failed; manual review required',
+                        'payment_refunded' => 'Payment refunded to wallet',
+                        'payment_notice_failed' => 'Post-payment operation failed; check payment state',
+                        'callback_storage_failed' => 'Unable to persist payment callback',
+                        'cron_failed' => 'Cron job failed',
+                        'renewal_failed' => 'Renewal reminder processing failed',
+                        'notification_failed' => 'Message delivery incident; one sample for review',
+                        'service_monitor_failed' => 'Service processing failed',
+                        'service_removal_failed' => 'Panel service removal failed',
+                ],
+                'reasons' => [
+                        'paid_amount_below_minimum' => 'Paid amount below invoice minimum',
+                        'invalid_paid_amount' => 'Paid amount missing or invalid',
+                        'invalid_received_amount' => 'Received amount missing or invalid',
+                        'invalid_delivered_tron' => 'Delivered TRX amount invalid',
+                        'invalid_expected_tron' => 'Expected TRX amount invalid',
+                        'invalid_order_metadata' => 'Order metadata invalid',
+                        'missing_order_wallet' => 'Order wallet missing',
+                        'wallet_mismatch' => 'Wallet mismatch',
+                        'legacy_token_mismatch' => 'Legacy order token mismatch',
+                        'invalid_legacy_wallet' => 'Legacy wallet invalid',
+                        'requires_reconciliation' => 'Manual wallet/service reconciliation required',
+                        'cancelled' => 'Payment cancelled',
+                        'storage_error' => 'Database persistence failed',
+                        'panel_rejected' => 'Panel did not confirm operation',
+                        'failed' => 'Payment delivery failed',
+                        'refunded' => 'Refunded to wallet',
+                ],
+        ],
         'renewalOffers' => [
                 'delivery_report' => '📨 Telegram accepted a renewal notification
 Service: {username}
@@ -4301,6 +4349,7 @@ We hope you had a good experience with the ease and speed of your service. If yo
                         'textbot' => 'Main texts & buttons',
                         'keyboard' => 'Keyboards',
                         'panel' => 'Web panel',
+                        'reportEvents' => 'Important event reports',
                         'paymentGateway' => 'Payment gateways',
                         'db_defaults' => 'Default values',
                 ],

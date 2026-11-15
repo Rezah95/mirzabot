@@ -92,6 +92,7 @@ try {
             include $script;
         } catch (Throwable $e) {
             $jobError = $e->getMessage();
+            if ($job['job'] !== 'report_events' && function_exists('reportEventQueue')) { reportEventQueue('cron_failed', ['job' => $job['job'], 'reason' => get_class($e)], $job['job'] . ':' . date('YmdH')); }
             $jobState = 'failed';
         } finally {
             chdir($cronbotDir);

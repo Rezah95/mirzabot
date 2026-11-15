@@ -5043,6 +5043,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         ]);
     } catch (Throwable $error) {
         $reference = tonpaysLog('order_creation_failed', ['stage' => $phase, 'order_id' => $orderId, 'amount' => $amount], $error);
+        reportEventQueue('payment_creation_failed', ['gateway' => 'TonPays', 'order' => $orderId, 'user' => $from_id, 'reason' => get_class($error), 'details' => 'stage=' . $phase], $orderId);
         if ($paymentRecorded) {
             try { $pdo->prepare("UPDATE Payment_report SET payment_Status = 'reject' WHERE id_order = ?")->execute([$orderId]); }
             catch (Throwable $cleanupError) { tonpaysLog('order_rejection_failed', ['order_id' => $orderId], $cleanupError); }
@@ -5060,6 +5061,8 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         tonpaysLog('payment_message_failed', ['stage' => 'send_payment_link', 'order_id' => $orderId,
             'telegram_code' => is_array($paymentMessage) ? ($paymentMessage['error_code'] ?? 0) : 0,
             'reason' => is_array($paymentMessage) ? tonpaysResponseError($paymentMessage) : 'Invalid Telegram response']);
+        $code = (int) ($paymentMessage['error_code'] ?? 0);
+        if ($code !== 403) { reportEventQueue('notification_failed', ['gateway' => 'TonPays', 'order' => $orderId, 'user' => $from_id, 'reason' => 'telegram_' . $code], $code . ':' . date('YmdH')); }
     }
 } elseif ($datain === 'tronadopay') {
     if (!tronadoConfigured()) {
@@ -5095,6 +5098,7 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     } catch (Throwable $error) {
         update('Payment_report', 'payment_Status', 'reject', 'id_order', $orderId);
         error_log('Tronado order creation failed: ' . $error->getMessage());
+        reportEventQueue('payment_creation_failed', ['gateway' => 'Tronado', 'order' => $orderId, 'user' => $from_id, 'reason' => get_class($error)], $orderId);
         sendmessage($from_id, $textbotlang['users']['Balance']['errorLinkPayment'], $keyboard, 'HTML');
         step('home', $from_id);
         return;

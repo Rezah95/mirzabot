@@ -55,7 +55,7 @@ $server = null;
 $webRoot = sys_get_temp_dir() . '/mirza-tronado-http-' . bin2hex(random_bytes(6));
 try {
     $pdo->exec("USE $db");
-    foreach (['Payment_report', 'Tronado_callback'] as $table) {
+    foreach (['Payment_report', 'Tronado_callback', 'report_event_outbox', 'topicid'] as $table) {
         $definition = require dirname(__DIR__) . '/db/tables/' . $table . '.php';
         $pdo->exec("CREATE TABLE `$table` (" . $definition['create'] . ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
     }
@@ -233,6 +233,7 @@ try {
     mkdir($webRoot . '/tools');
     copy(dirname(__DIR__) . '/tools/tronado_diagnose.php', $webRoot . '/tools/tronado_diagnose.php');
     copy(dirname(__DIR__) . '/payment/tronado_lib.php', $webRoot . '/payment/tronado_lib.php');
+    copy(dirname(__DIR__) . '/report_events.php', $webRoot . '/report_events.php');
     file_put_contents($webRoot . '/config.php', '<?php $pdo = new PDO(' . var_export('mysql:unix_socket=' . $socket . ';dbname=' . $db, true)
         . ', "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);');
     copy(dirname(__DIR__) . '/payment/tronado_delivery.php', $webRoot . '/payment/tronado_delivery.php');
@@ -243,7 +244,10 @@ try {
     $bootstrap = <<<'PHP'
 <?php
 function clearSelectCache($table) {}
-function getPaySettingValue($key, $default = '') { return $key === 'tronado_ipn_signing_key' ? 'test-ipn-key' : $default; }
+function getPaySettingValue($key, $default = '') {
+    if ($key === 'tronado_cashback' && !empty($GLOBALS['simulateGiftFailure'])) { return '50'; }
+    return $key === 'tronado_ipn_signing_key' ? 'test-ipn-key' : $default;
+}
 function languagechange() { return require LANGUAGE_FILE; }
 function select($table, $fields = '*', $field = null, $value = null, $mode = 'select') {
     global $pdo;
@@ -258,8 +262,13 @@ function update($table, $field, $value, $whereField, $whereValue) {
     global $pdo;
     $pdo->prepare("UPDATE `$table` SET `$field` = ? WHERE `$whereField` = ?")->execute([$value, $whereValue]);
 }
-function sendmessage(...$args) { usleep(2500000); }
+function sendmessage(...$args) {
+    $GLOBALS['sendCount'] = ($GLOBALS['sendCount'] ?? 0) + 1;
+    if (!empty($GLOBALS['simulateGiftFailure']) && $GLOBALS['sendCount'] === 2) { throw new RuntimeException('gift notification failed'); }
+    usleep(2500000);
+}
 function telegram($method, $args) {
+    if (!empty($GLOBALS['simulateFinancialFailure'])) { return ['ok' => false, 'error_code' => 400, 'description' => 'message thread not found']; }
     file_put_contents(__DIR__ . '/reports.jsonl', json_encode($args) . "\n", FILE_APPEND);
     return ['ok' => true];
 }
@@ -320,6 +329,39 @@ PHP;
         1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']], $pipes);
     expectCallback(is_resource($cron) && proc_close($cron) === 0 && $balance() === 501000
         && $state() === 'fulfilled' && is_file($webRoot . '/reports.jsonl'), 'Cron recovery/context failed');
+
+    // Actual report worker uses the same scheduler/bootstrap contract and never calls payment delivery.
+    $pdo->prepare('INSERT INTO report_event_outbox (id,event,topic,context,created_at) VALUES (?,?,?,?,?)')
+        ->execute(['worker-check', 'cron_failed', 'errorreport', json_encode(['job' => 'sample']), time()]);
+    copy(dirname(__DIR__) . '/cronbot/report_events.php', $webRoot . '/cronbot/report_events.php');
+    $reportCode = 'chdir("/tmp"); $beforeLog = ini_get("error_log"); require '
+        . var_export($webRoot . '/cronbot/report_events.php', true)
+        . '; if (getcwd() !== "/tmp" || ini_get("error_log") !== $beforeLog) { exit(1); }';
+    $reportProcess = proc_open([PHP_BINARY, '-r', $reportCode], [0 => ['file', '/dev/null', 'r'],
+        1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']], $pipes);
+    expectCallback(is_resource($reportProcess) && proc_close($reportProcess) === 0
+        && $pdo->query("SELECT sent_at FROM report_event_outbox WHERE id='worker-check'")->fetchColumn() !== null
+        && $balance() === 501000 && count(file($webRoot . '/reports.jsonl')) === 2, 'Report worker bootstrap/context or payment isolation failed');
+
+    // A gift notification error cannot suppress the financial report or replay the paid order.
+    $reset(); $receive(); unlink($webRoot . '/reports.jsonl');
+    $giftCode = '$GLOBALS["simulateGiftFailure"] = true; require ' . var_export($webRoot . '/cronbot/tronado.php', true) . ';';
+    $giftProcess = proc_open([PHP_BINARY, '-r', $giftCode], [0 => ['file', '/dev/null', 'r'],
+        1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']], $pipes);
+    expectCallback(is_resource($giftProcess) && proc_close($giftProcess) === 0 && $state() === 'fulfilled'
+        && $balance() === 751000 && count(file($webRoot . '/reports.jsonl')) === 1
+        && (int) $pdo->query("SELECT COUNT(*) FROM report_event_outbox WHERE event='payment_notice_failed'")->fetchColumn() === 1,
+        'Gift failure suppressed payment reporting or changed delivery state');
+
+    // Failed financial-report delivery is retried as a report, with no payment replay.
+    $reset(); $receive(); unlink($webRoot . '/reports.jsonl');
+    $failureCode = '$GLOBALS["simulateFinancialFailure"] = true; require ' . var_export($webRoot . '/cronbot/tronado.php', true) . ';';
+    $failureProcess = proc_open([PHP_BINARY, '-r', $failureCode], [0 => ['file', '/dev/null', 'r'],
+        1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']], $pipes);
+    expectCallback(is_resource($failureProcess) && proc_close($failureProcess) === 0 && $state() === 'fulfilled'
+        && $balance() === 501000 && !is_file($webRoot . '/reports.jsonl')
+        && (int) $pdo->query("SELECT COUNT(*) FROM report_event_outbox WHERE event='payment_success' AND sent_at IS NULL")->fetchColumn() === 1,
+        'Financial report failure lost report or changed payment delivery');
 
     // Exercise the real delivery adapter with bootstrap fixtures, including its PDO scope.
     copy(dirname(__DIR__) . '/payment/tronado_delivery.php', $webRoot . '/payment/tronado_delivery.php');

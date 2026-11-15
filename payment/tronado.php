@@ -32,16 +32,6 @@ if ($signature === '' && function_exists('getallheaders')) {
 [$status, $body] = tronadoReceiveCallback($pdo, is_string($rawBody) ? $rawBody : '',
     $signature, tronadoSetting('tronado_ipn_signing_key'));
 error_log('Tronado callback result: ' . json_encode(['http_status' => $status] + $body));
-if (!empty($body['cancelled'])) {
-    error_log('Tronado paid order cancelled; manual reconciliation required: ' . $body['payment_id']);
-    $reportSetting = select('setting', '*');
-    if (!empty($reportSetting['Channel_Report'])) {
-        telegram('sendmessage', [
-            'chat_id' => $reportSetting['Channel_Report'],
-            'text' => '⚠️ Tronado order ' . $body['payment_id'] . ' was cancelled after acceptance. Reconcile the service and wallet manually.',
-        ]);
-    }
-}
 // Close the response before panel/Telegram work on FPM, LiteSpeed and Apache.
 // Content-Length lets the provider finish reading even on hosts without finish_request.
 $reply = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -66,3 +56,6 @@ if ($status === 200 && ($body['fulfillment'] ?? '') === 'queued') {
     require_once __DIR__ . '/tronado_delivery.php';
     tronadoDeliverPayment($pdo, $body['payment_id']);
 }
+
+$reportCallback = json_decode(is_string($rawBody) ? $rawBody : '', true);
+tronadoQueueCallbackReport($status, $body, is_array($reportCallback) ? $reportCallback : []);

@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/tonpays_diagnostics.php';
+require_once __DIR__ . '/../report_events.php';
 
 function tonpaysCredentialsReady(): bool
 {
@@ -136,8 +137,14 @@ function tonpaysProcessCallback(PDO $pdo, array $callback, string $providedKey, 
     if (count($rows) !== 1 || $rows[0]['Payment_Method'] !== 'TonPays') { return [404, ['ok' => false]]; }
     $order = $rows[0];
     $metadata = json_decode((string) ($order['dec_not_confirmed'] ?? ''), true);
-    if (!is_array($metadata) || !is_string($metadata['invoice_id'] ?? null)) { return [503, ['ok' => false]]; }
-    if ($metadata['invoice_id'] !== $invoiceId) { return [409, ['ok' => false]]; }
+    if (!is_array($metadata) || !is_string($metadata['invoice_id'] ?? null)) {
+        reportEventQueue('payment_review', ['gateway' => 'TonPays', 'order' => $orderId, 'user' => $order['id_user'], 'reason' => 'invalid_order_metadata'], $orderId);
+        return [503, ['ok' => false]];
+    }
+    if ($metadata['invoice_id'] !== $invoiceId) {
+        reportEventQueue('payment_mismatch', ['gateway' => 'TonPays', 'order' => $orderId, 'user' => $order['id_user'], 'reason' => 'invoice_mismatch'], $orderId);
+        return [409, ['ok' => false]];
+    }
     if ($order['payment_Status'] === 'paid') {
         return in_array($order['fulfillment_status'] ?? null, ['fulfilled', 'refunded'], true)
             ? [200, ['ok' => true, 'paid' => true]] : [503, ['ok' => false, 'error' => 'Payment requires reconciliation']];
@@ -146,9 +153,11 @@ function tonpaysProcessCallback(PDO $pdo, array $callback, string $providedKey, 
         $verified = $check($invoiceId);
     } catch (Throwable $e) {
         tonpaysLog('inquiry_failed', ['order_id' => $orderId, 'stage' => 'check_invoice'], $e);
+        reportEventQueue('payment_review', ['gateway' => 'TonPays', 'order' => $orderId, 'user' => $order['id_user'], 'reason' => get_class($e)], $orderId);
         return [502, ['ok' => false]];
     }
     if (!is_array($verified) || !tonpaysInvoiceMatchesOrder($verified, $order, $metadata)) {
+        reportEventQueue('payment_mismatch', ['gateway' => 'TonPays', 'order' => $orderId, 'user' => $order['id_user'], 'reason' => 'invoice_mismatch'], $orderId);
         tonpaysLog('invoice_mismatch', ['order_id' => $orderId, 'stage' => 'verify_invoice',
             'response_fields' => is_array($verified) ? tonpaysResponseFields($verified) : get_debug_type($verified)]);
         return [409, ['ok' => false]];
@@ -167,7 +176,9 @@ function tonpaysProcessCallback(PDO $pdo, array $callback, string $providedKey, 
     } catch (Throwable $e) {
         $pdo->prepare("UPDATE Payment_report SET fulfillment_status = 'failed', fulfillment_updated_at = NOW() WHERE id_order = ?")->execute([$orderId]);
         tonpaysLog('delivery_failed', ['order_id' => $orderId, 'stage' => 'fulfillment'], $e);
+        reportEventQueue('payment_failed', ['gateway' => 'TonPays', 'order' => $orderId, 'user' => $order['id_user'], 'reason' => get_class($e)], $orderId);
         return [500, ['ok' => false, 'error' => 'Payment requires reconciliation']];
     }
+    reportEventQueue($delivered === false ? 'payment_refunded' : 'payment_success', ['gateway' => 'TonPays', 'order' => $orderId, 'user' => $order['id_user'], 'details' => 'amount_toman=' . (float) $order['price']], $orderId, 'paymentreport');
     return [200, ['ok' => true, 'paid' => true]];
 }

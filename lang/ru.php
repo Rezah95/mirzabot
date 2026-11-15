@@ -2,6 +2,54 @@
 
 
 return [
+        'reportEvents' => [
+                'template' => '📣 {event}
+{context}
+Время: {time}',
+                'fields' => [
+                        'gateway' => 'Шлюз',
+                        'order' => 'Заказ',
+                        'user' => 'Пользователь',
+                        'service' => 'Сервис',
+                        'reason' => 'Причина',
+                        'details' => 'Детали',
+                        'job' => 'Задача cron',
+                ],
+                'events' => [
+                        'payment_creation_failed' => 'Не удалось создать заказ шлюза',
+                        'payment_success' => 'Успешная оплата',
+                        'payment_mismatch' => 'Платёж отклонён при проверке',
+                        'payment_review' => 'Нужна ручная сверка платежа',
+                        'payment_cancelled' => 'Подтверждённый платёж отменён',
+                        'payment_failed' => 'Ошибка выдачи; нужна ручная проверка',
+                        'payment_refunded' => 'Платёж возвращён на баланс',
+                        'payment_notice_failed' => 'Ошибка операции после оплаты; проверьте платёж',
+                        'callback_storage_failed' => 'Не удалось сохранить callback платежа',
+                        'cron_failed' => 'Ошибка задачи cron',
+                        'renewal_failed' => 'Ошибка обработки напоминания о продлении',
+                        'notification_failed' => 'Сбой доставки сообщения; пример для проверки',
+                        'service_monitor_failed' => 'Ошибка обработки сервиса',
+                        'service_removal_failed' => 'Не удалось удалить сервис в панели',
+                ],
+                'reasons' => [
+                        'paid_amount_below_minimum' => 'Сумма оплаты ниже минимума счёта',
+                        'invalid_paid_amount' => 'Сумма оплаты отсутствует или неверна',
+                        'invalid_received_amount' => 'Полученная сумма отсутствует или неверна',
+                        'invalid_delivered_tron' => 'Неверное количество полученных TRX',
+                        'invalid_expected_tron' => 'Неверное ожидаемое количество TRX',
+                        'invalid_order_metadata' => 'Неверные данные заказа',
+                        'missing_order_wallet' => 'Кошелёк заказа отсутствует',
+                        'wallet_mismatch' => 'Кошельки не совпадают',
+                        'legacy_token_mismatch' => 'Токен старого заказа не совпадает',
+                        'invalid_legacy_wallet' => 'Неверный кошелёк старого заказа',
+                        'requires_reconciliation' => 'Нужна ручная сверка баланса и сервиса',
+                        'cancelled' => 'Платёж отменён',
+                        'storage_error' => 'Ошибка сохранения в БД',
+                        'panel_rejected' => 'Панель не подтвердила операцию',
+                        'failed' => 'Ошибка выдачи после оплаты',
+                        'refunded' => 'Возврат на баланс',
+                ],
+        ],
         'renewalOffers' => [
                 'delivery_report' => '📨 Telegram принял уведомление о продлении
 Сервис: {username}
@@ -4298,6 +4346,7 @@ ID пользователя : %s
                         'textbot' => 'Основные тексты и кнопки',
                         'keyboard' => 'Клавиатуры',
                         'panel' => 'Веб-панель',
+                        'reportEvents' => 'Важные события',
                         'paymentGateway' => 'Платёжные шлюзы',
                         'db_defaults' => 'Значения по умолчанию',
                 ],

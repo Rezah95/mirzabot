@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../report_events.php';
+
 function tronadoSetting(string $name, string $default = ''): string
 {
     return trim((string) getPaySettingValue($name, $default));
@@ -314,7 +316,7 @@ function tronadoReceiveCallback(PDO $pdo, string $rawBody, string $signature, st
         $orders = $query->fetchAll(PDO::FETCH_ASSOC);
         if (count($orders) !== 1 || $orders[0]['Payment_Method'] !== 'Tronado') {
             $pdo->rollBack();
-            return [404, ['ok' => false, 'error' => 'Unknown or ambiguous payment']];
+            return [404, ['ok' => false, 'payment_id' => $paymentId, 'paid' => $accepted, 'error' => 'Unknown or ambiguous payment']];
         }
         $order = $orders[0];
         $mismatch = $accepted ? tronadoPaidCallbackMismatch($callback, $order) : null;
@@ -374,8 +376,27 @@ function tronadoReceiveCallback(PDO $pdo, string $rawBody, string $signature, st
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) { $pdo->rollBack(); }
         error_log('Tronado callback persistence failed: ' . $error->getMessage());
-        return [503, ['ok' => false, 'error' => 'Unable to persist callback']];
+        return [503, ['ok' => false, 'payment_id' => $paymentId, 'reason' => 'storage_error', 'error' => 'Unable to persist callback']];
     }
+}
+
+/** Called after sending the HTTP reply; invalid signatures/probes never create channel noise. */
+function tronadoQueueCallbackReport(int $status, array $body, array $callback = []): void
+{
+    if (empty($body['payment_id']) || !in_array($status, [200, 404, 409, 503], true)) { return; }
+    $event = !empty($body['cancelled']) ? 'payment_cancelled'
+        : (($body['fulfillment'] ?? '') === 'review' ? 'payment_review'
+            : ($status === 409 ? (isset($body['reason']) ? 'payment_mismatch' : 'payment_review')
+                : ($status === 503 ? 'callback_storage_failed' : ($status === 404 && !empty($body['paid']) ? 'payment_review' : null))));
+    if ($event === null) { return; }
+    if (!empty($body['cancelled'])) { error_log('Tronado paid order cancelled; manual reconciliation required: ' . $body['payment_id']); }
+    try {
+        $order = select('Payment_report', '*', 'id_order', $body['payment_id'], 'select') ?: [];
+        $details = $event === 'payment_mismatch' ? json_encode(tronadoPaymentMatchEvidence($callback, $order)) : '';
+        reportEventQueue($event, ['gateway' => 'Tronado', 'order' => $body['payment_id'], 'user' => $order['id_user'] ?? '-',
+            'reason' => $body['reason'] ?? ($event === 'payment_cancelled' ? 'cancelled' : 'requires_reconciliation'), 'details' => $details],
+            $body['payment_id'] . ':' . ($body['reason'] ?? ''));
+    } catch (Throwable $e) { error_log('Tronado callback report queue failed: ' . get_class($e)); }
 }
 
 /** Only a queued order can be claimed. Interrupted/failed deliveries are never blindly replayed. */
@@ -392,6 +413,7 @@ function tronadoFulfillQueued(PDO $pdo, string $paymentId, callable $deliver, ?c
             ->execute([$paymentId]);
         clearSelectCache('Payment_report');
         error_log('Tronado historical payment requires manual reconciliation: ' . $paymentId);
+        reportEventQueue('payment_review', ['gateway' => 'Tronado', 'order' => $paymentId, 'user' => $candidate['id_user'], 'reason' => 'requires_reconciliation'], $paymentId . ':');
         return false;
     }
     $claim = $pdo->prepare("UPDATE Payment_report SET fulfillment_status = 'processing', fulfillment_updated_at = NOW()
@@ -415,13 +437,16 @@ function tronadoFulfillQueued(PDO $pdo, string $paymentId, callable $deliver, ?c
             WHERE id_order = ? AND fulfillment_status = 'processing'")->execute([$paymentId]);
         clearSelectCache('Payment_report');
         error_log('Tronado fulfillment failed for ' . $paymentId . ': ' . $error->getMessage());
+        reportEventQueue('payment_failed', ['gateway' => 'Tronado', 'order' => $paymentId, 'user' => $candidate['id_user'], 'reason' => get_class($error)], $paymentId);
         return false;
     }
     error_log('Tronado delivery result: ' . $paymentId . ' ' . $status);
+    if ($status === 'refunded') { reportEventQueue('payment_refunded', ['gateway' => 'Tronado', 'order' => $paymentId, 'user' => $candidate['id_user'], 'reason' => 'refunded'], $paymentId, 'paymentreport'); }
     if ($delivered !== false && $afterDelivery !== null) {
         try { $afterDelivery($order); }
         catch (Throwable $error) {
             error_log('Tronado post-payment notification failed for ' . $paymentId . ': ' . $error->getMessage());
+            reportEventQueue('payment_notice_failed', ['gateway' => 'Tronado', 'order' => $paymentId, 'user' => $order['id_user'], 'reason' => get_class($error)], $paymentId);
         }
     }
     return true;

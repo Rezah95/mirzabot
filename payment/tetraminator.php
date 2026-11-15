@@ -52,6 +52,7 @@ $paidAmount = $inquiry['data']['amount'] ?? null;
 if (!is_scalar($paidAmount) || !ctype_digit((string) $paidAmount)
     || (int) $paidAmount !== (int) $Payment_report['price']) {
     error_log('Tetraminator amount mismatch for ' . $order_id);
+    reportEventQueue('payment_mismatch', ['gateway' => 'Tetraminator', 'order' => $order_id, 'user' => $Payment_report['id_user'], 'reason' => 'invoice_mismatch'], $order_id);
     http_response_code(409); echo 'Payment amount does not match order'; exit;
 }
 

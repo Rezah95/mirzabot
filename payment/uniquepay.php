@@ -58,6 +58,7 @@ if (!is_array($createdInvoice) || !is_string($expectedRefId) || $expectedRefId =
     || !isset($verifiedInvoice['amount']) || !ctype_digit((string) $verifiedInvoice['amount'])
     || (int) $verifiedInvoice['amount'] !== (int) $Payment_report['price']) {
     error_log('UniquePay invoice mismatch for order ' . $order_id);
+    reportEventQueue('payment_mismatch', ['gateway' => 'UniquePay', 'order' => $order_id, 'user' => $Payment_report['id_user'], 'reason' => 'invoice_mismatch'], $order_id);
     http_response_code(409);
     echo json_encode(['ok' => false, 'error' => 'Invoice does not match order']);
     exit;

@@ -19,26 +19,31 @@ function tronadoDeliverPayment(PDO $pdo, string $paymentId): bool
         return DirectPayment($order['id_order'], dirname(__DIR__) . '/images.jpg');
     }, static function (array $order): void {
         global $textbotlang;
-        $cashback = getPaySettingValue('tronado_cashback', '0');
-        $buyer = select('user', '*', 'id', $order['id_user'], 'select');
-        if (is_numeric($cashback) && (float) $cashback > 0 && $buyer) {
-            $amount = ((float) $order['price'] * (float) $cashback) / 100;
-            addBalance($buyer['id'], $amount);
-            sendmessage($buyer['id'], sprintf($textbotlang['paymentGateway']['giftReport'], $amount), null, 'HTML');
-        }
-        $setting = select('setting', '*');
-        if (!empty($setting['Channel_Report'])) {
-            $topic = select('topicid', 'idreport', 'report', 'paymentreport', 'select')['idreport'] ?? null;
-            $report = telegram('sendmessage', [
-                'chat_id' => $setting['Channel_Report'],
-                'message_thread_id' => $topic,
-                'text' => sprintf($textbotlang['paymentGateway']['reportTronado'],
-                    htmlspecialchars((string) ($buyer['username'] ?? $order['id_user']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    $order['id_user'], number_format((float) $order['price'])),
-                'parse_mode' => 'HTML',
-            ]);
-            if (empty($report['ok'])) {
-                error_log('Tronado report failed for ' . $order['id_order'] . '; Telegram code=' . (int) ($report['error_code'] ?? 0));
+        $buyer = null;
+        try {
+            $cashback = getPaySettingValue('tronado_cashback', '0');
+            $buyer = select('user', '*', 'id', $order['id_user'], 'select');
+            if (is_numeric($cashback) && (float) $cashback > 0 && $buyer) {
+                $amount = ((float) $order['price'] * (float) $cashback) / 100;
+                addBalance($buyer['id'], $amount);
+                sendmessage($buyer['id'], sprintf($textbotlang['paymentGateway']['giftReport'], $amount), null, 'HTML');
+            }
+        } finally {
+            $setting = select('setting', '*');
+            if (!empty($setting['Channel_Report'])) {
+                $topic = select('topicid', 'idreport', 'report', 'paymentreport', 'select')['idreport'] ?? null;
+                try { $report = telegram('sendmessage', [
+                    'chat_id' => $setting['Channel_Report'],
+                    'message_thread_id' => $topic,
+                    'text' => sprintf($textbotlang['paymentGateway']['reportTronado'],
+                        htmlspecialchars((string) ($buyer['username'] ?? $order['id_user']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                        $order['id_user'], number_format((float) $order['price'])),
+                    'parse_mode' => 'HTML',
+                ]); } catch (Throwable $e) { $report = []; }
+                if (empty($report['ok'])) {
+                    error_log('Tronado report failed for ' . $order['id_order'] . '; Telegram code=' . (int) ($report['error_code'] ?? 0));
+                    reportEventQueue('payment_success', ['gateway' => 'Tronado', 'order' => $order['id_order'], 'user' => $order['id_user'], 'details' => 'amount_toman=' . (float) $order['price']], $order['id_order'], 'paymentreport');
+                }
             }
         }
     });

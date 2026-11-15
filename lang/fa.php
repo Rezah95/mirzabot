@@ -2,6 +2,54 @@
 
 
 return [
+        'reportEvents' => [
+                'template' => '📣 {event}
+{context}
+زمان: {time}',
+                'fields' => [
+                        'gateway' => 'درگاه',
+                        'order' => 'سفارش',
+                        'user' => 'کاربر',
+                        'service' => 'سرویس',
+                        'reason' => 'دلیل',
+                        'details' => 'جزئیات',
+                        'job' => 'کرون',
+                ],
+                'events' => [
+                        'payment_creation_failed' => 'ساخت سفارش درگاه انجام نشد',
+                        'payment_success' => 'پرداخت موفق',
+                        'payment_mismatch' => 'رد تطبیق پرداخت',
+                        'payment_review' => 'پرداخت نیازمند بررسی دستی',
+                        'payment_cancelled' => 'لغو پرداخت پس از تأیید',
+                        'payment_failed' => 'خطا در تحویل پرداخت؛ بررسی دستی لازم است',
+                        'payment_refunded' => 'مبلغ پرداخت به کیف پول برگشت',
+                        'payment_notice_failed' => 'خطای عملیات پس از پرداخت؛ اصل پرداخت را بررسی کنید',
+                        'callback_storage_failed' => 'ذخیرهٔ کال‌بک پرداخت انجام نشد',
+                        'cron_failed' => 'اجرای کرون خطا داد',
+                        'renewal_failed' => 'پردازش یادآوری تمدید خطا داد',
+                        'notification_failed' => 'اختلال ارسال پیام؛ یک نمونه برای بررسی',
+                        'service_monitor_failed' => 'پردازش سرویس خطا داد',
+                        'service_removal_failed' => 'حذف سرویس در پنل انجام نشد',
+                ],
+                'reasons' => [
+                        'paid_amount_below_minimum' => 'مبلغ پرداختی کمتر از حد مجاز فاکتور است',
+                        'invalid_paid_amount' => 'مبلغ پرداختی نامعتبر یا مفقود است',
+                        'invalid_received_amount' => 'مبلغ دریافتی نامعتبر یا مفقود است',
+                        'invalid_delivered_tron' => 'مقدار ترون تحویلی نامعتبر است',
+                        'invalid_expected_tron' => 'مقدار ترون سفارش نامعتبر است',
+                        'invalid_order_metadata' => 'اطلاعات سفارش نامعتبر است',
+                        'missing_order_wallet' => 'کیف پول سفارش ثبت نشده است',
+                        'wallet_mismatch' => 'کیف پول متفاوت است',
+                        'legacy_token_mismatch' => 'توکن قرارداد قدیمی متفاوت است',
+                        'invalid_legacy_wallet' => 'کیف پول قرارداد قدیمی نامعتبر است',
+                        'requires_reconciliation' => 'نیازمند تطبیق دستی با موجودی و سرویس',
+                        'cancelled' => 'لغو پرداخت',
+                        'storage_error' => 'خطای ثبت در دیتابیس',
+                        'panel_rejected' => 'پنل عملیات را تأیید نکرد',
+                        'failed' => 'شکست تحویل پرداخت',
+                        'refunded' => 'بازگشت به کیف پول',
+                ],
+        ],
         'renewalOffers' => [
                 'delivery_report' => '📨 ثبت تأیید تلگرام برای پیام تمدید
 سرویس: {username}
@@ -4308,6 +4356,7 @@ f,n.n2',
                         'textbot' => 'متن‌ها و دکمه‌های اصلی',
                         'keyboard' => 'کیبوردها',
                         'panel' => 'پنل وب',
+                        'reportEvents' => 'گزارش رخدادهای مهم',
                         'paymentGateway' => 'درگاه‌های پرداخت',
                         'db_defaults' => 'مقادیر پیش‌فرض',
                 ],
