@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.2-dev.1 — 2026-11-15 (prerelease)
+
+- Reset previous unlimited-plan usage when switching to finite quota with either additive renewal method. Preserve the chosen time policy and positive finite-plan carry-over.
+- Abort renewal when the usage reset fails; no schema change or automatic repair of previously converted services.
+- Validate the real shared renewal path with isolated tests for 250 GiB unlimited usage to a 100 GiB plan, finite carry-over, time policy, unlimited renewals and failed resets. No live provider/VPS verification.
+
 ## 0.9.1 — 2026-11-06
 
 - Promote the approved 0.9.1-dev.1 updater repair: prepare and validate the replacement before publication, retain the previous tree and attempt rollback on rename failure.

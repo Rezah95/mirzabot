@@ -411,3 +411,9 @@ Trials (in all four supported languages), unpaid/waiting/failed orders, wallet t
 Version `0.8.0` is a backward-compatible feature release after `0.7.1`, following the pre-1.0 minor-for-features policy. The authoritative version is `version`; development is on `dev`, and approved production releases are promoted to `master` and tagged `v<version>`. This release follows the maintainer's standing instruction to publish both branches.
 
 Checks: `php tests/broadcast_flow_test.php`, `php tests/bulk_operations_test.php` and `php tests/purchase_audience_test.php`. The last test runs real SQL only when `AUDIENCE_TEST_SOCKET` points to a disposable MySQL server under `/tmp/mirza-audience-test.*`; otherwise it runs input validation and reports the skipped SQL checks.
+
+### تمدید از نامحدود به حجمی (0.9.2-dev.1، آزمایشی)
+
+در روش‌های «ریست زمان و اضافه کردن حجم قبلی» و «اضافه شدن زمان و حجم به ماه بعد»، هنگام تبدیل سقف نامحدود (صفر) به حجم محدود، مصرف قبلی ریست می‌شود و حجم خرید جدید کامل قابل استفاده است. برای نمونه، مصرف ۲۵۰ گیگ در طرح نامحدود، از طرح جدید ۱۰۰ گیگ کسر نمی‌شود. سیاست زمان روش انتخابی و انتقال مانده طرح‌های حجمی حفظ می‌شود؛ خطای ریست مانع اعمال سقف جدید است. این اصلاح برای تمدیدهای بعدی است و سرویس‌های قبلاً تغییرکرده را خودکار ترمیم نمی‌کند.
+
+نسخه در `version` نگهداری می‌شود؛ این تغییر فعلاً روی `dev` است و نسخه پروداکشن `master` همچنان 0.9.1 است. بررسی محلی: `php tests/unlimited_renewal_test.php`.

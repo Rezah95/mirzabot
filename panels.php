@@ -220,6 +220,14 @@ class ManagePanel
         update("invoice", 'uuid', null, "username", $username);
         update("invoice", 'Status', "active", "username", $username);
         $Method_extend = extendMethodKey($Method_extend);
+        // Unlimited usage is not a debt against the newly purchased finite quota.
+        if ((float) $data_limit_old === 0.0 && $new_limit > 0) {
+            $Method_extend = match ($Method_extend) {
+                'resetTimeAddVolume' => 'resetVolumeTime',
+                'addTimeVolumeNextMonth' => 'resetVolumeAddTime',
+                default => $Method_extend,
+            };
+        }
         if ($Method_extend == "resetVolumeTime") {
             $reset = $this->ResetUserDataUsage($username, $panel['name_panel']);
             if ($reset['status'] == false) {
