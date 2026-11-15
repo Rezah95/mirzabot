@@ -298,6 +298,11 @@ function sendmessage($chat_id,$text,$keyboard,$parse_mode,$bot_token = null){
             'reply_markup' => $index == count($chunks) - 1 ? $keyboard : null,
             'parse_mode' => $parse_mode,
         ], $bot_token);
+        if (($result['ok'] ?? false) !== true) {
+            // Earlier chunks may already exist: do not retry the entire message on 429.
+            if ($index > 0) { $result = ['ok' => false, 'partial_delivery' => true]; }
+            return $result;
+        }
     }
     return $result;
 }

@@ -40,60 +40,64 @@ class ServiceMonitor
             return;
         $stmtCron = $this->pdo->prepare("UPDATE invoice SET time_cron = ? WHERE id_invoice = ?");
         foreach ($invoices as $invoice) {
-            if ($invoice['time_cron'] != null && (time() - $invoice['time_cron']) < 1600)
-                continue;
-            $stmtCron->execute([time(), $invoice['id_invoice']]);
-            clearSelectCache('invoice');
-            $check_send = json_decode($invoice['notifctions'], true);
-            $data = $this->processInvoice($invoice);
-            if (!is_array($data))
-                continue;
-            bulkEnsureExpirySchema($this->pdo);
-            $expiry = $data['userData']['expire'] ?? null;
-            if ($expiry !== null && (is_numeric($expiry) || is_string($expiry))) {
-                $expiry = is_numeric($expiry) ? (int) $expiry : strtotime($expiry);
-                if ($expiry !== false && $expiry >= 0) {
-                    $this->pdo->prepare('UPDATE invoice SET expires_at = ? WHERE id_invoice = ?')
-                        ->execute([$expiry, $invoice['id_invoice']]);
-                }
-            }
-            $volumeLimit = $data['userData']['data_limit'] ?? 0;
-            $volumeUsed = $data['userData']['used_traffic'] ?? 0;
-            $volumeEnded = ($data['userData']['status'] ?? '') === 'limited'
-                || (is_numeric($volumeLimit) && is_numeric($volumeUsed) && (float) $volumeLimit > 0 && (float) $volumeUsed >= (float) $volumeLimit);
-            if ($volumeEnded) {
-                $this->pdo->prepare('UPDATE invoice SET depleted_at = COALESCE(depleted_at, ?) WHERE id_invoice = ?')
-                    ->execute([time(), $invoice['id_invoice']]);
-            } elseif (($data['userData']['status'] ?? '') === 'active') {
-                $this->pdo->prepare('UPDATE invoice SET depleted_at = NULL WHERE id_invoice = ?')
-                    ->execute([$invoice['id_invoice']]);
-            }
-            $offerKinds = [];
             try {
-                $offerLang = languagechange(dirname(__DIR__), $data['user']['lang'] ?? 'fa');
-                $offerKinds = renewalWarningNotify($this->pdo, renewalReminderSettings($this->pdo), $data['invoice'], $data['user'], $data['userData'],
-                    function (array $invoice, string $message) use ($offerLang): array {
-                        $keyboard = json_encode(['inline_keyboard' => [[['text' => $offerLang['renewalOffers']['renew'], 'callback_data' => 'extend_' . $invoice['id_invoice']]]]]);
-                        return sendmessage($invoice['id_user'], $message, $keyboard, 'HTML', $invoice['bottype'] ?: null);
-                    }, $offerLang);
-            } catch (Throwable $e) { error_log('Renewal offer failed: ' . get_class($e)); }
-            $result = false;
-            if (!$check_send['volume'] && !in_array('volume', $offerKinds, true)) {
-                if ($this->status_cron['volume'])
-                    $result = $this->checkVolumeThreshold($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
+                if ($invoice['time_cron'] != null && (time() - $invoice['time_cron']) < 1600)
+                    continue;
+                $stmtCron->execute([time(), $invoice['id_invoice']]);
+                clearSelectCache('invoice');
+                $check_send = json_decode($invoice['notifctions'], true);
+                $data = $this->processInvoice($invoice);
+                if (!is_array($data))
+                    continue;
+                bulkEnsureExpirySchema($this->pdo);
+                $expiry = $data['userData']['expire'] ?? null;
+                if ($expiry !== null && (is_numeric($expiry) || is_string($expiry))) {
+                    $expiry = is_numeric($expiry) ? (int) $expiry : strtotime($expiry);
+                    if ($expiry !== false && $expiry >= 0) {
+                        $this->pdo->prepare('UPDATE invoice SET expires_at = ? WHERE id_invoice = ?')
+                            ->execute([$expiry, $invoice['id_invoice']]);
+                    }
+                }
+                $volumeLimit = $data['userData']['data_limit'] ?? 0;
+                $volumeUsed = $data['userData']['used_traffic'] ?? 0;
+                $volumeEnded = ($data['userData']['status'] ?? '') === 'limited'
+                    || (is_numeric($volumeLimit) && is_numeric($volumeUsed) && (float) $volumeLimit > 0 && (float) $volumeUsed >= (float) $volumeLimit);
+                if ($volumeEnded) {
+                    $this->pdo->prepare('UPDATE invoice SET depleted_at = COALESCE(depleted_at, ?) WHERE id_invoice = ?')
+                        ->execute([time(), $invoice['id_invoice']]);
+                } elseif (($data['userData']['status'] ?? '') === 'active') {
+                    $this->pdo->prepare('UPDATE invoice SET depleted_at = NULL WHERE id_invoice = ?')
+                        ->execute([$invoice['id_invoice']]);
+                }
+                $offerKinds = [];
+                try {
+                    $offerLang = languagechange(dirname(__DIR__), $data['user']['lang'] ?? 'fa');
+                    $offerKinds = renewalWarningNotify($this->pdo, renewalReminderSettings($this->pdo), $data['invoice'], $data['user'], $data['userData'],
+                        function (array $invoice, string $message) use ($offerLang): array {
+                            $keyboard = json_encode(['inline_keyboard' => [[['text' => $offerLang['renewalOffers']['renew'], 'callback_data' => 'extend_' . $invoice['id_invoice']]]]]);
+                            return sendmessage($invoice['id_user'], $message, $keyboard, 'HTML', $invoice['bottype'] ?: null);
+                        }, $offerLang, null, 'renewalDeliveryReport');
+                } catch (Throwable $e) { error_log('Renewal offer failed: ' . get_class($e)); }
+                $result = false;
+                if (!$check_send['volume'] && !in_array('volume', $offerKinds, true)) {
+                    if ($this->status_cron['volume'])
+                        $result = $this->checkVolumeThreshold($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
+                }
+                if ($result)
+                    $data['invoice'] = select("invoice", "*", "id_invoice", $invoice['id_invoice']);
+                if (!$check_send['time'] && !in_array('time', $offerKinds, true)) {
+                    if ($this->status_cron['day'])
+                        $this->checkTimeExpiration($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
+                }
+                if ($this->status_cron['remove'])
+                    $this->shouldRemoveService($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
+                if ($this->status_cron['remove_volume'])
+                    $this->shouldRemoveServiceـvolume($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
+                if ($data['panel']['inboundstatus'] == "oninbounddisable" && $data['panel']['type'] == "marzban" && $data['panel']['version_panel'] != "1")
+                    $this->active_inbound_expire($data['invoice'], $data['userData'], $data['panel']);
+            } catch (Throwable $e) {
+                error_log('Service monitor failed: invoice=' . $invoice['id_invoice'] . ' ' . get_class($e));
             }
-            if ($result)
-                $data['invoice'] = select("invoice", "*", "id_invoice", $invoice['id_invoice']);
-            if (!$check_send['time'] && !in_array('time', $offerKinds, true)) {
-                if ($this->status_cron['day'])
-                    $this->checkTimeExpiration($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
-            }
-            if ($this->status_cron['remove'])
-                $this->shouldRemoveService($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
-            if ($this->status_cron['remove_volume'])
-                $this->shouldRemoveServiceـvolume($data['invoice'], $data['user'], $data['userData'], $invoice['username']);
-            if ($data['panel']['inboundstatus'] == "oninbounddisable" && $data['panel']['type'] == "marzban" && $data['panel']['version_panel'] != "1")
-                $this->active_inbound_expire($data['invoice'], $data['userData'], $data['panel']);
         }
     }
 
@@ -150,9 +154,9 @@ class ServiceMonitor
                 sprintf($this->textBotLang['users']['notify']['serviceUsername'], $username) .
                 sprintf($this->textBotLang['users']['notify']['serviceStatus'], $userData['status']) .
                 sprintf($this->textBotLang['users']['notify']['remainingVolume'], $formattedVolume);
-            $this->send_notifactions($invoice, $user, $message, true, $invoice['bottype']);
-            $this->sendReportNotification($reportMessage);
+            if (!$this->send_notifactions($invoice, $user, $message, true, $invoice['bottype'])) { return false; }
             $this->updateInvoiceStatus("volume", $invoice);
+            $this->sendReportNotification($reportMessage);
             return true;
         }
     }
@@ -272,9 +276,9 @@ class ServiceMonitor
                 sprintf($this->textBotLang['users']['notify']['serviceUsername2'], $invoice['username']) .
                 sprintf($this->textBotLang['users']['notify']['serviceStatus2'], $userData['status']) .
                 sprintf($this->textBotLang['users']['notify']['remainingDays'], $daysRemaining);
-            $this->send_notifactions($invoice, $user, $message, true, $invoice['bottype']);
-            $this->sendReportNotification($reportMessage);
+            if (!$this->send_notifactions($invoice, $user, $message, true, $invoice['bottype'])) { return false; }
             $this->updateInvoiceStatus("time", $invoice);
+            $this->sendReportNotification($reportMessage);
             return true;
         }
     }
@@ -285,10 +289,13 @@ class ServiceMonitor
             $status_cron_user = $status_cron_user['status_cron'] ?? 1;
         }
         if (intval($status_cron_user) == 0)
-            return;
+            return false;
         $keyboard = $this->createExtendServiceKeyboard($invoice['id_invoice']);
         $keyboard = $keyboard_active ? $keyboard : null;
-        sendmessage($invoice['id_user'], $message, $keyboard, 'HTML', $bot_token);
+        $result = sendmessage($invoice['id_user'], $message, $keyboard, 'HTML', $bot_token ?: null);
+        $ok = ($result['ok'] ?? false) === true;
+        if (!$ok) { error_log('Service notification failed: invoice=' . $invoice['id_invoice'] . ' code=' . (int) ($result['error_code'] ?? 0)); }
+        return $ok;
     }
 
     public function createExtendServiceKeyboard($invoiceId)

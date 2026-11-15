@@ -3,6 +3,18 @@
 
 return [
         'renewalOffers' => [
+                'delivery_report' => '📨 Telegram accepted a renewal notification
+Service: {username}
+Invoice: {invoice}
+User: {user}
+Kind: {kind}
+Chat: {chat}
+Message: {message}
+Time: {time}
+This does not confirm that the message was read.',
+                'kind_time' => 'Time warning offer',
+                'kind_volume' => 'Volume warning offer',
+                'kind_expired' => 'After-expiry reminder',
                 'edit_web' => '📝 Edit message texts on the web',
                 'stats' => 'Sent: {sent} | Needs review: {errors}',
                 'entry' => '⏰ Renewal reminders and offers',

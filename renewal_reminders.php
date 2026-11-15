@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/discount_rules.php';
+require_once __DIR__ . '/renewal_delivery.php';
 
 function renewalReminderValidate(array $settings): void
 {
@@ -142,7 +143,7 @@ function renewalReminderCoupon(PDO $pdo, array $settings, array $invoice, array 
 }
 
 /** Callbacks allow exercising real scheduling and persistence without sending messages. */
-function renewalReminderRun(PDO $pdo, callable $readPanel, callable $send, string $testName, ?int $now = null): int
+function renewalReminderRun(PDO $pdo, callable $readPanel, callable $send, string $testName, ?int $now = null, ?callable $report = null): int
 {
     $now ??= time();
     $lock = 'renewal_reminders_' . sha1((string) $pdo->query('SELECT DATABASE()')->fetchColumn());
@@ -200,10 +201,13 @@ function renewalReminderRun(PDO $pdo, callable $readPanel, callable $send, strin
                 // Reserve the occurrence before the HTTP request. Never replay an ambiguous delivery.
                 $pdo->prepare("UPDATE renewal_reminder_state SET sent_count = ?, last_sent_at = ?, status = 'sending' WHERE id = ?")
                     ->execute([$number, $now, $id]);
-                $result = $send($invoice, $message);
+                try { $result = $send($invoice, $message); }
+                catch (Throwable $e) { $result = []; } // Preserve ambiguous delivery without replaying this occurrence.
+                renewalDeliveryRecord($pdo, 'renewal_reminder_state', $id, $result, $now);
                 if (($result['ok'] ?? false) === true) {
                     $pdo->prepare("UPDATE renewal_reminder_state SET confirmed_count = confirmed_count + 1, status = 'active', next_attempt_at = 0 WHERE id = ?")->execute([$id]);
                     $sent++;
+                    renewalDeliveryReportSafely($report, $invoice, $result, 'expired');
                 } elseif ((int) ($result['error_code'] ?? 0) === 429) {
                     $retry = max(60, (int) ($result['parameters']['retry_after'] ?? 600));
                     $pdo->prepare("UPDATE renewal_reminder_state SET sent_count = ?, last_sent_at = ?, next_attempt_at = ?, status = 'active' WHERE id = ?")

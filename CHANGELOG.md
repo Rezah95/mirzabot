@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.2-dev.2 — 2026-11-15 (prerelease)
+
+- Repair renewal notification delivery bookkeeping: do not mark failed legacy warnings sent, stop multipart sends at the first failure, and prevent an offer backoff/blocked state from bypassing the legacy sender.
+- Restore cron-channel reporting for accepted pre-expiry offers and after-expiry reminders; report failures never replay a successful user notification. Localized report texts remain editable in the web dashboard.
+- Add nullable Telegram attempt time, destination, message ID and error code to both renewal state tables. Preserve historical states without inventing delivery evidence or replaying them. Run the normal database bootstrap during upgrade before the new cron code.
+- Clamp invalid/negative byte displays to zero and isolate per-service monitor failures. Existing unlimited-to-finite renewal correction remains included. No historical delivery or live VPS success is claimed.
+
 ## 0.9.2-dev.1 — 2026-11-15 (prerelease)
 
 - Reset previous unlimited-plan usage when switching to finite quota with either additive renewal method. Preserve the chosen time policy and positive finite-plan carry-over.

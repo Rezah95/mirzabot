@@ -3,6 +3,18 @@
 
 return [
         'renewalOffers' => [
+                'delivery_report' => '📨 Telegram 已接受续费通知
+服务：{username}
+订单：{invoice}
+用户：{user}
+类型：{kind}
+聊天：{chat}
+消息：{message}
+时间：{time}
+这并不表示消息已被阅读。',
+                'kind_time' => '到期前优惠',
+                'kind_volume' => '流量用尽前优惠',
+                'kind_expired' => '到期后提醒',
                 'edit_web' => '📝 在网页编辑消息文本',
                 'stats' => '已发送：{sent} | 需检查：{errors}',
                 'entry' => '⏰ 续费提醒与优惠',

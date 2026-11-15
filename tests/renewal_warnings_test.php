@@ -34,11 +34,17 @@ try {
     $legacy['create'] = preg_replace('/^.*warning_.*\n/m', '', $legacy['create']); unset($legacy['columns']);
     $schema->apply('renewal_reminder_settings', $legacy);
     $pdo->exec("UPDATE renewal_reminder_settings SET message_template='custom فارسی 😀', discount_value=25, enabled=1");
+    $oldState = require dirname(__DIR__) . '/db/tables/renewal_warning_state.php';
+    $oldState['create'] = preg_replace('/^.*delivery_.*\n/m', '', $oldState['create']); unset($oldState['columns']);
+    $schema->apply('renewal_warning_state', $oldState);
+    $pdo->exec("INSERT INTO renewal_warning_state (id,invoice_id,user_id,kind,status,created_at) VALUES ('legacy','legacy','101','volume','sent',1)");
     for ($i = 0; $i < 2; $i++) {
         foreach (['renewal_reminder_settings', 'renewal_warning_state', 'DiscountSell', 'Giftcodeconsumed', 'Discount', 'service_other'] as $table) {
             $schema->apply($table, require dirname(__DIR__) . '/db/tables/' . $table . '.php');
         }
     }
+    $legacyState = $pdo->query("SELECT * FROM renewal_warning_state WHERE id='legacy'")->fetch(PDO::FETCH_ASSOC);
+    offerCheck($legacyState['status'] === 'sent' && $legacyState['delivery_at'] === null, 'Migration invented historical evidence or reset state');
     $s = renewalReminderSettings($pdo);
     offerCheck($s['message_template'] === 'custom فارسی 😀' && (int) $s['discount_value'] === 25 && (int) $s['enabled'] === 1 && (int) $s['warning_enabled'] === 0, 'Upgrade changed existing settings');
     $from_id = 101; $message_id = 2; $messages = []; $adminUser = ['step' => 'home'];
@@ -94,7 +100,7 @@ try {
     $pdo->exec("INSERT INTO service_other (id_user,username,value,time,price,type,status,output) VALUES ('101','sample<&','{}','2026/11/06 00:00:00','100','extend_user','paid','{}')");
     $notify(); offerCheck(count($sent) === $count + 1, 'Unlimited-time renewal failed to rearm warning');
     $invoice['id_invoice'] = 'rate-limit';
-    $notify(null, static fn() => ['ok' => false, 'error_code' => 429, 'parameters' => ['retry_after' => 60]]);
+    offerCheck($notify(null, static fn() => ['ok' => false, 'error_code' => 429, 'parameters' => ['retry_after' => 60]]) === ['volume'], '429 bypassed by legacy warning');
     $before = (int) $pdo->query('SELECT COUNT(*) FROM DiscountSell')->fetchColumn(); $count = count($sent);
     $notify(null, null, $base + 59); offerCheck(count($sent) === $count, '429 backoff ignored');
     $notify(null, null, $base + 60);
@@ -107,6 +113,14 @@ try {
         $invoice['id_invoice'] = bin2hex(random_bytes(4));
         offerCheck($notify(null, null, null, array_replace($user, $change)) === [], 'Ineligible user notified');
     }
+    $invoice['id_invoice'] = 'evidence'; $reports = 0;
+    $accepted = static fn() => ['ok' => true, 'result' => ['chat' => ['id' => 101], 'message_id' => 42]];
+    $report = static function () use (&$reports) { $reports++; throw new RuntimeException('Report unavailable'); };
+    renewalWarningNotify($pdo, $s, $invoice, $user, $fresh, $accepted, $textbotlang, $base, $report);
+    renewalWarningNotify($pdo, $s, $invoice, $user, $fresh, $accepted, $textbotlang, $base, $report);
+    $evidence = $pdo->query("SELECT * FROM renewal_warning_state WHERE invoice_id='evidence'")->fetch(PDO::FETCH_ASSOC);
+    offerCheck($reports === 1 && $evidence['status'] === 'sent' && (int) $evidence['delivery_at'] === $base
+        && (string) $evidence['delivery_chat_id'] === '101' && (int) $evidence['delivery_message_id'] === 42, 'Evidence/report deduplication failed');
     // Same override merge used by runtime; web editor must expose the full new root.
     $override = ['renewalOffers' => ['volume' => 'سفارشی 😀 {username} {remaining_gb}']];
     $custom = array_replace_recursive($textbotlang, $override);

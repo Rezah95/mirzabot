@@ -103,15 +103,19 @@ try {
     $read = static fn($invoice) => ['status' => $invoice['depleted_at'] ? 'limited' : 'expired', 'expire' => $invoice['expires_at'], 'data_limit' => 100, 'used_traffic' => $invoice['depleted_at'] ? 100 : 1];
     $send = static function ($invoice, $message) use (&$messages): array {
         $messages[] = [$invoice['id_invoice'], $message];
-        return ['ok' => true];
+        return ['ok' => true, 'result' => ['chat' => ['id' => 101], 'message_id' => 77]];
     };
-    $run = static fn(int $now) => renewalReminderRun($pdo, $read, $send, 'Test service', $now);
+    $reports = [];
+    $report = static function ($invoice, $result, $kind) use (&$reports) { $reports[] = [$invoice['id_invoice'], $kind]; };
+    $run = static fn(int $now) => renewalReminderRun($pdo, $read, $send, 'Test service', $now, $report);
     expectReminder($run($base + 3 * 86400) === 0, 'Disabled worker sends messages');
     renewalReminderSave($pdo, ['enabled' => 1, 'discount_send' => 2, 'discount_mode' => 'fixed', 'discount_value' => 20000], $base);
     expectReminder($run($base + 3 * 86400 - 1) === 0, 'Reminder sent early');
     expectReminder($run($base + 3 * 86400) === 1, 'Day 3 send or another active service blocks delivery');
     expectReminder(count($messages) === 1 && $messages[0][0] === 'ended' && !str_contains($messages[0][1], 'کد تخفیف'), 'Wrong recipient or early coupon');
     expectReminder($run($base + 3 * 86400) === 0, 'Duplicate cron delivered twice');
+    $delivery = $pdo->query("SELECT * FROM renewal_reminder_state WHERE invoice_id='ended'")->fetch(PDO::FETCH_ASSOC);
+    expectReminder($reports === [['ended', 'expired']] && (int) $delivery['delivery_message_id'] === 77 && (int) $delivery['delivery_chat_id'] === 101, 'Reminder evidence/report missing or duplicated');
     expectReminder($run($base + 6 * 86400) === 1, 'Day 6 send');
     $coupon = $pdo->query("SELECT * FROM DiscountSell WHERE target_user_id = '101'")->fetch(PDO::FETCH_ASSOC);
     expectReminder($coupon && $coupon['discount_mode'] === 'fixed' && $coupon['type'] === 'extend', 'Wrong automatic coupon');

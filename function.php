@@ -997,8 +997,8 @@ function cubepayCardDetailsText($payment)
 function formatBytes($bytes, $precision = 2): string
 {
     global $textbotlang;
-    $base = log($bytes, 1024);
-    $power = $bytes > 0 ? floor($base) : 0;
+    $bytes = is_numeric($bytes) && is_finite((float) $bytes) ? max(0.0, (float) $bytes) : 0.0;
+    $power = $bytes > 0 ? min(4, max(0, (int) floor(log($bytes, 1024)))) : 0;
     $suffixes = [
         $textbotlang['common']['units']['byte'],
         $textbotlang['common']['units']['kilobyte'],
@@ -1006,7 +1006,7 @@ function formatBytes($bytes, $precision = 2): string
         $textbotlang['common']['units']['gigabyteAlt'],
         $textbotlang['common']['units']['terabyte'],
     ];
-    return round(pow(1024, $base - $power), $precision) . ' ' . $suffixes[$power];
+    return round($bytes / pow(1024, $power), $precision) . ' ' . $suffixes[$power];
 }
 function generateUsername($from_id, $Metode, $username, $randomString, $text, $namecustome, $usernamecustom)
 {

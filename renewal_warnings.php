@@ -34,7 +34,7 @@ function renewalWarningRender(array $lang, array $invoice, string $kind, array $
 }
 
 /** Each threshold sends once per observed expiry/quota cycle; 429 retries reuse the coupon. */
-function renewalWarningNotify(PDO $pdo, array $settings, array $invoice, array $user, array $fresh, callable $send, array $lang, ?int $now = null): array
+function renewalWarningNotify(PDO $pdo, array $settings, array $invoice, array $user, array $fresh, callable $send, array $lang, ?int $now = null, ?callable $report = null): array
 {
     $now ??= time();
     if (($user['User_Status'] ?? '') !== 'Active' || (int) ($user['status_cron'] ?? 1) === 0
@@ -60,10 +60,10 @@ function renewalWarningNotify(PDO $pdo, array $settings, array $invoice, array $
             $query = $pdo->prepare('SELECT * FROM renewal_warning_state WHERE id = ?'); $query->execute([$id]);
             $state = $query->fetch(PDO::FETCH_ASSOC);
             if ($state['status'] !== 'ready') {
-                if (in_array($state['status'], ['sent', 'sending', 'uncertain'], true)) { $handled[] = $kind; }
+                $handled[] = $kind; // Never bypass an offer failure with the legacy sender.
                 continue;
             }
-            if ((int) $state['next_attempt_at'] > $now) { continue; }
+            if ((int) $state['next_attempt_at'] > $now) { $handled[] = $kind; continue; }
             $coupon = $state['coupon_code'] ? discountCodeRow($pdo, $state['coupon_code']) : null;
             if (!$coupon || ((int) $coupon['time'] > 0 && (int) $coupon['time'] <= $now)) {
                 $coupon = renewalReminderCouponData(['discount_value' => $settings['warning_percent'], 'discount_mode' => 'percent',
@@ -79,12 +79,14 @@ function renewalWarningNotify(PDO $pdo, array $settings, array $invoice, array $
             $pdo->prepare("UPDATE renewal_warning_state SET status = 'sending' WHERE id = ?")->execute([$id]);
             try { $result = $send($invoice, $message); }
             catch (Throwable $e) { $result = []; } // Unknown delivery must not be replayed.
+            renewalDeliveryRecord($pdo, 'renewal_warning_state', $id, $result, $now);
             $status = ($result['ok'] ?? false) === true ? 'sent'
                 : ((int) ($result['error_code'] ?? 0) === 429 ? 'ready'
                     : (in_array((int) ($result['error_code'] ?? 0), [400, 401, 403], true) ? 'blocked' : 'uncertain'));
             $retry = $status === 'ready' ? $now + max(60, (int) ($result['parameters']['retry_after'] ?? 600)) : 0;
             $pdo->prepare('UPDATE renewal_warning_state SET status = ?, next_attempt_at = ? WHERE id = ?')->execute([$status, $retry, $id]);
-            if (in_array($status, ['sent', 'uncertain'], true)) { $handled[] = $kind; }
+            $handled[] = $kind;
+            if ($status === 'sent') { renewalDeliveryReportSafely($report, $invoice, $result, $kind); }
         } finally { $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$lock]); }
     }
     return $handled;

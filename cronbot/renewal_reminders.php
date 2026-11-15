@@ -22,5 +22,5 @@ require_once __DIR__ . '/../renewal_reminders.php';
             ]]]);
             return sendmessage($invoice['id_user'], $message, $keyboard, 'HTML', $invoice['bottype'] ?: null);
         },
-        $lang['common']['labels']['testServiceName']);
+        $lang['common']['labels']['testServiceName'], null, 'renewalDeliveryReport');
 })();
