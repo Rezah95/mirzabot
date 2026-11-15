@@ -32,6 +32,7 @@ function update($table, $field, $value, $whereField, $whereValue): void
     $pdo->prepare('UPDATE Payment_report SET payment_Status = ? WHERE id_order = ?')->execute([$value, $whereValue]);
 }
 require_once dirname(__DIR__) . '/payment/tronado_lib.php';
+require_once dirname(__DIR__) . '/payment/tronado_inspection.php';
 $textbotlang = require dirname(__DIR__) . '/lang/fa.php';
 $source = file_get_contents(dirname(__DIR__) . '/function.php');
 $start = strpos($source, 'function addBalance(');
@@ -97,9 +98,36 @@ try {
     foreach ([['PaymentId' => []], ['OrderStatusID' => []], ['PaymentId' => '']] as $bad) {
         expectCallback($receive(array_replace($callback, $bad))[0] === 400, 'Malformed event accepted');
     }
-    foreach ([['Wallet' => 'wrong'], ['Wallet' => []], ['UserPaidTomanAmount' => 490000], ['TronAmount' => 0]] as $bad) {
-        expectCallback($receive(array_replace($callback, $bad))[0] === 409, 'Payment mismatch accepted');
+    foreach ([
+        [['Wallet' => 'wrong'], 'wallet_mismatch'], [['Wallet' => []], 'wallet_mismatch'],
+        [['UserPaidTomanAmount' => 490000], 'paid_amount_below_minimum'],
+        [['UserPaidTomanAmount' => null], 'invalid_paid_amount'],
+        [['TomanAmountWithoutWage' => 0], 'invalid_received_amount'],
+        [['TronAmount' => 0], 'invalid_delivered_tron'],
+    ] as [$bad, $reason]) {
+        [$status, $body] = $receive(array_replace($callback, $bad));
+        expectCallback($status === 409 && $body['reason'] === $reason && $body['payment_id'] === $callback['PaymentId'], 'Mismatch reason or acceptance changed');
     }
+    $mismatchLogs = file_get_contents($log);
+    expectCallback(str_contains($mismatchLogs, 'paid_amount_below_minimum') && str_contains($mismatchLogs, '490000')
+        && !str_contains($mismatchLogs, $callback['Wallet']) && !str_contains($mismatchLogs, 'test-ipn-key'), 'Mismatch diagnostics missing or sensitive');
+    $policyOrder = ['price' => 500000, 'dec_not_confirmed' => json_encode($metadata)];
+    expectCallback(tronadoPaidCallbackMatchesOrder(array_replace($callback, ['UserPaidTomanAmount' => 495000]), $policyOrder)
+        && !tronadoPaidCallbackMatchesOrder(array_replace($callback, ['UserPaidTomanAmount' => 494999]), $policyOrder), 'Existing 5000-toman boundary changed');
+    // Read-only inspection must leave payment, callback history and wallet exactly intact.
+    $snapshot = static fn() => [
+        $pdo->query('SELECT * FROM Payment_report')->fetchAll(PDO::FETCH_ASSOC),
+        $pdo->query('SELECT * FROM Tronado_callback')->fetchAll(PDO::FETCH_ASSOC),
+        $pdo->query('SELECT * FROM user')->fetchAll(PDO::FETCH_ASSOC),
+    ];
+    $before = $snapshot();
+    $provider = array_replace($callback, ['PaymentID' => $callback['PaymentId']]);
+    unset($provider['PaymentId'], $provider['UserPaidTomanAmount'], $provider['TomanAmountWithoutWage']);
+    $inspection = tronadoInspectOrder($pdo, $provider);
+    expectCallback($inspection['read_only'] && $inspection['provider_is_paid'] && $snapshot() === $before
+        && $inspection['callback_match_reason'] === 'status_response_is_not_a_complete_callback'
+        && $inspection['evidence']['wallet_matches'] === true, 'Inspection accepted an incomplete callback or mutated payment');
+    expectCallback(!str_contains(json_encode($inspection), $callback['Wallet']), 'Inspection leaked wallet');
     expectCallback((int) $pdo->query('SELECT COUNT(*) FROM Tronado_callback')->fetchColumn() === 0, 'Rejected event persisted');
     $pdo->exec("UPDATE Payment_report SET Payment_Method = 'Currency Rial 2'");
     expectCallback($receive()[0] === 404, 'CubePay order accepted by Tronado');
@@ -121,6 +149,11 @@ try {
     expectCallback($deliveries === 1 && $notifications === 1 && $balance() === 501000 && $state() === 'fulfilled',
         'Incorrect delivery, notification, or wallet balance');
     expectCallback(count($sentMessages) === 1, 'User payment confirmation missing or duplicated');
+    $before = $snapshot();
+    $inspection = tronadoInspectOrder($pdo, $provider);
+    expectCallback($inspection['local_fulfillment_status'] === 'fulfilled' && count($inspection['stored_callbacks']) === 1
+        && $snapshot() === $before, 'Inspecting a successful payment lost history or changed balances');
+
     expectCallback($receive()[0] === 200 && !$work() && $balance() === 501000, 'Redelivery credited twice');
     expectCallback($receive(array_replace($callback, ['OrderStatusID' => 27]))[0] === 200 && !$work(), 'Different paid event credited twice');
 
@@ -197,6 +230,8 @@ try {
     $reset();
     mkdir($webRoot . '/payment', 0700, true);
     copy(dirname(__DIR__) . '/payment/tronado.php', $webRoot . '/payment/tronado.php');
+    mkdir($webRoot . '/tools');
+    copy(dirname(__DIR__) . '/tools/tronado_diagnose.php', $webRoot . '/tools/tronado_diagnose.php');
     copy(dirname(__DIR__) . '/payment/tronado_lib.php', $webRoot . '/payment/tronado_lib.php');
     file_put_contents($webRoot . '/config.php', '<?php $pdo = new PDO(' . var_export('mysql:unix_socket=' . $socket . ';dbname=' . $db, true)
         . ', "root", "", [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);');
@@ -254,6 +289,10 @@ PHP;
         curl_close($curl);
         return [$status, json_decode($body, true), $time];
     };
+    $cliProbe = curl_init('http://' . $address . '/tools/tronado_diagnose.php');
+    curl_setopt($cliProbe, CURLOPT_RETURNTRANSFER, true); curl_exec($cliProbe);
+    expectCallback(curl_getinfo($cliProbe, CURLINFO_HTTP_CODE) === 404, 'Credentialed inspection exposed over HTTP');
+    curl_close($cliProbe);
     expectCallback($http('GET', '')[0] === 405 && $http('POST', 'invalid')[0] === 401, 'HTTP method/authentication checks failed');
     $result = $http('POST', hash_hmac('sha512', json_encode($callback), 'test-ipn-key'));
     expectCallback($result[0] === 200 && $result[1]['fulfillment'] === 'queued' && $result[2] < 2, 'HTTP acceptance waited for fulfillment');

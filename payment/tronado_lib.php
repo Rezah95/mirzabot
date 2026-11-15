@@ -203,38 +203,56 @@ function tronadoVerifyCallbackSignature(string $rawBody, string $signature, stri
     return hash_equals(hash_hmac('sha512', $rawBody, $signingKey), $signature);
 }
 
-function tronadoPaidCallbackMatchesOrder(array $callback, array $paymentReport): bool
+/** Same acceptance policy as before; a reason makes intermittent rejections diagnosable. */
+function tronadoPaidCallbackMismatch(array $callback, array $paymentReport): ?string
 {
     $metadata = json_decode((string) ($paymentReport['dec_not_confirmed'] ?? ''), true);
-    if (!is_array($metadata)) {
-        return false;
-    }
+    if (!is_array($metadata)) { return 'invalid_order_metadata'; }
     $amount = $callback['UserPaidTomanAmount'] ?? null;
     $received = $callback['TomanAmountWithoutWage'] ?? null;
     $deliveredTron = $callback['TronAmount'] ?? null;
-    $amountMatches = is_scalar($amount) && ctype_digit((string) $amount)
-        && (int) $amount >= max(1, (int) ($paymentReport['price'] ?? 0) - 5000)
-        && is_scalar($received) && ctype_digit((string) $received) && (int) $received > 0
-        && is_numeric($deliveredTron) && (float) $deliveredTron > 0;
-    if (!$amountMatches) {
-        return false;
-    }
+    if (!is_scalar($amount) || !ctype_digit((string) $amount)) { return 'invalid_paid_amount'; }
+    if ((int) $amount < max(1, (int) ($paymentReport['price'] ?? 0) - 5000)) { return 'paid_amount_below_minimum'; }
+    if (!is_scalar($received) || !ctype_digit((string) $received) || (int) $received <= 0) { return 'invalid_received_amount'; }
+    if (!is_numeric($deliveredTron) || !((float) $deliveredTron > 0)) { return 'invalid_delivered_tron'; }
     if (($metadata['wage_from_business_percentage'] ?? null) === 100) {
         $expectedTron = $metadata['tron_amount'] ?? null;
         $wallet = $metadata['wallet'] ?? null;
-        return is_numeric($expectedTron) && (float) $expectedTron > 0
-            && is_string($wallet) && $wallet !== ''
-            && is_string($callback['Wallet'] ?? null) && hash_equals($wallet, $callback['Wallet']);
+        if (!is_numeric($expectedTron) || !((float) $expectedTron > 0)) { return 'invalid_expected_tron'; }
+        if (!is_string($wallet) || $wallet === '') { return 'missing_order_wallet'; }
+        return is_string($callback['Wallet'] ?? null) && hash_equals($wallet, $callback['Wallet']) ? null : 'wallet_mismatch';
     }
-    // Orders created by the earlier official Tronado implementation stored
-    // only the provider response. Bind those in-flight invoices to its token
-    // and the legacy destination wallet without accepting CubePay orders.
+    // Preserve the earlier official Tronado order/token and wallet contract.
     $legacyToken = strtolower(str_replace('-', '', (string) ($metadata['Token'] ?? '')));
     $callbackToken = strtolower(str_replace('-', '', (string) ($callback['UniqueCode'] ?? '')));
     $legacyWallet = tronadoSetting('walletaddress');
-    return strlen($legacyToken) >= 8 && hash_equals($legacyToken, $callbackToken)
-        && preg_match('/^T[1-9A-HJ-NP-Za-km-z]{33}$/', $legacyWallet) === 1
-        && is_string($callback['Wallet'] ?? null) && hash_equals($legacyWallet, $callback['Wallet']);
+    if (strlen($legacyToken) < 8 || !hash_equals($legacyToken, $callbackToken)) { return 'legacy_token_mismatch'; }
+    if (preg_match('/^T[1-9A-HJ-NP-Za-km-z]{33}$/', $legacyWallet) !== 1) { return 'invalid_legacy_wallet'; }
+    return is_string($callback['Wallet'] ?? null) && hash_equals($legacyWallet, $callback['Wallet']) ? null : 'wallet_mismatch';
+}
+
+function tronadoPaidCallbackMatchesOrder(array $callback, array $paymentReport): bool
+{
+    return tronadoPaidCallbackMismatch($callback, $paymentReport) === null;
+}
+
+/** Allowlisted evidence only: no wallet addresses, tokens, signatures or raw payload. */
+function tronadoPaymentMatchEvidence(array $callback, array $order): array
+{
+    $metadata = json_decode((string) ($order['dec_not_confirmed'] ?? ''), true);
+    $number = static fn($value) => is_numeric($value) && is_finite((float) $value) ? (float) $value : null;
+    $wallet = ($metadata['wage_from_business_percentage'] ?? null) === 100
+        ? ($metadata['wallet'] ?? null) : tronadoSetting('walletaddress');
+    return [
+        'invoice_toman' => $number($order['price'] ?? null),
+        'minimum_paid_toman' => max(1, (int) ($order['price'] ?? 0) - 5000),
+        'user_paid_toman' => $number($callback['UserPaidTomanAmount'] ?? null),
+        'received_toman' => $number($callback['TomanAmountWithoutWage'] ?? null),
+        'delivered_tron' => $number($callback['TronAmount'] ?? null),
+        'expected_tron' => $number($metadata['tron_amount'] ?? null),
+        'wallet_matches' => is_string($wallet) && $wallet !== '' && is_string($callback['Wallet'] ?? null)
+            ? hash_equals($wallet, $callback['Wallet']) : null,
+    ];
 }
 
 /** @return 'new'|'duplicate'|'error' */
@@ -299,9 +317,13 @@ function tronadoReceiveCallback(PDO $pdo, string $rawBody, string $signature, st
             return [404, ['ok' => false, 'error' => 'Unknown or ambiguous payment']];
         }
         $order = $orders[0];
-        if ($accepted && !tronadoPaidCallbackMatchesOrder($callback, $order)) {
+        $mismatch = $accepted ? tronadoPaidCallbackMismatch($callback, $order) : null;
+        if ($mismatch !== null) {
             $pdo->rollBack();
-            return [409, ['ok' => false, 'error' => 'Amount or wallet does not match order']];
+            error_log('Tronado callback mismatch: ' . json_encode(['payment_id' => $paymentId, 'reason' => $mismatch]
+                + tronadoPaymentMatchEvidence($callback, $order), JSON_INVALID_UTF8_SUBSTITUTE));
+            return [409, ['ok' => false, 'payment_id' => $paymentId,
+                'error' => 'Amount or wallet does not match order', 'reason' => $mismatch]];
         }
         $registration = tronadoRegisterCallback($paymentId, $orderStatus, $rawBody, $pdo);
         if ($registration === 'error') {

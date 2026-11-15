@@ -9,6 +9,15 @@ if (PHP_SAPI === 'cli-server') {
         echo json_encode(['TronPriceToman' => 70000]);
         return;
     }
+    if (in_array($path, ['/Order/GetStatus', '/Order/GetStatusByPaymentID'], true)) {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || ($_SERVER['HTTP_X_API_KEY'] ?? '') !== 'test-api-key'
+            || ($body['Id'] ?? '') !== ($path === '/Order/GetStatus' ? '3181762' : '0123456789')) {
+            http_response_code(400); echo json_encode(['Error' => 'Invalid inspection request']); return;
+        }
+        echo json_encode(['PaymentID' => '0123456789', 'OrderStatusID' => 30, 'IsPaid' => true,
+            'Wallet' => 'T' . str_repeat('1', 33), 'TronAmount' => 7.1]);
+        return;
+    }
     if ($path !== '/api/v5/GetOrderToken'
         || $_SERVER['REQUEST_METHOD'] !== 'POST'
         || ($_SERVER['HTTP_X_API_KEY'] ?? '') !== 'test-api-key'
@@ -52,6 +61,7 @@ function expectTronado(bool $condition, string $message): void
 }
 
 require_once dirname(__DIR__) . '/payment/tronado_lib.php';
+require_once dirname(__DIR__) . '/payment/tronado_inspection.php';
 
 $socket = stream_socket_server('tcp://127.0.0.1:0');
 $address = stream_socket_get_name($socket, false);
@@ -151,6 +161,19 @@ try {
     }
     expectTronado(mb_strlen(tronadoResponseError(['ErrorMessage' => str_repeat('خطا ', 200)])) <= 400, 'Unbounded error detail');
     expectTronado(tronadoResponseFields(['api-key' => 'secret', 'Nested' => ['token' => $token], 'Status' => false]) === 'Nested(token),Status', 'Response shape leaked values');
+    $inspectRequest = static function ($url, $body, $key) use ($address) {
+        expectTronado(str_starts_with($url, 'https://bot.tronado.cloud/Order/'), 'Unexpected inspection destination');
+        return tronadoPost('http://' . $address . parse_url($url, PHP_URL_PATH), $body, $key);
+    };
+    foreach ([['3181762', false], ['0123456789', true]] as [$id, $byPayment]) {
+        $status = tronadoInspectStatus($id, $byPayment, $inspectRequest);
+        expectTronado($status['IsPaid'] === true && $status['PaymentID'] === '0123456789'
+            && !isset($status['UserPaidTomanAmount']), 'Documented status contract changed');
+    }
+    $mismatchRejected = false;
+    try { tronadoInspectStatus('0123456789', true, static fn() => ['PaymentID' => 'another']); }
+    catch (RuntimeException $e) { $mismatchRejected = true; }
+    expectTronado($mismatchRejected, 'Mismatched provider PaymentID accepted');
     echo "Tronado gateway tests passed\n";
 } finally {
     if (is_resource($server)) {

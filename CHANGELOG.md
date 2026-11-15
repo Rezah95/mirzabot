@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.3-dev.1 — 2026-11-15 (prerelease)
+
+- Make intermittent Tronado 409 rejections diagnosable: record the internal payment ID, specific mismatch reason, numeric amount evidence and wallet-match boolean without credentials, tokens, raw payload or wallet addresses. Keep acceptance criteria, callback authentication, queueing and delivery policy unchanged.
+- Add a CLI-only, read-only order inspection tool using the documented GetStatus or GetStatusByPaymentID endpoint. Correlate provider state with the local payment and saved callback history; incomplete status responses never authorize payment acceptance or fulfillment.
+- No schema change, automatic reconciliation, retry/credit of historical orders or changes to cron are included. A real failing order still needs read-only server inspection; these changes do not establish the cause of the previously reported rejections.
+- Validation: local HTTP API/callback contracts and isolated MySQL checks cover successful order creation, early response, exactly-once fulfillment, mismatch reasons, redaction, unchanged wallet/payment/history after inspection and HTTP denial for the CLI tool. An additional local comparison matched the old acceptance policy in 1,496 boundary/type/metadata cases. No live provider call or VPS deployment.
+
 ## 0.9.2 — 2026-11-15
 
 - Promote the maintainer-approved v0.9.2-dev.2 candidate: reset usage on unlimited-to-finite renewal and repair cron warning delivery bookkeeping and reporting.
