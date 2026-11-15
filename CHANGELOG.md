@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.2 — 2026-11-15
+
+- Promote the maintainer-approved v0.9.2-dev.2 candidate: reset usage on unlimited-to-finite renewal and repair cron warning delivery bookkeeping and reporting.
+- Preserve finite quota carry-over and the configured time policy; do not replay historical notification states. Persist Telegram delivery evidence for future offers/reminders and expose localized report text in the web editor.
+- Upgrade: run the normal database bootstrap before the new cron code to add nullable delivery columns. Existing settings, text overrides and historical state remain intact. No Tronado behavior change is included in this release.
+- Validation: isolated MySQL offers/reminders and local renewal, notification, dispatcher and Tronado callback regressions. Production publication is not a live VPS/provider verification.
+
 ## 0.9.2-dev.2 — 2026-11-15 (prerelease)
 
 - Repair renewal notification delivery bookkeeping: do not mark failed legacy warnings sent, stop multipart sends at the first failure, and prevent an offer backoff/blocked state from bypassing the legacy sender.
