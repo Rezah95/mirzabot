@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.3 — 2026-11-15
+
+- Promote the maintainer-approved v0.9.3-dev.2 candidate: diagnose intermittent Tronado callback rejections without changing acceptance rules, and add the read-only order inspection tool.
+- Publish missing payment/cron channel reports, the durable report outbox, TonPays financial reporting, Variza topic fallback and Tronado reporting isolation from gift notification failures. Report retries never re-run payment fulfillment.
+- Upgrade: normal database bootstrap must create report_event_outbox; the existing cron dispatcher schedules the report worker automatically. Keep report-channel permissions and /lang overrides. No automatic replay of historical payments or service changes is included.
+- Validation: isolated MySQL and local HTTP/cron regressions, acceptance-policy comparison, PHP/shell syntax checks, and refreshed local Graphify artifacts. Production source publication does not establish live VPS or Telegram/provider success.
+
 ## 0.9.3-dev.2 — 2026-11-15 (prerelease)
 
 - Connect missing operational reports to the configured report channel: Tronado callback mismatches, cancellations and manual review, payment creation/delivery failures and refunds, and cron/service/reminder failures. Reuse the shared fulfillment marker across hosted gateways and Stars instead of changing acceptance rules.
