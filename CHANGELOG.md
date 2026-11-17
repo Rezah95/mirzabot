@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0 — 2026-11-17
+
+- Promote the approved v0.10.0-dev.1 candidate: filter location destinations and enforce directional per-panel allowlists at selection and execution.
+- Admin: panel feature settings → allowed location destinations. Explicitly select normal destinations for normal source panels; existing NULL policies retain all enabled destinations.
+- Upgrade: database bootstrap adds nullable marzban_panel.location_targets. No existing service transfer or automatic price-category inference.
+- Validation: local policy regressions, additive migration and persistence on a restored backup, PHP syntax and Graphify refresh. Live VPS/Telegram testing is not established.
+
+
 ## 0.10.0-dev.1 — 2026-11-17 (prerelease)
 
 - Filter location destinations by enabled status, user audience and source-panel allowlist; enforce the same policy before confirmation and before any transfer.

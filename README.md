@@ -470,9 +470,9 @@ sudo grep -E 'Tronado callback (mismatch|result)' /var/www/html/mirzaprobotconfi
 
 بررسی محلی: `tests/report_events_test.php` با `REPORT_TEST_SOCKET` روی MySQL موقت؛ تست‌های HTTP کال‌بک ترونادو، callback در TonPays، پیشنهاد/یادآوری تمدید، پرداخت مشترک، Stars و ثبت/اجرای کرون. این قابلیت‌ها در نسخهٔ پروداکشن 0.9.3 منتشر شده‌اند؛ تست محلی و انتشار سورس، تأیید نصب یا عملکرد VPS و تلگرام واقعی نیست.
 
-### Location destination rules (0.10.0-dev.1)
+### Location destination rules (0.10.0)
 
-Development candidate on `dev`; approved production remains 0.9.3 on `master`.
+Approved production release: `0.10.0` on `master`; development continues on `dev`.
 Admin panel → panel management → select panel → «مقصدهای مجاز تغییر لوکیشن».
 Select destination panels; each toggle saves immediately. ⛔ marks a destination whose location-change switch is off.
 Rules apply in the outgoing direction only. Select only normal panels for each normal source panel to prevent transfers to national/premium panels. Both source and destination must have location changes enabled. Hidden, inactive and audience-ineligible destinations are rejected, including stale callbacks.
