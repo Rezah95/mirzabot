@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.0-dev.1 — 2026-11-17 (prerelease)
+
+- Filter location destinations by enabled status, user audience and source-panel allowlist; enforce the same policy before confirmation and before any transfer.
+- Add immediate-save destination selection to each panel’s Telegram admin settings. Rules are directional; NULL retains all enabled destinations, [] blocks all destinations.
+- Migration: database bootstrap adds nullable marzban_panel.location_targets. Configure explicit normal-panel destinations to prevent transfers to premium/national panels. No automatic price-category inference or existing service changes.
+
+
 ## 0.9.3 — 2026-11-15
 
 - Promote the maintainer-approved v0.9.3-dev.2 candidate: diagnose intermittent Tronado callback rejections without changing acceptance rules, and add the read-only order inspection tool.

@@ -469,3 +469,11 @@ sudo grep -E 'Tronado callback (mismatch|result)' /var/www/html/mirzaprobotconfi
 این صف، ارسال مجدد **گزارش** را انجام می‌دهد؛ هیچ پرداخت یا شارژ مالی را دوباره اجرا نمی‌کند. خطای مبهم شبکه ممکن است باعث تکرار یک پیام گزارش شود. اگر کانال تنظیم نشده باشد گزارش غیرفعال است؛ خطای دسترسی تلگرام، توقف کرون یا نبود دیتابیس را نمی‌توان تضمین‌شده دور زد. شکست ثبت صف در لاگ ثبت می‌شود. همهٔ گزارش‌های قدیمی به صف منتقل نشده‌اند؛ مسیرهای قدیمی مستقیم همچنان برقرارند. سوابق قبلی پرداخت یا اعلان، خودکار بازپخش نمی‌شوند.
 
 بررسی محلی: `tests/report_events_test.php` با `REPORT_TEST_SOCKET` روی MySQL موقت؛ تست‌های HTTP کال‌بک ترونادو، callback در TonPays، پیشنهاد/یادآوری تمدید، پرداخت مشترک، Stars و ثبت/اجرای کرون. این قابلیت‌ها در نسخهٔ پروداکشن 0.9.3 منتشر شده‌اند؛ تست محلی و انتشار سورس، تأیید نصب یا عملکرد VPS و تلگرام واقعی نیست.
+
+### Location destination rules (0.10.0-dev.1)
+
+Development candidate on `dev`; approved production remains 0.9.3 on `master`.
+Admin panel → panel management → select panel → «مقصدهای مجاز تغییر لوکیشن».
+Select destination panels; each toggle saves immediately. ⛔ marks a destination whose location-change switch is off.
+Rules apply in the outgoing direction only. Select only normal panels for each normal source panel to prevent transfers to national/premium panels. Both source and destination must have location changes enabled. Hidden, inactive and audience-ineligible destinations are rejected, including stale callbacks.
+Existing panels default to all enabled destinations (NULL); «هیچ مقصدی» stores an explicit empty list. Database bootstrap adds `marzban_panel.location_targets`; no existing subscriptions are migrated. This backward-compatible feature uses a minor pre-1.0 release target.

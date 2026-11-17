@@ -48,6 +48,7 @@ return [
         inbounds TEXT NULL,
         subvip varchar(60) NULL,
         changeloc varchar(60) NULL,
+        location_targets TEXT NULL,
         on_hold_test varchar(60) NOT NULL,
         version_panel varchar(60) NOT NULL,
         customvolume TEXT NULL,
@@ -55,6 +56,7 @@ return [
         display_order INT NOT NULL DEFAULT 0
         SQL,
     'columns' => [
+        ['location_targets', null, 'TEXT'],
         ['code_panel', null, 'VARCHAR(50)'],
         ['status', 'active', 'VARCHAR(50)'],
         ['agent', 'all', 'VARCHAR(50)'],

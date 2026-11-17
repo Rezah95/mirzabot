@@ -2,6 +2,7 @@
 require_once 'vendor/autoload.php';
 require 'config.php';
 require_once __DIR__ . '/discount_rules.php';
+require_once __DIR__ . '/location_rules.php';
 require_once __DIR__ . '/report_events.php';
 require_once __DIR__ . '/gateway_labels.php';
 require_once __DIR__ . '/payment/tonpays_lib.php';

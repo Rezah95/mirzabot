@@ -2304,8 +2304,23 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
         sendmessage($from_id, $textbotlang['users']['status']['error'], null, 'html');
         return;
     }
-    Editmessagetext($from_id, $message_id, $textbotlang['textbot']['selectLocation'], $list_marzban_panel_userschange);
+    $rows = [];
+    foreach (select('marzban_panel', '*', null, null, 'fetchAll') as $target) {
+        if (locationChangeAllowed($marzban_list_get, $target, $from_id, $user['agent'])) {
+            $rows[] = [['text' => $target['name_panel'], 'callback_data' => 'changelocselectlo-' . $target['code_panel']]];
+        }
+    }
+    $prompt = $rows ? $textbotlang['textbot']['selectLocation'] : $textbotlang['locationRules']['empty'];
+    $rows[] = [['text' => $textbotlang['users']['backbtn'], 'callback_data' => 'backorder']];
+    Editmessagetext($from_id, $message_id, $prompt, json_encode(['inline_keyboard' => $rows]));
 } elseif (preg_match('/changelocselectlo-(\w+)/', $datain, $dataget)) {
+    $currentInvoice = select('invoice', '*', 'id_invoice', $user['Processing_value'], 'select');
+    if (!invoiceBelongsToUser($currentInvoice, $from_id)) { return; }
+    $source = select('marzban_panel', '*', 'name_panel', $currentInvoice['Service_location'], 'select');
+    $target = select('marzban_panel', '*', 'code_panel', $dataget[1], 'select');
+    if (!$source || !$target || !locationChangeAllowed($source, $target, $from_id, $user['agent'])) {
+        sendmessage($from_id, $textbotlang['users']['featureUnavailable2'], null, 'html'); return;
+    }
     update("user", "Processing_value_one", $dataget[1], "id", $from_id);
     $limitchangeloc = json_decode($setting['limitnumber'], true);
     $userlimitlast = $limitchangeloc['all'] - $user['limitchangeloc'];
@@ -2333,6 +2348,9 @@ if ($text == "/start" || $datain == "start" || $text == "start") {
     }
     $marzban_list_get = select("marzban_panel", "*", "name_panel", $nameloc['Service_location'], "select");
     $marzban_list_get_new = select("marzban_panel", "*", "code_panel", $user['Processing_value_one'], "select");
+    if (!$marzban_list_get || !$marzban_list_get_new || !locationChangeAllowed($marzban_list_get, $marzban_list_get_new, $from_id, $user['agent'])) {
+        sendmessage($from_id, $textbotlang['users']['featureUnavailable2'], null, 'html'); return;
+    }
     $limitchangeloc = json_decode($setting['limitnumber'], true);
     $limitfree = true;
     if ($user['limitchangeloc'] < $limitchangeloc['free'] and intval($setting['statuslimitchangeloc']) == 1) {

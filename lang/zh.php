@@ -2,6 +2,7 @@
 
 
 return [
+    'locationRules' => ['empty' => '此服务目前没有可用的切换目标。', 'title' => '允许切换的目标面板', 'all' => '所有已启用的目标', 'none' => '不允许任何目标', 'help' => '选择允许的目标，修改立即保存。⛔ 表示目标已关闭位置切换。此设置仅控制从当前面板转出的方向。'],
         'reportEvents' => [
                 'template' => '📣 {event}
 {context}

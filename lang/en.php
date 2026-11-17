@@ -2,6 +2,7 @@
 
 
 return [
+    'locationRules' => ['empty' => 'No allowed destination is currently available for this service.', 'title' => 'Allowed location destinations', 'all' => 'All enabled destinations', 'none' => 'No destinations', 'help' => 'Select allowed destinations. Changes save immediately. ⛔ means location changes are disabled at the destination. This setting controls outgoing transfers only.'],
         'reportEvents' => [
                 'template' => '📣 {event}
 {context}

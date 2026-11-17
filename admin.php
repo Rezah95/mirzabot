@@ -117,6 +117,37 @@ if ($adminrulecheck['rule'] != "administrator") {
         return;
     }
 }
+if ($adminrulecheck['rule'] === 'administrator' && preg_match('/^locdest:(open|toggle|all|none):([\w]+)(?::([\w]+))?$/D', $datain, $match)) {
+    $source = select('marzban_panel', '*', 'code_panel', $match[2], 'select');
+    if (!$source) { return; }
+    $panels = select('marzban_panel', '*', null, null, 'fetchAll');
+    $selected = $source['location_targets'] === null ? null : json_decode($source['location_targets'], true);
+    if ($match[1] === 'all') { $selected = null; }
+    if ($match[1] === 'none') { $selected = []; }
+    if ($match[1] === 'toggle' && isset($match[3])) {
+        if ($selected === null) {
+            $selected = array_column(array_filter($panels, fn($p) => $p['code_panel'] !== $source['code_panel'] && $p['changeloc'] === 'onchangeloc'), 'code_panel');
+        }
+        $selected = is_array($selected) ? array_map('strval', $selected) : [];
+        if (in_array($match[3], $selected, true)) { $selected = array_values(array_diff($selected, [$match[3]])); }
+        else { $selected[] = $match[3]; }
+    }
+    if ($match[1] !== 'open') {
+        $pdo->prepare('UPDATE marzban_panel SET location_targets = ? WHERE code_panel = ?')->execute([$selected === null ? null : json_encode($selected), $source['code_panel']]);
+        clearSelectCache('marzban_panel');
+    }
+    $labels = $textbotlang['locationRules'];
+    $buttons = [];
+    foreach ($panels as $p) {
+        if ($p['code_panel'] === $source['code_panel']) { continue; }
+        $checked = $selected === null || in_array((string) $p['code_panel'], array_map('strval', $selected ?? []), true);
+        $buttons[] = [['text' => ($checked ? '✅ ' : '▫️ ') . $p['name_panel'] . ($p['changeloc'] === 'onchangeloc' ? '' : ' ⛔'), 'callback_data' => 'locdest:toggle:' . $source['code_panel'] . ':' . $p['code_panel']]];
+    }
+    $buttons[] = [['text' => $labels['all'], 'callback_data' => 'locdest:all:' . $source['code_panel']], ['text' => $labels['none'], 'callback_data' => 'locdest:none:' . $source['code_panel']]];
+    $buttons[] = [['text' => $textbotlang['Admin']['backAdminBtn'], 'callback_data' => 'admin']];
+    Editmessagetext($from_id, $message_id, htmlspecialchars($source['name_panel'], ENT_QUOTES, 'UTF-8') . "\n" . $labels['help'], json_encode(['inline_keyboard' => $buttons]));
+    return;
+}
 if ($adminrulecheck['rule'] === 'administrator' && renewalReminderAdminHandle($datain, $text, $user)) {
     return;
 }
@@ -8601,6 +8632,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         ];
     }
     if (!in_array($panel['type'], ["Manualsale", "WGDashboard"])) {
+        $Bot_Status['inline_keyboard'][] = [[ 'text' => $textbotlang['locationRules']['title'], 'callback_data' => 'locdest:open:' . $panel['code_panel'] ]];
         $Bot_Status['inline_keyboard'][] = [
             ['text' => $changeloc, 'callback_data' => "editpanel-changeloc-{$panel['changeloc']}-{$panel['code_panel']}"],
             ['text' => $textbotlang['keyboard']['changeLocation'], 'callback_data' => "none"],
@@ -8839,6 +8871,7 @@ if ($datain == "settimecornday" && $adminrulecheck['rule'] == "administrator") {
         ];
     }
     if (!in_array($panel['type'], ["Manualsale", "WGDashboard"])) {
+        $Bot_Status['inline_keyboard'][] = [[ 'text' => $textbotlang['locationRules']['title'], 'callback_data' => 'locdest:open:' . $panel['code_panel'] ]];
         $Bot_Status['inline_keyboard'][] = [
             ['text' => $changeloc, 'callback_data' => "editpanel-changeloc-{$panel['changeloc']}-{$panel['code_panel']}"],
             ['text' => $textbotlang['keyboard']['changeLocation'], 'callback_data' => "none"],
