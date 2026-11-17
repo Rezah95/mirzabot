@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.1 — 2026-11-17
+
+- Promote only the approved v0.10.1-dev.1 candidate (a609ad9): seven selective upstream fixes for unlimited renewal, XUI metadata, purchase navigation, crontab preservation, missing child-bot products, QR background preservation and atomic cashback/referral updates with Variza gateway matching.
+- Preserve the fork database, discounts, payment guards, reporting and location destination rules. No database migration is required.
+- The later v0.10.1-dev.2 Tronado net-TRX reconciliation changes are excluded from this production release and remain development work.
+- Local candidate checks passed; this promotion does not establish live VPS/provider/Telegram verification or remote publication.
+
 ## 0.10.1-dev.1 — 2026-11-17 (prerelease)
 
 - Selectively port seven approved fixes from upstream main 0.9.3 (fea8178); retain the fork's database layout, transactional discounts, payment fulfillment guards, location policies and reporting.
