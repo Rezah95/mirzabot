@@ -488,3 +488,13 @@ Development candidate on `dev`; approved production remains `0.10.0` on `master`
 - Remaining cron cashback and miniapp referral increments use atomic SQL. Both Variza lookup paths require the matching payment method.
 
 No configuration or database migration is required. Validate with `php tests/upstream_integration_test.php`, `php tests/unlimited_renewal_test.php`, `php tests/cron_registration_test.php` and `python3 tests/updater_files_test.py`. Tests use local fixtures; real VPS/provider/Telegram behavior requires a separate deployment check. Follow the existing dev candidate → explicit production approval → master release process.
+
+### Tronado net-TRX reconciliation (0.10.1-dev.2)
+
+Development patch candidate on `dev`; production remains `0.10.0` on `master`. Provider support clarified the contract for `wageFromBusinessPercentage=100`: compare the confirmed callback `TronAmount` with the first pending callback, not with the gross `TronAmount` requested at creation or `ActualTronAmount`.
+
+The first authenticated status-20 callback is stored once in `Tronado_callback`; its wallet and positive TRX value must validate before storage. Status 30 grants the saved invoice value only when its wallet matches and its net TRX is at least the stored baseline. Comparison uses integer sun (six decimals); discounted Toman values are diagnostic only for this modern contract. Signature, order identity, durable acceptance and duplicate-delivery guards remain active.
+
+Missing/invalid baselines and partial payments enter `review` and generate a localized report through the existing report channel/outbox. There is no proportional automatic credit. A later status-20 event does not automatically release a reviewed payment. The delivery worker rechecks evidence for old queued orders. Inspect through gateway settings → callback/order diagnostics or `php tools/tronado_diagnose.php --payment-id <PaymentId>`; inspection does not settle orders.
+
+The exact 23 PaymentIds confirmed manually compensated by the administrator are excluded from automatic delivery in both callback and cron paths. Replayed callbacks are acknowledged without another credit. This release does not alter historical wallet balances or replay old orders. No schema migration is required; the existing callback unique key preserves the baseline. Deploy and check a new real pending → confirmed payment before treating local tests as live verification.

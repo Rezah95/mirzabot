@@ -33,6 +33,12 @@ return [
                         'service_removal_failed' => 'Не удалось удалить сервис в панели',
                 ],
                 'reasons' => [
+                        'missing_pending_tron' => 'Нет исходного уведомления об ожидании оплаты',
+                        'invalid_pending_tron' => 'Неверная исходная сумма TRX',
+                        'pending_wallet_mismatch' => 'Исходный кошелек не соответствует заказу',
+                        'paid_tron_below_pending' => 'Оплачено меньше исходной суммы TRX; нужна ручная проверка',
+                        'manually_compensated' => 'Заказ компенсирован вручную; повторная выдача заблокирована',
+                        'missing_paid_callback' => 'Нет уведомления о подтверждении оплаты',
                         'paid_amount_below_minimum' => 'Сумма оплаты ниже минимума счёта',
                         'invalid_paid_amount' => 'Сумма оплаты отсутствует или неверна',
                         'invalid_received_amount' => 'Полученная сумма отсутствует или неверна',

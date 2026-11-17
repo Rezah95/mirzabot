@@ -205,25 +205,67 @@ function tronadoVerifyCallbackSignature(string $rawBody, string $signature, stri
     return hash_equals(hash_hmac('sha512', $rawBody, $signingKey), $signature);
 }
 
-/** Same acceptance policy as before; a reason makes intermittent rejections diagnosable. */
-function tronadoPaidCallbackMismatch(array $callback, array $paymentReport): ?string
+/** Convert TRX to integer sun without accepting a sub-sun shortfall by rounding. */
+function tronadoSun($amount): ?int
+{
+    if (is_float($amount)) {
+        if (!is_finite($amount) || $amount <= 0 || $amount >= 10000000000) { return null; }
+        $decimal = number_format($amount, 6, '.', '');
+        if (abs((float) $decimal - $amount) > 0.000000000001) { return null; }
+        $amount = $decimal;
+    }
+    if ((!is_string($amount) && !is_int($amount))
+        || !preg_match('/^(\d{1,10})(?:\.(\d{1,6}))?$/D', (string) $amount, $parts)) { return null; }
+    $sun = (int) $parts[1] * 1000000 + (int) str_pad($parts[2] ?? '', 6, '0');
+    return $sun > 0 ? $sun : null;
+}
+
+/** These exact orders were already compensated manually by the administrator. */
+function tronadoManuallySettled(string $paymentId): bool
+{
+    return in_array($paymentId, [
+        '8acef58c6e', '7942f64a02', '5d66997576', '650f99528f', '0b8a3259e4',
+        '1ac4db3faa', '59dabea3ba', '1de361aedf', '9a60cf7f34', 'dca37bd16d',
+        '5629a39704', '9b2de7f0e9', '1dd7dc79d8', 'c024dfbda1', '72470fffda',
+        'e8ca5fea40', 'fdbed2a155', '8b6bcd69fd', '89be465601', 'd014409349',
+        'b7b3a29ec8', '85cd43e068', '1419f4de52',
+    ], true);
+}
+
+/** First authenticated status-20 event is immutable under the callback unique key. */
+function tronadoPendingCallback(PDO $pdo, string $paymentId): ?array
+{
+    $query = $pdo->prepare('SELECT raw_payload FROM Tronado_callback WHERE payment_id_hash = ? AND order_status_id = 20');
+    $query->execute([hash('sha256', $paymentId)]);
+    $raw = $query->fetchColumn();
+    $pending = is_string($raw) ? json_decode($raw, true) : null;
+    return is_array($pending) ? $pending : null;
+}
+
+/** Provider-confirmed contract: compare net TRX with the first pending callback, never fiat discounts. */
+function tronadoPaidCallbackMismatch(array $callback, array $paymentReport, ?array $pending = null): ?string
 {
     $metadata = json_decode((string) ($paymentReport['dec_not_confirmed'] ?? ''), true);
     if (!is_array($metadata)) { return 'invalid_order_metadata'; }
+    $delivered = tronadoSun($callback['TronAmount'] ?? null);
+    if ($delivered === null) { return 'invalid_delivered_tron'; }
+    if (($metadata['wage_from_business_percentage'] ?? null) === 100) {
+        if (tronadoSun($metadata['tron_amount'] ?? null) === null) { return 'invalid_expected_tron'; }
+        $wallet = $metadata['wallet'] ?? null;
+        if (!is_string($wallet) || $wallet === '') { return 'missing_order_wallet'; }
+        if (!is_string($callback['Wallet'] ?? null) || !hash_equals($wallet, $callback['Wallet'])) { return 'wallet_mismatch'; }
+        if ($pending === null) { return 'missing_pending_tron'; }
+        if (!is_string($pending['Wallet'] ?? null) || !hash_equals($wallet, $pending['Wallet'])) { return 'pending_wallet_mismatch'; }
+        $baseline = tronadoSun($pending['TronAmount'] ?? null);
+        if ($baseline === null) { return 'invalid_pending_tron'; }
+        return $delivered >= $baseline ? null : 'paid_tron_below_pending';
+    }
+    // Legacy orders lack the modern net-TRX contract and still require manual reconciliation.
     $amount = $callback['UserPaidTomanAmount'] ?? null;
     $received = $callback['TomanAmountWithoutWage'] ?? null;
-    $deliveredTron = $callback['TronAmount'] ?? null;
     if (!is_scalar($amount) || !ctype_digit((string) $amount)) { return 'invalid_paid_amount'; }
     if ((int) $amount < max(1, (int) ($paymentReport['price'] ?? 0) - 5000)) { return 'paid_amount_below_minimum'; }
     if (!is_scalar($received) || !ctype_digit((string) $received) || (int) $received <= 0) { return 'invalid_received_amount'; }
-    if (!is_numeric($deliveredTron) || !((float) $deliveredTron > 0)) { return 'invalid_delivered_tron'; }
-    if (($metadata['wage_from_business_percentage'] ?? null) === 100) {
-        $expectedTron = $metadata['tron_amount'] ?? null;
-        $wallet = $metadata['wallet'] ?? null;
-        if (!is_numeric($expectedTron) || !((float) $expectedTron > 0)) { return 'invalid_expected_tron'; }
-        if (!is_string($wallet) || $wallet === '') { return 'missing_order_wallet'; }
-        return is_string($callback['Wallet'] ?? null) && hash_equals($wallet, $callback['Wallet']) ? null : 'wallet_mismatch';
-    }
     // Preserve the earlier official Tronado order/token and wallet contract.
     $legacyToken = strtolower(str_replace('-', '', (string) ($metadata['Token'] ?? '')));
     $callbackToken = strtolower(str_replace('-', '', (string) ($callback['UniqueCode'] ?? '')));
@@ -233,13 +275,13 @@ function tronadoPaidCallbackMismatch(array $callback, array $paymentReport): ?st
     return is_string($callback['Wallet'] ?? null) && hash_equals($legacyWallet, $callback['Wallet']) ? null : 'wallet_mismatch';
 }
 
-function tronadoPaidCallbackMatchesOrder(array $callback, array $paymentReport): bool
+function tronadoPaidCallbackMatchesOrder(array $callback, array $paymentReport, ?array $pending = null): bool
 {
-    return tronadoPaidCallbackMismatch($callback, $paymentReport) === null;
+    return tronadoPaidCallbackMismatch($callback, $paymentReport, $pending) === null;
 }
 
 /** Allowlisted evidence only: no wallet addresses, tokens, signatures or raw payload. */
-function tronadoPaymentMatchEvidence(array $callback, array $order): array
+function tronadoPaymentMatchEvidence(array $callback, array $order, ?array $pending = null): array
 {
     $metadata = json_decode((string) ($order['dec_not_confirmed'] ?? ''), true);
     $number = static fn($value) => is_numeric($value) && is_finite((float) $value) ? (float) $value : null;
@@ -247,11 +289,11 @@ function tronadoPaymentMatchEvidence(array $callback, array $order): array
         ? ($metadata['wallet'] ?? null) : tronadoSetting('walletaddress');
     return [
         'invoice_toman' => $number($order['price'] ?? null),
-        'minimum_paid_toman' => max(1, (int) ($order['price'] ?? 0) - 5000),
         'user_paid_toman' => $number($callback['UserPaidTomanAmount'] ?? null),
         'received_toman' => $number($callback['TomanAmountWithoutWage'] ?? null),
         'delivered_tron' => $number($callback['TronAmount'] ?? null),
-        'expected_tron' => $number($metadata['tron_amount'] ?? null),
+        'requested_tron' => $number($metadata['tron_amount'] ?? null),
+        'pending_tron' => $number($pending['TronAmount'] ?? null),
         'wallet_matches' => is_string($wallet) && $wallet !== '' && is_string($callback['Wallet'] ?? null)
             ? hash_equals($wallet, $callback['Wallet']) : null,
     ];
@@ -283,7 +325,8 @@ function tronadoRegisterCallback(string $paymentId, int $orderStatusId, string $
 function tronadoAutomaticDeliveryAllowed(array $order): bool
 {
     $metadata = json_decode((string) ($order['dec_not_confirmed'] ?? ''), true);
-    return is_array($metadata) && ($metadata['automatic_delivery'] ?? null) === 2;
+    return !tronadoManuallySettled((string) ($order['id_order'] ?? ''))
+        && is_array($metadata) && ($metadata['automatic_delivery'] ?? null) === 2;
 }
 
 /** Authenticate and persist payment acceptance before doing any network work. */
@@ -307,8 +350,7 @@ function tronadoReceiveCallback(PDO $pdo, string $rawBody, string $signature, st
     if ($paymentId === '' || strlen($paymentId) > 500 || $orderStatus === false || $orderStatus === null) {
         return [400, ['ok' => false, 'error' => 'PaymentId and OrderStatusID are required']];
     }
-    $accepted = !in_array($orderStatus, [40, 200], true)
-        && (filter_var($callback['IsPaid'] ?? false, FILTER_VALIDATE_BOOLEAN) || $orderStatus === 30);
+    $accepted = $orderStatus === 30;
     try {
         $pdo->beginTransaction();
         $query = $pdo->prepare('SELECT * FROM Payment_report WHERE id_order = ? LIMIT 2 FOR UPDATE');
@@ -319,7 +361,30 @@ function tronadoReceiveCallback(PDO $pdo, string $rawBody, string $signature, st
             return [404, ['ok' => false, 'payment_id' => $paymentId, 'paid' => $accepted, 'error' => 'Unknown or ambiguous payment']];
         }
         $order = $orders[0];
-        $mismatch = $accepted ? tronadoPaidCallbackMismatch($callback, $order) : null;
+        if (tronadoManuallySettled($paymentId)) {
+            if (tronadoRegisterCallback($paymentId, $orderStatus, $rawBody, $pdo) === 'error') {
+                throw new RuntimeException('Unable to persist compensated callback');
+            }
+            $pdo->prepare("UPDATE Payment_report SET fulfillment_status = 'review', fulfillment_updated_at = NOW()
+                WHERE id = ? AND (fulfillment_status IS NULL OR fulfillment_status IN ('', 'queued', 'review'))")
+                ->execute([$order['id']]);
+            $pdo->commit();
+            return [200, ['ok' => true, 'payment_id' => $paymentId, 'fulfillment' => 'review', 'reason' => 'manually_compensated']];
+        }
+        $pending = $accepted ? tronadoPendingCallback($pdo, $paymentId) : null;
+        // Validate a pending event before allowing it to become the immutable baseline.
+        $mismatch = ($accepted || $orderStatus === 20)
+            ? tronadoPaidCallbackMismatch($callback, $order, $orderStatus === 20 ? $callback : $pending) : null;
+        if ($accepted && in_array($mismatch, ['missing_pending_tron', 'invalid_pending_tron', 'pending_wallet_mismatch', 'paid_tron_below_pending'], true)) {
+            if (tronadoRegisterCallback($paymentId, $orderStatus, $rawBody, $pdo) === 'error') {
+                throw new RuntimeException('Unable to persist review callback');
+            }
+            $pdo->prepare("UPDATE Payment_report SET payment_Status = 'paid', fulfillment_status = 'review', fulfillment_updated_at = NOW()
+                WHERE id = ? AND payment_Status <> 'reject' AND (fulfillment_status IS NULL OR fulfillment_status IN ('', 'queued', 'review'))")
+                ->execute([$order['id']]);
+            $pdo->commit();
+            return [200, ['ok' => true, 'payment_id' => $paymentId, 'fulfillment' => 'review', 'reason' => $mismatch, 'pending_tron' => $pending['TronAmount'] ?? null]];
+        }
         if ($mismatch !== null) {
             $pdo->rollBack();
             error_log('Tronado callback mismatch: ' . json_encode(['payment_id' => $paymentId, 'reason' => $mismatch]
@@ -392,7 +457,8 @@ function tronadoQueueCallbackReport(int $status, array $body, array $callback = 
     if (!empty($body['cancelled'])) { error_log('Tronado paid order cancelled; manual reconciliation required: ' . $body['payment_id']); }
     try {
         $order = select('Payment_report', '*', 'id_order', $body['payment_id'], 'select') ?: [];
-        $details = $event === 'payment_mismatch' ? json_encode(tronadoPaymentMatchEvidence($callback, $order)) : '';
+        $details = in_array($event, ['payment_mismatch', 'payment_review'], true)
+            ? json_encode(tronadoPaymentMatchEvidence($callback, $order, ['TronAmount' => $body['pending_tron'] ?? null])) : '';
         reportEventQueue($event, ['gateway' => 'Tronado', 'order' => $body['payment_id'], 'user' => $order['id_user'] ?? '-',
             'reason' => $body['reason'] ?? ($event === 'payment_cancelled' ? 'cancelled' : 'requires_reconciliation'), 'details' => $details],
             $body['payment_id'] . ':' . ($body['reason'] ?? ''));
@@ -414,6 +480,18 @@ function tronadoFulfillQueued(PDO $pdo, string $paymentId, callable $deliver, ?c
         clearSelectCache('Payment_report');
         error_log('Tronado historical payment requires manual reconciliation: ' . $paymentId);
         reportEventQueue('payment_review', ['gateway' => 'Tronado', 'order' => $paymentId, 'user' => $candidate['id_user'], 'reason' => 'requires_reconciliation'], $paymentId . ':');
+        return false;
+    }
+    $confirmed = $pdo->prepare('SELECT raw_payload FROM Tronado_callback WHERE payment_id_hash = ? AND order_status_id = 30');
+    $confirmed->execute([hash('sha256', $paymentId)]);
+    $raw = $confirmed->fetchColumn();
+    $paid = is_string($raw) ? json_decode($raw, true) : null;
+    $reason = is_array($paid) ? tronadoPaidCallbackMismatch($paid, $candidate, tronadoPendingCallback($pdo, $paymentId)) : 'missing_paid_callback';
+    if ($reason !== null) {
+        $pdo->prepare("UPDATE Payment_report SET fulfillment_status = 'review', fulfillment_updated_at = NOW()
+            WHERE id_order = ? AND payment_Status = 'paid' AND fulfillment_status = 'queued'")->execute([$paymentId]);
+        clearSelectCache('Payment_report');
+        reportEventQueue('payment_review', ['gateway' => 'Tronado', 'order' => $paymentId, 'user' => $candidate['id_user'], 'reason' => $reason], $paymentId . ':' . $reason);
         return false;
     }
     $claim = $pdo->prepare("UPDATE Payment_report SET fulfillment_status = 'processing', fulfillment_updated_at = NOW()

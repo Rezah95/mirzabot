@@ -33,6 +33,12 @@ return [
                         'service_removal_failed' => '面板未能删除服务',
                 ],
                 'reasons' => [
+                        'missing_pending_tron' => '缺少初始待支付回调',
+                        'invalid_pending_tron' => '初始待支付 TRX 数量无效',
+                        'pending_wallet_mismatch' => '初始待支付钱包与订单不符',
+                        'paid_tron_below_pending' => '支付 TRX 少于初始基准，需人工审核',
+                        'manually_compensated' => '此订单已人工补偿，禁止重复交付',
+                        'missing_paid_callback' => '缺少支付确认回调',
                         'paid_amount_below_minimum' => '实付金额低于订单最低金额',
                         'invalid_paid_amount' => '实付金额缺失或无效',
                         'invalid_received_amount' => '收款金额缺失或无效',

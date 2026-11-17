@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.1-dev.2 — 2026-11-17 (prerelease)
+
+- Fix modern Tronado wageFromBusinessPercentage=100 matching using the first authenticated status-20 net TRX amount, as clarified by provider support. Compare status-30 TRX in integer sun; fiat discounts and rounding no longer reject full payments.
+- Persist the pending baseline through the existing unique callback event; duplicate pending callbacks cannot replace it. Invalid signatures, wallets and TRX cannot seed the baseline.
+- A missing/invalid baseline or short TRX payment is acknowledged into manual review, with localized channel reporting. No proportional credit or automatic release after a late baseline. Recheck queued deliveries before claiming them.
+- Permanently exclude the exact 23 administrator-confirmed manually compensated PaymentIds from callback/cron delivery, preventing duplicate compensation.
+- No schema migration, historical replay, wallet compensation, production deployment or remote push. Existing reviewed orders need manual reconciliation. Patch candidate; production remains 0.10.0.
+- Local validation: real MySQL/HTTP callback tests including discounts, one-sun shortfalls, ten-percent payments, duplicate pending events, missing/late baselines, all 23 compensated orders, queue recovery, concurrency and delivery failures; shared payment, Stars, gateway and report outbox regressions.
+
 ## 0.10.1-dev.1 — 2026-11-17 (prerelease)
 
 - Selectively port seven approved fixes from upstream main 0.9.3 (fea8178); retain the fork's database layout, transactional discounts, payment fulfillment guards, location policies and reporting.

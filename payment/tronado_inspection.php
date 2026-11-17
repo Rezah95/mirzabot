@@ -44,9 +44,9 @@ function tronadoInspectOrder(PDO $pdo, array $status): array
         'local_payment_status' => $order['payment_Status'],
         'local_fulfillment_status' => $order['fulfillment_status'] ?? null,
         'automatic_delivery_allowed' => tronadoAutomaticDeliveryAllowed($order),
-        'evidence' => tronadoPaymentMatchEvidence($status, $order),
+        'evidence' => tronadoPaymentMatchEvidence($status, $order, tronadoPendingCallback($pdo, $paymentId)),
         'missing_callback_fields' => $missing,
-        'callback_match_reason' => $missing ? 'status_response_is_not_a_complete_callback' : tronadoPaidCallbackMismatch($status, $order),
+        'callback_match_reason' => $missing ? 'status_response_is_not_a_complete_callback' : tronadoPaidCallbackMismatch($status, $order, tronadoPendingCallback($pdo, $paymentId)),
         'stored_callbacks' => $query->fetchAll(PDO::FETCH_ASSOC),
     ];
 }

@@ -33,6 +33,12 @@ return [
                         'service_removal_failed' => 'حذف سرویس در پنل انجام نشد',
                 ],
                 'reasons' => [
+                        'missing_pending_tron' => 'کال\u200cبک اولیهٔ در انتظار پرداخت ثبت نشده است',
+                        'invalid_pending_tron' => 'مقدار ترون کال\u200cبک اولیه نامعتبر است',
+                        'pending_wallet_mismatch' => 'کیف پول کال\u200cبک اولیه با سفارش مطابقت ندارد',
+                        'paid_tron_below_pending' => 'ترون پرداخت\u200cشده کمتر از مبنای اولیه است؛ بررسی دستی لازم است',
+                        'manually_compensated' => 'این سفارش قبلاً دستی جبران شده؛ تحویل مجدد مسدود است',
+                        'missing_paid_callback' => 'کال\u200cبک تأیید پرداخت ثبت نشده است',
                         'paid_amount_below_minimum' => 'مبلغ پرداختی کمتر از حد مجاز فاکتور است',
                         'invalid_paid_amount' => 'مبلغ پرداختی نامعتبر یا مفقود است',
                         'invalid_received_amount' => 'مبلغ دریافتی نامعتبر یا مفقود است',

@@ -76,6 +76,9 @@ try {
         $pdo->prepare("INSERT INTO Payment_report (id_user, id_order, price, Payment_Method, payment_Status, dec_not_confirmed, id_invoice)
             VALUES (123, ?, 500000, 'Tronado', 'Unpaid', ?, 'none')")
             ->execute([$callback['PaymentId'], json_encode($metadata)]);
+        $pending = array_replace($callback, ['OrderStatusID' => 20, 'IsPaid' => false]);
+        $raw = json_encode($pending);
+        expectCallback(tronadoReceiveCallback($pdo, $raw, hash_hmac('sha512', $raw, 'test-ipn-key'), 'test-ipn-key')[0] === 200, 'Pending baseline rejected');
         $GLOBALS['sentMessages'] = [];
     };
     $receive = static function (?array $payload = null, ?string $signature = null, string $key = 'test-ipn-key') use ($pdo, $callback): array {
@@ -100,20 +103,60 @@ try {
     }
     foreach ([
         [['Wallet' => 'wrong'], 'wallet_mismatch'], [['Wallet' => []], 'wallet_mismatch'],
-        [['UserPaidTomanAmount' => 490000], 'paid_amount_below_minimum'],
-        [['UserPaidTomanAmount' => null], 'invalid_paid_amount'],
-        [['TomanAmountWithoutWage' => 0], 'invalid_received_amount'],
         [['TronAmount' => 0], 'invalid_delivered_tron'],
     ] as [$bad, $reason]) {
         [$status, $body] = $receive(array_replace($callback, $bad));
         expectCallback($status === 409 && $body['reason'] === $reason && $body['payment_id'] === $callback['PaymentId'], 'Mismatch reason or acceptance changed');
     }
     $mismatchLogs = file_get_contents($log);
-    expectCallback(str_contains($mismatchLogs, 'paid_amount_below_minimum') && str_contains($mismatchLogs, '490000')
+    expectCallback(str_contains($mismatchLogs, 'wallet_mismatch')
         && !str_contains($mismatchLogs, $callback['Wallet']) && !str_contains($mismatchLogs, 'test-ipn-key'), 'Mismatch diagnostics missing or sensitive');
     $policyOrder = ['price' => 500000, 'dec_not_confirmed' => json_encode($metadata)];
-    expectCallback(tronadoPaidCallbackMatchesOrder(array_replace($callback, ['UserPaidTomanAmount' => 495000]), $policyOrder)
-        && !tronadoPaidCallbackMatchesOrder(array_replace($callback, ['UserPaidTomanAmount' => 494999]), $policyOrder), 'Existing 5000-toman boundary changed');
+    expectCallback(tronadoPaidCallbackMatchesOrder(array_replace($callback, ['UserPaidTomanAmount' => 1]), $policyOrder, $callback)
+        && !tronadoPaidCallbackMatchesOrder(array_replace($callback, ['TronAmount' => 0.71]), $policyOrder, $callback), 'Net TRX baseline policy failed');
+    $realOrder = ['price' => 389000, 'dec_not_confirmed' => json_encode(array_replace($metadata, ['tron_amount' => 4.64683]))];
+    $realPaid = array_replace($callback, ['TronAmount' => 3.865152, 'UserPaidTomanAmount' => 361560, 'TomanAmountWithoutWage' => 321837]);
+    expectCallback(tronadoPaidCallbackMatchesOrder($realPaid, $realOrder, $realPaid), 'Provider-confirmed Karma example rejected');
+    // Karma discounts and fiat rounding do not reduce net TRX delivery.
+    $reset();
+    expectCallback($receive(array_replace($callback, ['UserPaidTomanAmount' => 1, 'TomanAmountWithoutWage' => 1]))[1]['fulfillment'] === 'queued', 'Fiat discount rejected full TRX');
+    $reset();
+    expectCallback($receive(array_replace($callback, ['TronAmount' => '7.100001']))[1]['fulfillment'] === 'queued', 'Overpayment rejected');
+    foreach (['0.710000', '7.099999'] as $short) {
+        $reset();
+        $result = $receive(array_replace($callback, ['TronAmount' => $short]));
+        expectCallback($result[0] === 200 && $result[1]['reason'] === 'paid_tron_below_pending'
+            && $state() === 'review' && !$work() && $balance() === 1000, 'Short payment credited or retried');
+        expectCallback($receive()[0] === 409 && !$work(), 'Review silently escaped into automatic delivery');
+    }
+    $reset();
+    $pending = array_replace($callback, ['OrderStatusID' => 20, 'IsPaid' => false, 'TronAmount' => 0.71]);
+    expectCallback($receive($pending)[0] === 200 && tronadoPendingCallback($pdo, $callback['PaymentId'])['TronAmount'] === 7.1,
+        'Repeated pending callback replaced the initial baseline');
+    $pdo->exec('DELETE FROM Tronado_callback');
+    expectCallback($receive(array_replace($pending, ['Wallet' => 'wrong']))[0] === 409
+        && tronadoPendingCallback($pdo, $callback['PaymentId']) === null, 'Wrong wallet seeded a baseline');
+    expectCallback($receive(array_replace($pending, ['TronAmount' => 0]))[0] === 409, 'Invalid TRX seeded baseline');
+    expectCallback($receive()[1]['reason'] === 'missing_pending_tron' && $state() === 'review' && !$work(), 'Missing baseline credited');
+    $receive(array_replace($callback, ['OrderStatusID' => 20, 'IsPaid' => false]));
+    expectCallback($receive()[0] === 409 && !$work(), 'Late pending event silently released review');
+    $reset();
+    $pdo->exec('DELETE FROM Tronado_callback');
+    tronadoRegisterCallback($callback['PaymentId'], 30, json_encode($callback), $pdo);
+    $pdo->exec("UPDATE Payment_report SET payment_Status = 'paid', fulfillment_status = 'queued'");
+    expectCallback(!$work() && $state() === 'review' && $balance() === 1000, 'Old queue bypassed baseline validation');
+    foreach (['8acef58c6e','7942f64a02','5d66997576','650f99528f','0b8a3259e4','1ac4db3faa','59dabea3ba','1de361aedf','9a60cf7f34','dca37bd16d','5629a39704','9b2de7f0e9','1dd7dc79d8','c024dfbda1','72470fffda','e8ca5fea40','fdbed2a155','8b6bcd69fd','89be465601','d014409349','b7b3a29ec8','85cd43e068','1419f4de52'] as $settled) {
+        $reset();
+        $pdo->prepare("UPDATE Payment_report SET id_order = ?, payment_Status = 'paid', fulfillment_status = 'queued'")->execute([$settled]);
+        expectCallback(!tronadoFulfillQueued($pdo, $settled, $deliver), 'Compensated queue delivered');
+        $result = $receive(array_replace($callback, ['PaymentId' => $settled]));
+        expectCallback($result[0] === 200 && $result[1]['reason'] === 'manually_compensated' && $balance() === 1000, 'Compensated order replayed');
+    }
+    foreach ([0, -1, INF, NAN, true, [], '1e6', '0.0000001', '7.1000001'] as $invalidSun) {
+        expectCallback(tronadoSun($invalidSun) === null, 'Invalid TRX precision accepted');
+    }
+    expectCallback(tronadoSun(0.000001) === 1 && tronadoSun('7.100001') === 7100001, 'Integer sun conversion failed');
+    $reset();
     // Read-only inspection must leave payment, callback history and wallet exactly intact.
     $snapshot = static fn() => [
         $pdo->query('SELECT * FROM Payment_report')->fetchAll(PDO::FETCH_ASSOC),
@@ -128,7 +171,7 @@ try {
         && $inspection['callback_match_reason'] === 'status_response_is_not_a_complete_callback'
         && $inspection['evidence']['wallet_matches'] === true, 'Inspection accepted an incomplete callback or mutated payment');
     expectCallback(!str_contains(json_encode($inspection), $callback['Wallet']), 'Inspection leaked wallet');
-    expectCallback((int) $pdo->query('SELECT COUNT(*) FROM Tronado_callback')->fetchColumn() === 0, 'Rejected event persisted');
+    expectCallback((int) $pdo->query('SELECT COUNT(*) FROM Tronado_callback')->fetchColumn() === 1, 'Rejected event persisted');
     $pdo->exec("UPDATE Payment_report SET Payment_Method = 'Currency Rial 2'");
     expectCallback($receive()[0] === 404, 'CubePay order accepted by Tronado');
     $reset();
@@ -139,7 +182,7 @@ try {
     $pdo->exec("CREATE TRIGGER reject_queue BEFORE UPDATE ON Payment_report FOR EACH ROW
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Test queue storage failure'");
     expectCallback($receive()[0] === 503
-        && (int) $pdo->query('SELECT COUNT(*) FROM Tronado_callback')->fetchColumn() === 0 && $state() === null,
+        && (int) $pdo->query('SELECT COUNT(*) FROM Tronado_callback')->fetchColumn() === 1 && $state() === null,
         'Event was committed without its recoverable queue entry');
     $pdo->exec('DROP TRIGGER reject_queue');
 
@@ -151,7 +194,7 @@ try {
     expectCallback(count($sentMessages) === 1, 'User payment confirmation missing or duplicated');
     $before = $snapshot();
     $inspection = tronadoInspectOrder($pdo, $provider);
-    expectCallback($inspection['local_fulfillment_status'] === 'fulfilled' && count($inspection['stored_callbacks']) === 1
+    expectCallback($inspection['local_fulfillment_status'] === 'fulfilled' && count($inspection['stored_callbacks']) === 2
         && $snapshot() === $before, 'Inspecting a successful payment lost history or changed balances');
 
     expectCallback($receive()[0] === 200 && !$work() && $balance() === 501000, 'Redelivery credited twice');
