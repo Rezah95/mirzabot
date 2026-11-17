@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.2 — 2026-11-17
+
+- Promote the approved v0.10.1-dev.2 Tronado fix (18fb325), retargeted without functional changes as v0.10.2-dev.1 after the 0.10.1 release.
+- Match confirmed net TRX against the immutable first status-20 callback using integer sun; discounted Toman values no longer reject full modern payments.
+- Route missing baselines and partial TRX to manual review and localized reports. Revalidate queued deliveries; block replay of all 23 manually compensated orders.
+- No database migration or historical wallet compensation/replay. Keep all previously approved 0.10.1 fixes.
+- Local MySQL/HTTP and payment regression checks; live VPS/provider/Telegram behavior remains unverified. This promotion is local until an explicitly requested push/deployment.
+
 ## 0.10.2-dev.1 — 2026-11-17 (prerelease)
 
 - Retarget the existing v0.10.1-dev.2 Tronado reconciliation candidate after production approval of v0.10.1-dev.1 as 0.10.1. No additional functional changes.
