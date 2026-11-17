@@ -477,3 +477,14 @@ Admin panel → panel management → select panel → «مقصدهای مجاز 
 Select destination panels; each toggle saves immediately. ⛔ marks a destination whose location-change switch is off.
 Rules apply in the outgoing direction only. Select only normal panels for each normal source panel to prevent transfers to national/premium panels. Both source and destination must have location changes enabled. Hidden, inactive and audience-ineligible destinations are rejected, including stale callbacks.
 Existing panels default to all enabled destinations (NULL); «هیچ مقصدی» stores an explicit empty list. Database bootstrap adds `marzban_panel.location_targets`; no existing subscriptions are migrated. This backward-compatible feature uses a minor pre-1.0 release target.
+
+### Selected upstream fixes (0.10.1-dev.1)
+
+Development candidate on `dev`; approved production remains `0.10.0` on `master`. The `version` file is authoritative. This patch selectively ports approved fixes from upstream `mahdiMGF2/mirzabot` main `fea8178` (0.9.3), rather than merging its database redesign.
+
+- Unlimited purchases remain unlimited in the carry-over renewal mode; existing unlimited-to-finite renewal protection remains active.
+- XUI edits preserve client metadata; purchase Back returns to the previous step; child-bot renewal handles missing products.
+- Crontab migration retains comments and unmatched jobs. The staged updater restores `custom.jpg` and its active `images.jpg` background from the full backup before publication.
+- Remaining cron cashback and miniapp referral increments use atomic SQL. Both Variza lookup paths require the matching payment method.
+
+No configuration or database migration is required. Validate with `php tests/upstream_integration_test.php`, `php tests/unlimited_renewal_test.php`, `php tests/cron_registration_test.php` and `python3 tests/updater_files_test.py`. Tests use local fixtures; real VPS/provider/Telegram behavior requires a separate deployment check. Follow the existing dev candidate → explicit production approval → master release process.

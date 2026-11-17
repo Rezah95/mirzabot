@@ -2936,6 +2936,13 @@ function update_bot() {
             return 1
         }
     fi
+    if [ -f "$UPDATE_BACKUP_DIR/site/custom.jpg" ]; then
+        sudo cp -a "$UPDATE_BACKUP_DIR/site/custom.jpg" "$BOT_DIR/custom.jpg" \
+            && sudo cp -a "$UPDATE_BACKUP_DIR/site/custom.jpg" "$BOT_DIR/images.jpg" || {
+            echo "QR background restore failed. Backup: $UPDATE_BACKUP_DIR"
+            return 1
+        }
+    fi
     run_step "Restoring vpnbots" "restore_vpnbots '$BOT_DIR'" \
         || { show_step_error
              echo "Update aborted before publication. Full backup: $UPDATE_BACKUP_DIR"; return 1; }

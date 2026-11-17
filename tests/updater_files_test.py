@@ -66,6 +66,7 @@ with tempfile.TemporaryDirectory(prefix='mirza-updater-test.') as temp:
         live = work / 'live'; live.mkdir()
         (live / 'version').write_text('0.5.9\n')
         (live / 'config.php').write_text("<?php\n$domainhosts='';\n// preserved config\n")
+        (live / 'custom.jpg').write_bytes(b'custom QR background')
         (live / 'users.json').write_text('["kept"]')
         (live / 'lang/override').mkdir(parents=True)
         (live / 'lang/override/fa.php').write_text("<?php return ['custom' => 'فارسی 😀'];\n")
@@ -141,6 +142,8 @@ run_step() {
             assert len(retired) == 1 and (retired[0] / 'version').read_text().strip() == '0.5.9'
             assert (retired[0] / 'old-worker.log').read_text() == 'worker still writing'
             assert not (live / 'old-worker.log').exists()
+            assert (live / 'custom.jpg').read_bytes() == b'custom QR background'
+            assert (live / 'images.jpg').read_bytes() == b'custom QR background'
             assert (live / '.hidden').read_text() == 'new hidden asset'
             assert not (live / 'bot.zip').exists()
             assert not (live / 'install').exists()

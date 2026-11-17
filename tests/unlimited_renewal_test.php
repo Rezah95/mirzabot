@@ -85,3 +85,16 @@ foreach (['resetTimeAddVolume', 'addTimeVolumeNextMonth'] as $method) {
         'Hiddify retained unlimited usage');
 }
 echo "PASS: Hiddify reset payload\n";
+
+// Carry-over must never turn a newly purchased unlimited plan into a finite one.
+foreach ([0, 400 * 1073741824] as $oldLimit) {
+    foreach ([0, 100] as $newLimit) {
+        $manager = new RenewalManager();
+        $manager->limit = $oldLimit;
+        $manager->extend('addTimeConvertVolume', $newLimit, 30, 'user', 'product', 'panel');
+        $expected = $newLimit === 0 ? 0 : ($oldLimit === 0 ? 100 : 250) * 1073741824;
+        expectRenewal($published['data_limit_new'] == $expected, 'Carry-over changed unlimited or finite quota');
+        expectRenewal($manager->resets === 1, 'Carry-over did not reset usage');
+    }
+}
+echo "PASS: unlimited and finite carry-over renewals\n";

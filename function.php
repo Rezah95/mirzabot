@@ -2022,7 +2022,7 @@ function addCronIfNotExists($cronCommand, array $replacePatterns = [])
     $cronLines = $existingCronJobs === '' ? [] : preg_split('/\r?\n/', $existingCronJobs);
     $cronLines = array_values(array_filter(array_map('trim', $cronLines), static function ($line) {
         return $line !== ''
-            && stripos($line, 'no crontab') === false;
+            && stripos($line, 'no crontab for') !== 0;
     }));
 
     $originalLines = $cronLines;

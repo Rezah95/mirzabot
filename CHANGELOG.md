@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.1-dev.1 — 2026-11-17 (prerelease)
+
+- Selectively port seven approved fixes from upstream main 0.9.3 (fea8178); retain the fork's database layout, transactional discounts, payment fulfillment guards, location policies and reporting.
+- Keep newly purchased unlimited plans unlimited with addTimeConvertVolume; preserve XUI client metadata during modification.
+- Return purchase navigation to its previous step and report missing renewal products in child bots through existing localized messages.
+- Preserve comments and unmatched cronbot entries during crontab migration; preserve custom QR backgrounds through the staged updater.
+- Use atomic cashback/referral increments in remaining cron/miniapp paths; restrict both Variza callback lookup paths to Variza orders.
+- No database migration or historical payment replay. Patch target for backward-compatible fixes; production remains 0.10.0 until approval.
+
 ## 0.10.0 — 2026-11-17
 
 - Promote the approved v0.10.0-dev.1 candidate: filter location destinations and enforce directional per-panel allowlists at selection and execution.

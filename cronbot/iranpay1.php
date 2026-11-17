@@ -32,8 +32,7 @@ while ($Payment_report = ($list_service)->fetch(PDO::FETCH_ASSOC)) {
     $Balance_id = select("user", "*", "id", $Payment_report['id_user'], "select");
     if ($pricecashback != "0") {
         $result = ($Payment_report['price'] * $pricecashback) / 100;
-        $Balance_confrim = intval($Balance_id['Balance']) + $result;
-        update("user", "Balance", $Balance_confrim, "id", $Balance_id['id']);
+        addBalance($Balance_id['id'], $result);
         $text_report = sprintf($textbotlang['users']['Balance']['giftDepositIranpay'], $result);
         sendmessage($Balance_id['id'], $text_report, null, 'HTML');
     }
