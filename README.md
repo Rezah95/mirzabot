@@ -472,15 +472,15 @@ sudo grep -E 'Tronado callback (mismatch|result)' /var/www/html/mirzaprobotconfi
 
 ### Location destination rules (0.10.0)
 
-Approved production release: `0.10.0` on `master`; development continues on `dev`.
+Approved production release: `0.10.1` on `master`; development continues on `dev`.
 Admin panel → panel management → select panel → «مقصدهای مجاز تغییر لوکیشن».
 Select destination panels; each toggle saves immediately. ⛔ marks a destination whose location-change switch is off.
 Rules apply in the outgoing direction only. Select only normal panels for each normal source panel to prevent transfers to national/premium panels. Both source and destination must have location changes enabled. Hidden, inactive and audience-ineligible destinations are rejected, including stale callbacks.
 Existing panels default to all enabled destinations (NULL); «هیچ مقصدی» stores an explicit empty list. Database bootstrap adds `marzban_panel.location_targets`; no existing subscriptions are migrated. This backward-compatible feature uses a minor pre-1.0 release target.
 
-### Selected upstream fixes (0.10.1-dev.1)
+### Selected upstream fixes (0.10.1)
 
-Development candidate on `dev`; approved production remains `0.10.0` on `master`. The `version` file is authoritative. This patch selectively ports approved fixes from upstream `mahdiMGF2/mirzabot` main `fea8178` (0.9.3), rather than merging its database redesign.
+Approved production release `0.10.1` on `master`, promoted specifically from `v0.10.1-dev.1`. Development continues on `dev`. The `version` file is authoritative. This patch selectively ports approved fixes from upstream `mahdiMGF2/mirzabot` main `fea8178` (0.9.3), rather than merging its database redesign.
 
 - Unlimited purchases remain unlimited in the carry-over renewal mode; existing unlimited-to-finite renewal protection remains active.
 - XUI edits preserve client metadata; purchase Back returns to the previous step; child-bot renewal handles missing products.
@@ -489,9 +489,9 @@ Development candidate on `dev`; approved production remains `0.10.0` on `master`
 
 No configuration or database migration is required. Validate with `php tests/upstream_integration_test.php`, `php tests/unlimited_renewal_test.php`, `php tests/cron_registration_test.php` and `python3 tests/updater_files_test.py`. Tests use local fixtures; real VPS/provider/Telegram behavior requires a separate deployment check. Follow the existing dev candidate → explicit production approval → master release process.
 
-### Tronado net-TRX reconciliation (0.10.1-dev.2)
+### Tronado net-TRX reconciliation (0.10.2-dev.1)
 
-Development patch candidate on `dev`; production remains `0.10.0` on `master`. Provider support clarified the contract for `wageFromBusinessPercentage=100`: compare the confirmed callback `TronAmount` with the first pending callback, not with the gross `TronAmount` requested at creation or `ActualTronAmount`.
+Development patch candidate `0.10.2-dev.1` on `dev`; production is `0.10.1` on `master`. The existing Tronado changes from `v0.10.1-dev.2` were retargeted without functional changes after approval of the earlier dev.1 release. Provider support clarified the contract for `wageFromBusinessPercentage=100`: compare the confirmed callback `TronAmount` with the first pending callback, not with the gross `TronAmount` requested at creation or `ActualTronAmount`.
 
 The first authenticated status-20 callback is stored once in `Tronado_callback`; its wallet and positive TRX value must validate before storage. Status 30 grants the saved invoice value only when its wallet matches and its net TRX is at least the stored baseline. Comparison uses integer sun (six decimals); discounted Toman values are diagnostic only for this modern contract. Signature, order identity, durable acceptance and duplicate-delivery guards remain active.
 

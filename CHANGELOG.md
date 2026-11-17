@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.2-dev.1 — 2026-11-17 (prerelease)
+
+- Retarget the existing v0.10.1-dev.2 Tronado reconciliation candidate after production approval of v0.10.1-dev.1 as 0.10.1. No additional functional changes.
+- Integrate production release metadata into dev; pending-baseline matching and compensated-order replay protection remain development-only.
+
+## 0.10.1 — 2026-11-17
+
+- Promote only the approved v0.10.1-dev.1 candidate (a609ad9): seven selective upstream fixes for unlimited renewal, XUI metadata, purchase navigation, crontab preservation, missing child-bot products, QR background preservation and atomic cashback/referral updates with Variza gateway matching.
+- Preserve the fork database, discounts, payment guards, reporting and location destination rules. No database migration is required.
+- The later v0.10.1-dev.2 Tronado net-TRX reconciliation changes are excluded from this production release and remain development work.
+- Local candidate checks passed; this promotion does not establish live VPS/provider/Telegram verification or remote publication.
+
 ## 0.10.1-dev.2 — 2026-11-17 (prerelease)
 
 - Fix modern Tronado wageFromBusinessPercentage=100 matching using the first authenticated status-20 net TRX amount, as clarified by provider support. Compare status-30 TRX in integer sun; fiat discounts and rounding no longer reject full payments.
